@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Enable reading and writing to support unauthenticated initial database seeding and client actions
+    match /cabinets/{cabinetId} {
+      allow read, write: if true;
+    }
+    
+    match /consumables/{consumableId} {
+      allow read, write: if true;
+    }
+    
+    match /count_history/{historyId} {
+      allow read, write: if true;
+    }
+    
+    match /qc_consumption_history/{historyId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Consumable Cabinet Tracker",
+  "description": "ระบบตรวจสอบ ติดตาม และสแกนสต็อกวัสดุสิ้นเปลืองประจำตู้เก็บของในแผนกด้วยรหัส QR โค้ด เชื่อมต่อแบบเรียลไทม์",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
