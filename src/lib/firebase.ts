@@ -74,10 +74,26 @@ if (hasValidEnv) {
   activeConfig = productionConfig;
 }
 
+const isPlaceholderKey = activeConfig.apiKey === "AIzaSyDsEsptCNBdREm-2lZEAfOmLB7ZdMrx168";
+const savedUserStr = typeof window !== "undefined" ? localStorage.getItem("cabinet_tracker_user") : null;
+let isSimulationUser = false;
+try {
+  if (savedUserStr) {
+    isSimulationUser = JSON.parse(savedUserStr).isSimulation === true;
+  }
+} catch (e) {
+  console.error("Failed to parse saved user:", e);
+}
+
+const isOfflineFallback = isPlaceholderKey || isSimulationUser;
+
 // Safe console diagnostics to help debug configuration on Vercel at runtime
 console.log("[Firebase Initialization Debug]:", {
   isVercel,
   hasValidEnv,
+  isPlaceholderKey,
+  isSimulationUser,
+  isOfflineFallback,
   usingProjectId: activeConfig.projectId,
   usingApiKeyMasked: activeConfig.apiKey ? `${activeConfig.apiKey.substring(0, 6)}...${activeConfig.apiKey.substring(activeConfig.apiKey.length - 4)}` : "None",
   authDomain: activeConfig.authDomain
@@ -116,5 +132,8 @@ export {
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
+  isOfflineFallback,
+  isPlaceholderKey,
+  isVercel,
   type User
 };
