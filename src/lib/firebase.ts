@@ -46,24 +46,42 @@ const productionConfig = {
 
 // Detect running environment at runtime
 const isVercel = typeof window !== "undefined" && window.location.hostname.includes("vercel.app");
-const envApiKey = (import.meta as any).env?.VITE_FIREBASE_API_KEY;
+
+// Statically accessible by Vite during build
+const envApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+const envAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+const envProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+const envStorageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
+const envMessagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
+const envAppId = import.meta.env.VITE_FIREBASE_APP_ID;
 
 let activeConfig = sandboxConfig;
 
-if (envApiKey) {
+const hasValidEnv = !!(envApiKey && envApiKey.trim() !== "" && !envApiKey.includes("MY_") && !envApiKey.includes("YOUR_"));
+
+if (hasValidEnv) {
   // If you configure environment variables on Vercel manually, use them:
   activeConfig = {
     apiKey: envApiKey,
-    authDomain: (import.meta as any).env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: (import.meta as any).env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: (import.meta as any).env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: (import.meta as any).env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: (import.meta as any).env.VITE_FIREBASE_APP_ID
+    authDomain: envAuthDomain || "",
+    projectId: envProjectId || "",
+    storageBucket: envStorageBucket || "",
+    messagingSenderId: envMessagingSenderId || "",
+    appId: envAppId || ""
   };
 } else if (isVercel) {
   // If running on Vercel, automatically default to your new Firebase project!
   activeConfig = productionConfig;
 }
+
+// Safe console diagnostics to help debug configuration on Vercel at runtime
+console.log("[Firebase Initialization Debug]:", {
+  isVercel,
+  hasValidEnv,
+  usingProjectId: activeConfig.projectId,
+  usingApiKeyMasked: activeConfig.apiKey ? `${activeConfig.apiKey.substring(0, 6)}...${activeConfig.apiKey.substring(activeConfig.apiKey.length - 4)}` : "None",
+  authDomain: activeConfig.authDomain
+});
 
 // Initialize Firebase
 const app = initializeApp(activeConfig);
