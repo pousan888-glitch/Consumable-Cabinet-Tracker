@@ -15,6 +15,17 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     setLoading(true);
     setError("");
     try {
+      if (isOfflineFallback) {
+        // Simulate a minor network delay for premium visual feedback, then log in locally
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        onLogin({
+          email: "pousan888@gmail.com",
+          name: "คุณปูแสน (Demo Admin)",
+          role: "ADMIN",
+          isSimulation: true
+        });
+        return;
+      }
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
