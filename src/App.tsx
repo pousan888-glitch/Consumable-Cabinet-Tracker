@@ -26,10 +26,22 @@ export default function App() {
 
   // Auto-seed database and restore session on startup
   useEffect(() => {
+    let active = true;
+    
+    // Safety timeout: If initialization takes too long (e.g. 3.5 seconds), proceed to the screen anyway
+    const safetyTimeout = setTimeout(() => {
+      if (active) {
+        console.warn("Database initialization taking longer than expected. Proceeding to main screen...");
+        setLoading(false);
+      }
+    }, 3500);
+
     async function initializeApp() {
       try {
         // 1. Seed database with rich mock data if empty
         await seedDatabaseIfEmpty();
+
+        if (!active) return;
 
         // 2. Load and restore session if present
         const savedUser = localStorage.getItem("cabinet_tracker_user");
@@ -46,10 +58,18 @@ export default function App() {
       } catch (err) {
         console.error("Initialization error:", err);
       } finally {
-        setLoading(false);
+        if (active) {
+          clearTimeout(safetyTimeout);
+          setLoading(false);
+        }
       }
     }
     initializeApp();
+
+    return () => {
+      active = false;
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   // Fetch critical safety stock warnings in real-time
