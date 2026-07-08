@@ -31,9 +31,18 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       });
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
-      setError(
-        "เบราว์เซอร์หรือ Iframe บล็อกการเปิดหน้าต่างภายนอก (Popups) กรุณาคลิกปุ่ม 'เปิดในแท็บใหม่' ด้านขวาบนของหน้าจอ แล้วจึงเข้าสู่ระบบด้วย Google Account อีกครั้ง"
-      );
+      const errCode = err?.code || "";
+      const errMsg = err?.message || "";
+      
+      if (errCode === "auth/popup-blocked" || errCode === "auth/popup-closed-by-user") {
+        setError(
+          "เบราว์เซอร์หรือ Iframe บล็อกการเปิดหน้าต่างภายนอก (Popups) กรุณาคลิกปุ่ม 'เปิดในแท็บใหม่' ด้านขวาบนของหน้าจอ แล้วจึงเข้าสู่ระบบด้วย Google Account อีกครั้ง"
+        );
+      } else {
+        setError(
+          `เกิดข้อผิดพลาดในการเข้าสู่ระบบ (${errCode || "unknown"}): ${errMsg || "กรุณาตรวจสอบการตั้งค่า Firebase หรืออินเทอร์เน็ตของคุณ"} [รายละเอียดเพิ่มเติม: ${err.stack || err}]`
+        );
+      }
     } finally {
       setLoading(false);
     }
