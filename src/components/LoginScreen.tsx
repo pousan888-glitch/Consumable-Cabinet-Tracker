@@ -143,7 +143,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
             <span className="font-medium text-slate-700">
-              สถานะ: <strong className="text-emerald-700">ระบบจริง (Real Firebase Mode)</strong>
+              ระบบจริง: <strong className="text-emerald-700 font-mono">warehouse-consumables-monitor</strong>
             </span>
           </div>
           <button
@@ -151,7 +151,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             className="text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 hover:underline cursor-pointer"
           >
             <Settings className="h-3.5 w-3.5" />
-            ตั้งค่า
+            ตัวแปร Vercel
           </button>
         </div>
 
@@ -300,37 +300,52 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                     <table className="w-full text-left">
                       <thead className="bg-slate-100 font-semibold text-slate-700">
                         <tr>
-                          <th className="p-2.5">ชื่อตัวแปรใน Vercel</th>
-                          <th className="p-2.5">ค่าที่นำมาจาก Firebase</th>
-                          <th className="p-2.5 text-center">คัดลอกชื่อ</th>
+                          <th className="p-2.5">Key (ตัวแปร Vercel)</th>
+                          <th className="p-2.5">Value (ค่าจากโปรเจกต์ของคุณ)</th>
+                          <th className="p-2.5 text-center">คัดลอก Value</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
                         {[
-                          { env: "VITE_FIREBASE_API_KEY", desc: "apiKey" },
-                          { env: "VITE_FIREBASE_AUTH_DOMAIN", desc: "authDomain" },
-                          { env: "VITE_FIREBASE_PROJECT_ID", desc: "projectId" },
-                          { env: "VITE_FIREBASE_STORAGE_BUCKET", desc: "storageBucket" },
-                          { env: "VITE_FIREBASE_MESSAGING_SENDER_ID", desc: "messagingSenderId" },
-                          { env: "VITE_FIREBASE_APP_ID", desc: "appId" }
+                          { env: "VITE_FIREBASE_API_KEY", val: "AIzaSyAQO0gBpkiASG1NhdUJfQA25R7kUgUzRUQ", desc: "apiKey" },
+                          { env: "VITE_FIREBASE_AUTH_DOMAIN", val: "warehouse-consumables-monitor.firebaseapp.com", desc: "authDomain" },
+                          { env: "VITE_FIREBASE_PROJECT_ID", val: "warehouse-consumables-monitor", desc: "projectId" },
+                          { env: "VITE_FIREBASE_STORAGE_BUCKET", val: "warehouse-consumables-monitor.firebasestorage.app", desc: "storageBucket" },
+                          { env: "VITE_FIREBASE_MESSAGING_SENDER_ID", val: "917732792556", desc: "messagingSenderId" },
+                          { env: "VITE_FIREBASE_APP_ID", val: "1:917732792556:web:bf74faa9940babf768edc9", desc: "appId" }
                         ].map((item) => (
                           <tr key={item.env} className="hover:bg-slate-50">
-                            <td className="p-2.5 font-bold text-indigo-700">{item.env}</td>
-                            <td className="p-2.5 text-slate-600 font-sans text-xs">{item.desc}</td>
+                            <td className="p-2.5">
+                              <div className="flex items-center gap-1">
+                                <span className="font-bold text-indigo-700">{item.env}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(item.env, `key_${item.env}`)}
+                                  title="คัดลอกชื่อตัวแปร"
+                                  className="text-slate-400 hover:text-indigo-600 p-0.5"
+                                >
+                                  {copiedKey === `key_${item.env}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="p-2.5 text-slate-700 max-w-[200px] truncate" title={item.val}>
+                              {item.val}
+                            </td>
                             <td className="p-2.5 text-center font-sans">
                               <button
-                                onClick={() => handleCopy(item.env, item.env)}
-                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md inline-flex items-center gap-1 text-[11px] transition-colors"
+                                type="button"
+                                onClick={() => handleCopy(item.val, `val_${item.env}`)}
+                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
                               >
-                                {copiedKey === item.env ? (
+                                {copiedKey === `val_${item.env}` ? (
                                   <>
                                     <Check className="h-3 w-3 text-emerald-600" />
-                                    <span className="text-emerald-600 font-medium">Copied!</span>
+                                    <span className="text-emerald-600">คัดลอกแล้ว</span>
                                   </>
                                 ) : (
                                   <>
                                     <Copy className="h-3 w-3" />
-                                    คัดลอก
+                                    คัดลอกค่า
                                   </>
                                 )}
                               </button>

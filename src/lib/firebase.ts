@@ -24,24 +24,14 @@ import {
   User
 } from "firebase/auth";
 
-// AI Studio Sandbox Credentials
-const sandboxConfig = {
-  apiKey: "AIzaSyAivsfy9ggmOaegLmxq9cEb7BxsLnt9cQ0",
-  authDomain: "marklar-horizon-g9pl1.firebaseapp.com",
-  projectId: "marklar-horizon-g9pl1",
-  storageBucket: "marklar-horizon-g9pl1.firebasestorage.app",
-  messagingSenderId: "442887347911",
-  appId: "1:442887347911:web:2c4f9dcda252b64c97e8e2"
-};
-
-// Your Custom Firebase Credentials (for Vercel deployment)
-const productionConfig = {
-  apiKey: "AIzaSyDsEsptCNBdREm-2lZEAfOmLB7ZdMrx168",
-  authDomain: "consumable-cabinet-tracker.firebaseapp.com",
-  projectId: "consumable-cabinet-tracker",
-  storageBucket: "consumable-cabinet-tracker.firebasestorage.app",
-  messagingSenderId: "910240387442",
-  appId: "1:910240387442:web:b767007ccdee76d7788deb"
+// Real Production Firebase Credentials from user
+const realFirebaseConfig = {
+  apiKey: "AIzaSyAQO0gBpkiASG1NhdUJfQA25R7kUgUzRUQ",
+  authDomain: "warehouse-consumables-monitor.firebaseapp.com",
+  projectId: "warehouse-consumables-monitor",
+  storageBucket: "warehouse-consumables-monitor.firebasestorage.app",
+  messagingSenderId: "917732792556",
+  appId: "1:917732792556:web:bf74faa9940babf768edc9"
 };
 
 // Detect running environment at runtime
@@ -56,13 +46,13 @@ const envMessagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
 const envAppId = import.meta.env.VITE_FIREBASE_APP_ID;
 
 // Optional in-browser runtime config override (allows entering/testing credentials without redeploying)
-let browserCustomConfig: typeof sandboxConfig | null = null;
+let browserCustomConfig: typeof realFirebaseConfig | null = null;
 if (typeof window !== "undefined") {
   try {
     const raw = localStorage.getItem("custom_firebase_config");
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.apiKey && parsed?.projectId && !parsed.apiKey.includes("AIzaSyDsEsptCNBdREm")) {
+      if (parsed?.apiKey && parsed?.projectId) {
         browserCustomConfig = parsed;
       }
     }
@@ -71,10 +61,10 @@ if (typeof window !== "undefined") {
   }
 }
 
-const hasValidEnv = !!(envApiKey && envApiKey.trim() !== "" && !envApiKey.includes("MY_") && !envApiKey.includes("YOUR_") && !envApiKey.includes("AIzaSyDsEsptCNBdREm"));
+const hasValidEnv = !!(envApiKey && envApiKey.trim() !== "" && !envApiKey.includes("MY_") && !envApiKey.includes("YOUR_"));
 
-let activeConfig = sandboxConfig;
-let configSource: "env" | "custom" | "sandbox" = "sandbox";
+let activeConfig = realFirebaseConfig;
+let configSource: "env" | "custom" | "real_direct" = "real_direct";
 
 if (hasValidEnv) {
   activeConfig = {
@@ -90,8 +80,9 @@ if (hasValidEnv) {
   activeConfig = browserCustomConfig;
   configSource = "custom";
 } else {
-  activeConfig = sandboxConfig;
-  configSource = "sandbox";
+  // Default directly to your real Firebase project!
+  activeConfig = realFirebaseConfig;
+  configSource = "real_direct";
 }
 
 // Real mode active - no forced offline fallback!
@@ -117,7 +108,7 @@ export function getActiveFirebaseConfig() {
   };
 }
 
-export function saveInAppFirebaseConfig(config: typeof sandboxConfig) {
+export function saveInAppFirebaseConfig(config: typeof realFirebaseConfig) {
   if (typeof window === "undefined") return;
   localStorage.setItem("custom_firebase_config", JSON.stringify(config));
   window.location.reload();
