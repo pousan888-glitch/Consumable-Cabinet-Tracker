@@ -89,6 +89,40 @@ const getLocalQCConsumptionHistory = (): QCConsumptionHistory[] => {
   return list.map(item => convertToTimestamps<QCConsumptionHistory>(item));
 };
 
+// Global Cloud Sync Status tracking to inform the user if Firestore Rules need attention
+let cloudSyncNotice: { hasError: boolean; code?: string; message?: string } = { hasError: false };
+
+export function getCloudSyncNotice() {
+  return cloudSyncNotice;
+}
+
+function recordCloudError(err: any) {
+  const code = err?.code || "";
+  const msg = err?.message || "";
+  console.warn("[Cloud Firestore Sync Alert]:", code, msg);
+  if (code === "permission-denied" || code.includes("permission")) {
+    cloudSyncNotice = {
+      hasError: true,
+      code: "permission-denied",
+      message: "Firestore Security Rules ใน Firebase Console ปฏิเสธการเขียน/อ่าน (Permission Denied)"
+    };
+  } else if (code === "unavailable" || code.includes("unavailable")) {
+    cloudSyncNotice = {
+      hasError: true,
+      code: "unavailable",
+      message: "ไม่สามารถเชื่อมต่อไปยัง Cloud Firestore ได้ในขณะนี้ กำลังทำงานด้วยข้อมูลในเครื่อง"
+    };
+  }
+}
+
+// Race promise with timeout so Firestore operations don't hang if network is blocked
+function withTimeout<T>(promise: Promise<T>, ms = 4500): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("Firestore operation timed out")), ms))
+  ]);
+}
+
 // Seed initial data if database is empty (Handles both Cloud Firestore and local fallback)
 export async function seedDatabaseIfEmpty() {
   if (isOfflineFallback) {
@@ -398,16 +432,48 @@ export async function seedDatabaseIfEmpty() {
   }
 }
 
-// Fetch all cabinets
+// Fetch all cabinets (Fault-Tolerant & Local-First Resilient)
 export async function getCabinets(): Promise<Cabinet[]> {
+  const localList = getLocalCabinets();
+
   if (isOfflineFallback) {
-    return getLocalCabinets();
+    return localList;
   }
-  const snap = await getDocs(query(collection(db, "cabinets"), orderBy("createdAt", "desc")));
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cabinet));
+
+  try {
+    const snap = await withTimeout(
+      getDocs(query(collection(db, "cabinets"), orderBy("createdAt", "desc"))),
+      4000
+    );
+    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cabinet));
+    
+    // If cloud has documents, merge or sync to local
+    if (cloudList.length > 0) {
+      // Merge any local items that haven't synced yet
+      const combined = [...cloudList];
+      for (const loc of localList) {
+        if (!combined.some(c => c.id === loc.id)) {
+          combined.push(loc);
+        }
+      }
+      setLocal("local_cabinets", combined);
+      return combined;
+    }
+
+    // If cloud was empty but local has items, return local
+    if (localList.length > 0) {
+      return localList;
+    }
+
+    return [];
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Could not fetch cabinets from Cloud, serving from local cache:", err);
+    return localList;
+  }
 }
 
-// Add Cabinet
+// Add Cabinet (Always persists locally first, then syncs to Cloud Firestore)
 export async function addCabinet(cabinet: Omit<Cabinet, "id" | "createdAt">): Promise<string> {
   const id = "cab-" + generateId();
   const newCabinet: Cabinet = {
@@ -416,72 +482,120 @@ export async function addCabinet(cabinet: Omit<Cabinet, "id" | "createdAt">): Pr
     createdAt: Timestamp.now()
   };
 
+  // 1. Immediately save to LocalStorage so the user NEVER loses their cabinet!
+  const list = getLocalCabinets();
+  list.unshift(newCabinet);
+  setLocal("local_cabinets", list);
+
+  // 2. If in offline fallback, return immediately
   if (isOfflineFallback) {
-    const list = getLocalCabinets();
-    list.unshift(newCabinet);
-    setLocal("local_cabinets", list);
     return id;
   }
 
-  await setDoc(doc(db, "cabinets", id), newCabinet);
+  // 3. Attempt to save to Cloud Firestore without blocking the UI if it errors
+  try {
+    await setDoc(doc(db, "cabinets", id), newCabinet);
+    console.log("Cabinet successfully synced to Cloud Firestore:", id);
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: Cabinet saved to local storage, Cloud Firestore sync deferred:", err);
+  }
+
   return id;
 }
 
-// Update Cabinet
+// Update Cabinet (Fault-Tolerant)
 export async function updateCabinet(id: string, updates: Partial<Cabinet>): Promise<void> {
-  if (isOfflineFallback) {
-    const list = getLocalCabinets();
-    const index = list.findIndex(c => c.id === id);
-    if (index !== -1) {
-      list[index] = { ...list[index], ...updates };
-      setLocal("local_cabinets", list);
-    }
-    return;
+  // 1. Update in local storage
+  const list = getLocalCabinets();
+  const index = list.findIndex(c => c.id === id);
+  if (index !== -1) {
+    list[index] = { ...list[index], ...updates };
+    setLocal("local_cabinets", list);
   }
-  await updateDoc(doc(db, "cabinets", id), updates);
+
+  if (isOfflineFallback) return;
+
+  // 2. Update in Cloud Firestore
+  try {
+    await updateDoc(doc(db, "cabinets", id), updates);
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: Cabinet updated in local storage, Cloud sync deferred:", err);
+  }
 }
 
-// Delete Cabinet and its consumables
+// Delete Cabinet and its consumables (Fault-Tolerant)
 export async function deleteCabinet(id: string): Promise<void> {
-  if (isOfflineFallback) {
-    const list = getLocalCabinets();
-    const updated = list.filter(c => c.id !== id);
-    setLocal("local_cabinets", updated);
+  // 1. Delete locally
+  const list = getLocalCabinets();
+  const updated = list.filter(c => c.id !== id);
+  setLocal("local_cabinets", updated);
 
-    const consumables = getLocalConsumables();
-    const remainingConsumables = consumables.filter(c => c.cabinetId !== id);
-    setLocal("local_consumables", remainingConsumables);
-    return;
+  const consumables = getLocalConsumables();
+  const remainingConsumables = consumables.filter(c => c.cabinetId !== id);
+  setLocal("local_consumables", remainingConsumables);
+
+  if (isOfflineFallback) return;
+
+  // 2. Delete from Cloud Firestore
+  try {
+    await deleteDoc(doc(db, "cabinets", id));
+    const consumablesSnap = await getDocs(query(collection(db, "consumables"), where("cabinetId", "==", id)));
+    const batch = writeBatch(db);
+    consumablesSnap.docs.forEach(d => {
+      batch.delete(d.ref);
+    });
+    await batch.commit();
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: Cabinet deleted from local storage, Cloud sync deferred:", err);
   }
-
-  await deleteDoc(doc(db, "cabinets", id));
-  const consumablesSnap = await getDocs(query(collection(db, "consumables"), where("cabinetId", "==", id)));
-  const batch = writeBatch(db);
-  consumablesSnap.docs.forEach(d => {
-    batch.delete(d.ref);
-  });
-  await batch.commit();
 }
 
-// Fetch consumables
+// Fetch consumables (Fault-Tolerant)
 export async function getConsumables(cabinetId?: string): Promise<Consumable[]> {
+  const localList = getLocalConsumables();
+
   if (isOfflineFallback) {
-    const list = getLocalConsumables();
-    if (cabinetId) {
-      return list.filter(c => c.cabinetId === cabinetId);
-    }
-    return list;
+    return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
   }
 
-  let q = query(collection(db, "consumables"));
-  if (cabinetId) {
-    q = query(collection(db, "consumables"), where("cabinetId", "==", cabinetId));
+  try {
+    let q = query(collection(db, "consumables"));
+    if (cabinetId) {
+      q = query(collection(db, "consumables"), where("cabinetId", "==", cabinetId));
+    }
+    const snap = await withTimeout(getDocs(q), 4000);
+    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Consumable));
+
+    if (cloudList.length > 0) {
+      // Merge with local if needed
+      const combined = [...cloudList];
+      for (const loc of localList) {
+        if (!combined.some(c => c.id === loc.id)) {
+          if (!cabinetId || loc.cabinetId === cabinetId) {
+            combined.push(loc);
+          }
+        }
+      }
+      setLocal("local_consumables", combined);
+      return cabinetId ? combined.filter(c => c.cabinetId === cabinetId) : combined;
+    }
+
+    if (localList.length > 0) {
+      return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
+    }
+
+    return [];
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Could not fetch consumables from Cloud, serving from local cache:", err);
+    return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
   }
-  const snap = await getDocs(q);
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Consumable));
 }
 
-// Add Consumable
+// Add Consumable (Fault-Tolerant)
 export async function addConsumable(consumable: Omit<Consumable, "id" | "lastUpdated">): Promise<string> {
   const id = "con-" + generateId();
   const newConsumable: Consumable = {
@@ -490,51 +604,69 @@ export async function addConsumable(consumable: Omit<Consumable, "id" | "lastUpd
     lastUpdated: Timestamp.now()
   };
 
-  if (isOfflineFallback) {
-    const list = getLocalConsumables();
-    list.push(newConsumable);
-    setLocal("local_consumables", list);
-    return id;
+  // 1. Immediately save locally
+  const list = getLocalConsumables();
+  list.push(newConsumable);
+  setLocal("local_consumables", list);
+
+  if (isOfflineFallback) return id;
+
+  // 2. Sync to Cloud
+  try {
+    await setDoc(doc(db, "consumables", id), newConsumable);
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: Consumable saved locally, Cloud sync deferred:", err);
   }
 
-  await setDoc(doc(db, "consumables", id), newConsumable);
   return id;
 }
 
-// Update Consumable
+// Update Consumable (Fault-Tolerant)
 export async function updateConsumable(id: string, updates: Partial<Consumable>): Promise<void> {
-  if (isOfflineFallback) {
-    const list = getLocalConsumables();
-    const index = list.findIndex(c => c.id === id);
-    if (index !== -1) {
-      list[index] = { 
-        ...list[index], 
-        ...updates, 
-        lastUpdated: Timestamp.now() 
-      };
-      setLocal("local_consumables", list);
-    }
-    return;
+  // 1. Update locally
+  const list = getLocalConsumables();
+  const index = list.findIndex(c => c.id === id);
+  if (index !== -1) {
+    list[index] = { 
+      ...list[index], 
+      ...updates, 
+      lastUpdated: Timestamp.now() 
+    };
+    setLocal("local_consumables", list);
   }
 
-  await updateDoc(doc(db, "consumables", id), {
-    ...updates,
-    lastUpdated: Timestamp.now()
-  });
+  if (isOfflineFallback) return;
+
+  // 2. Update Cloud
+  try {
+    await updateDoc(doc(db, "consumables", id), {
+      ...updates,
+      lastUpdated: Timestamp.now()
+    });
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: Consumable updated locally, Cloud sync deferred:", err);
+  }
 }
 
-// Delete Consumable
+// Delete Consumable (Fault-Tolerant)
 export async function deleteConsumable(id: string): Promise<void> {
-  if (isOfflineFallback) {
-    const list = getLocalConsumables();
-    const updated = list.filter(c => c.id !== id);
-    setLocal("local_consumables", updated);
-    return;
+  const list = getLocalConsumables();
+  const updated = list.filter(c => c.id !== id);
+  setLocal("local_consumables", updated);
+
+  if (isOfflineFallback) return;
+
+  try {
+    await deleteDoc(doc(db, "consumables", id));
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: Consumable deleted locally, Cloud sync deferred:", err);
   }
-  await deleteDoc(doc(db, "consumables", id));
 }
 
-// Save Count Check History
+// Save Count Check History (Fault-Tolerant)
 export async function saveCountHistory(
   cabinetId: string, 
   cabinetName: string, 
@@ -551,42 +683,46 @@ export async function saveCountHistory(
     items: itemCounts
   };
 
-  if (isOfflineFallback) {
-    // 1. Save count history log
-    const historyList = getLocalCountHistory();
-    historyList.unshift(countLog);
-    setLocal("local_count_history", historyList);
+  // 1. Update local storage immediately
+  const historyList = getLocalCountHistory();
+  historyList.unshift(countLog);
+  setLocal("local_count_history", historyList);
 
-    // 2. Update consumable stock quantity locally
-    const consumables = getLocalConsumables();
-    itemCounts.forEach(item => {
-      const idx = consumables.findIndex(c => c.id === item.consumableId);
-      if (idx !== -1) {
-        consumables[idx].currentQty = item.newQty;
-        consumables[idx].lastUpdated = Timestamp.now();
-        consumables[idx].lastUpdatedBy = checkedBy;
-      }
-    });
-    setLocal("local_consumables", consumables);
-    return;
-  }
-
-  const batch = writeBatch(db);
-  batch.set(doc(db, "count_history", logId), countLog);
-
+  const consumables = getLocalConsumables();
   itemCounts.forEach(item => {
-    const ref = doc(db, "consumables", item.consumableId);
-    batch.update(ref, {
-      currentQty: item.newQty,
-      lastUpdated: Timestamp.now(),
-      lastUpdatedBy: checkedBy
-    });
+    const idx = consumables.findIndex(c => c.id === item.consumableId);
+    if (idx !== -1) {
+      consumables[idx].currentQty = item.newQty;
+      consumables[idx].lastUpdated = Timestamp.now();
+      consumables[idx].lastUpdatedBy = checkedBy;
+    }
   });
+  setLocal("local_consumables", consumables);
 
-  await batch.commit();
+  if (isOfflineFallback) return;
+
+  // 2. Sync to Cloud
+  try {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "count_history", logId), countLog);
+
+    itemCounts.forEach(item => {
+      const ref = doc(db, "consumables", item.consumableId);
+      batch.update(ref, {
+        currentQty: item.newQty,
+        lastUpdated: Timestamp.now(),
+        lastUpdatedBy: checkedBy
+      });
+    });
+
+    await batch.commit();
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: Count audit saved locally, Cloud sync deferred:", err);
+  }
 }
 
-// Save QC Consumption History
+// Save QC Consumption History (Fault-Tolerant)
 export async function saveQCConsumption(
   department: string, 
   consumedBy: string, 
@@ -601,61 +737,91 @@ export async function saveQCConsumption(
     items
   };
 
-  if (isOfflineFallback) {
-    // 1. Save consumption log
-    const qcList = getLocalQCConsumptionHistory();
-    qcList.unshift(qcLog);
-    setLocal("local_qc_consumption_history", qcList);
+  // 1. Update locally
+  const qcList = getLocalQCConsumptionHistory();
+  qcList.unshift(qcLog);
+  setLocal("local_qc_consumption_history", qcList);
 
-    // 2. Decrement inventory
-    const consumables = getLocalConsumables();
-    items.forEach(item => {
-      const idx = consumables.findIndex(c => c.id === item.consumableId);
-      if (idx !== -1) {
-        const currentQty = consumables[idx].currentQty || 0;
-        consumables[idx].currentQty = Math.max(0, currentQty - item.qtyTaken);
-        consumables[idx].lastUpdated = Timestamp.now();
-        consumables[idx].lastUpdatedBy = consumedBy;
-      }
-    });
-    setLocal("local_consumables", consumables);
-    return;
-  }
-
-  const batch = writeBatch(db);
-  batch.set(doc(db, "qc_consumption_history", logId), qcLog);
-
-  for (const item of items) {
-    const consumableRef = doc(db, "consumables", item.consumableId);
-    const docSnap = await getDoc(consumableRef);
-    if (docSnap.exists()) {
-      const currentQty = docSnap.data().currentQty || 0;
-      const newQty = Math.max(0, currentQty - item.qtyTaken);
-      batch.update(consumableRef, {
-        currentQty: newQty,
-        lastUpdated: Timestamp.now(),
-        lastUpdatedBy: consumedBy
-      });
+  const consumables = getLocalConsumables();
+  items.forEach(item => {
+    const idx = consumables.findIndex(c => c.id === item.consumableId);
+    if (idx !== -1) {
+      const currentQty = consumables[idx].currentQty || 0;
+      consumables[idx].currentQty = Math.max(0, currentQty - item.qtyTaken);
+      consumables[idx].lastUpdated = Timestamp.now();
+      consumables[idx].lastUpdatedBy = consumedBy;
     }
-  }
+  });
+  setLocal("local_consumables", consumables);
 
-  await batch.commit();
+  if (isOfflineFallback) return;
+
+  // 2. Sync to Cloud
+  try {
+    const batch = writeBatch(db);
+    batch.set(doc(db, "qc_consumption_history", logId), qcLog);
+
+    for (const item of items) {
+      const consumableRef = doc(db, "consumables", item.consumableId);
+      const docSnap = await getDoc(consumableRef);
+      if (docSnap.exists()) {
+        const currentQty = docSnap.data().currentQty || 0;
+        const newQty = Math.max(0, currentQty - item.qtyTaken);
+        batch.update(consumableRef, {
+          currentQty: newQty,
+          lastUpdated: Timestamp.now(),
+          lastUpdatedBy: consumedBy
+        });
+      }
+    }
+
+    await batch.commit();
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: QC consumption saved locally, Cloud sync deferred:", err);
+  }
 }
 
-// Fetch Counting History Logs
+// Fetch Counting History Logs (Fault-Tolerant)
 export async function getCountHistory(): Promise<CountHistory[]> {
-  if (isOfflineFallback) {
-    return getLocalCountHistory();
+  const localList = getLocalCountHistory();
+  if (isOfflineFallback) return localList;
+
+  try {
+    const snap = await withTimeout(
+      getDocs(query(collection(db, "count_history"), orderBy("checkedAt", "desc"))),
+      4000
+    );
+    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CountHistory));
+    if (cloudList.length > 0) {
+      setLocal("local_count_history", cloudList);
+      return cloudList;
+    }
+    return localList;
+  } catch (err) {
+    recordCloudError(err);
+    return localList;
   }
-  const snap = await getDocs(query(collection(db, "count_history"), orderBy("checkedAt", "desc")));
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CountHistory));
 }
 
-// Fetch QC Consumption History Logs
+// Fetch QC Consumption History Logs (Fault-Tolerant)
 export async function getQCConsumptionHistory(): Promise<QCConsumptionHistory[]> {
-  if (isOfflineFallback) {
-    return getLocalQCConsumptionHistory();
+  const localList = getLocalQCConsumptionHistory();
+  if (isOfflineFallback) return localList;
+
+  try {
+    const snap = await withTimeout(
+      getDocs(query(collection(db, "qc_consumption_history"), orderBy("consumedAt", "desc"))),
+      4000
+    );
+    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as QCConsumptionHistory));
+    if (cloudList.length > 0) {
+      setLocal("local_qc_consumption_history", cloudList);
+      return cloudList;
+    }
+    return localList;
+  } catch (err) {
+    recordCloudError(err);
+    return localList;
   }
-  const snap = await getDocs(query(collection(db, "qc_consumption_history"), orderBy("consumedAt", "desc")));
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as QCConsumptionHistory));
 }

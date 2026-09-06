@@ -11,6 +11,7 @@ import {
   deleteConsumable,
   getCountHistory,
   getQCConsumptionHistory,
+  getCloudSyncNotice,
   CABINET_PRESETS,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
@@ -33,7 +34,10 @@ import {
   Eye, 
   Sparkles,
   Loader2,
-  Printer
+  Printer,
+  Copy,
+  CheckCircle2,
+  X
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -62,6 +66,8 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
     departments: [] as string[],
     photoUrl: CABINET_PRESETS[0]
   });
+  const [isSavingCabinet, setIsSavingCabinet] = useState(false);
+  const [cabinetError, setCabinetError] = useState<string | null>(null);
 
   // Consumable Modals / Form
   const [showConsumableModal, setShowConsumableModal] = useState(false);
@@ -75,6 +81,13 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
     unit: "ชิ้น",
     imageUrl: CONSUMABLE_PRESETS["glove"]
   });
+  const [isSavingConsumable, setIsSavingConsumable] = useState(false);
+  const [consumableError, setConsumableError] = useState<string | null>(null);
+
+  // Notifications & UI Helpers
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [dismissCloudNotice, setDismissCloudNotice] = useState(false);
+  const [copiedRule, setCopiedRule] = useState(false);
 
   // QR Code Modal
   const [showQRModal, setShowQRModal] = useState(false);
@@ -118,23 +131,52 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
   // Cabinet submit
   const handleCabinetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cabinetForm.name || !cabinetForm.location || cabinetForm.departments.length === 0) {
-      alert("กรุณากรอกข้อมูลให้ครบถ้วน รวมถึงเลือกอย่างน้อย 1 แผนก");
+    setCabinetError(null);
+
+    const trimmedName = cabinetForm.name.trim();
+    const trimmedLocation = cabinetForm.location.trim();
+
+    if (!trimmedName) {
+      setCabinetError("กรุณาระบุชื่อตู้เก็บของ");
+      return;
+    }
+    if (!trimmedLocation) {
+      setCabinetError("กรุณาระบุสถานที่ตั้งตู้เก็บของ");
+      return;
+    }
+    if (cabinetForm.departments.length === 0) {
+      setCabinetError("กรุณาเลือกอย่างน้อย 1 แผนกที่ดูแลหรือใช้งานตู้นี้");
       return;
     }
 
+    setIsSavingCabinet(true);
     try {
+      const payload = {
+        name: trimmedName,
+        location: trimmedLocation,
+        departments: cabinetForm.departments,
+        photoUrl: cabinetForm.photoUrl || CABINET_PRESETS[0]
+      };
+
       if (editingCabinet) {
-        await updateCabinet(editingCabinet.id, cabinetForm);
+        await updateCabinet(editingCabinet.id, payload);
+        setToastMessage("อัปเดตข้อมูลตู้เก็บของเรียบร้อย");
       } else {
-        await addCabinet(cabinetForm);
+        await addCabinet(payload);
+        setToastMessage("เพิ่มตู้เก็บของใหม่สำเร็จเรียบร้อย!");
       }
+
       setShowCabinetModal(false);
       setEditingCabinet(null);
       setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
+      setCabinetError(null);
       triggerRefresh();
-    } catch (err) {
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
       console.error("Error saving cabinet:", err);
+      setCabinetError(err?.message || "เกิดข้อผิดพลาดในการบันทึกตู้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsSavingCabinet(false);
     }
   };
 
@@ -146,6 +188,7 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
       departments: cab.departments,
       photoUrl: cab.photoUrl
     });
+    setCabinetError(null);
     setShowCabinetModal(true);
   };
 
@@ -153,7 +196,9 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
     if (confirm("คุณแน่ใจหรือไม่ที่จะลบตู้นี้? การลบตู้จะทำให้วัสดุสิ้นเปลืองทั้งหมดในตู้นี้ถูกลบไปด้วย และไม่สามารถกู้คืนได้")) {
       try {
         await deleteCabinet(id);
+        setToastMessage("ลบตู้เก็บของและรายการพัสดุในตู้เรียบร้อย");
         triggerRefresh();
+        setTimeout(() => setToastMessage(null), 4000);
       } catch (err) {
         console.error("Error deleting cabinet:", err);
       }
@@ -163,23 +208,35 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
   // Consumable submit
   const handleConsumableSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!consumableForm.name || !selectedCabinetId) {
-      alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+    setConsumableError(null);
+
+    const trimmedName = consumableForm.name.trim();
+    if (!trimmedName) {
+      setConsumableError("กรุณาระบุชื่อวัสดุสิ้นเปลือง");
+      return;
+    }
+    if (!selectedCabinetId) {
+      setConsumableError("กรุณาเลือกตู้เก็บพัสดุ");
       return;
     }
 
+    setIsSavingConsumable(true);
     try {
       const payload = {
         ...consumableForm,
+        name: trimmedName,
         cabinetId: selectedCabinetId,
         lastUpdatedBy: userEmail
       };
 
       if (editingConsumable) {
         await updateConsumable(editingConsumable.id, payload);
+        setToastMessage("อัปเดตข้อมูลวัสดุสิ้นเปลืองเรียบร้อย");
       } else {
         await addConsumable(payload);
+        setToastMessage("เพิ่มวัสดุสิ้นเปลืองลงในตู้สำเร็จเรียบร้อย!");
       }
+
       setShowConsumableModal(false);
       setEditingConsumable(null);
       setConsumableForm({
@@ -190,9 +247,14 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
         unit: "ชิ้น",
         imageUrl: CONSUMABLE_PRESETS["glove"]
       });
+      setConsumableError(null);
       triggerRefresh();
-    } catch (err) {
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
       console.error("Error saving consumable:", err);
+      setConsumableError(err?.message || "เกิดข้อผิดพลาดในการบันทึกพัสดุ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsSavingConsumable(false);
     }
   };
 
@@ -309,6 +371,63 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
           </button>
         </div>
       </div>
+
+      {/* CLOUD FIRESTORE RULES NOTICE BANNER */}
+      {getCloudSyncNotice().hasError && !dismissCloudNotice && (
+        <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs animate-fade-in shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0 mt-0.5">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-bold text-amber-900 text-sm mb-1">
+                ระบบเปิดใช้งาน Local-First Storage สำเร็จ: ข้อมูลของคุณถูกบันทึกอย่างปลอดภัยในเครื่อง
+              </p>
+              <p className="text-amber-800 leading-relaxed max-w-3xl">
+                {getCloudSyncNotice().code === "permission-denied" ? (
+                  <>
+                    Cloud Firestore ปฏิเสธการเข้าถึง (Permission Denied) เนื่องจากยังไม่ได้ตั้งค่าสิทธิ์ใน Firebase Console 
+                    แต่ระบบได้บันทึกตู้และพัสดุทั้งหมดของคุณไว้ในเครื่องให้ทันที สามารถใช้งาน สร้างตู้ และเช็กสต็อกได้ตามปกติ! 
+                    หากต้องการเปิดให้พนักงานเครื่องอื่นมองเห็นข้อมูลร่วมกันบนคลาวด์ ให้ไปที่ <b>Firebase Console &gt; Firestore Database &gt; Rules</b>
+                  </>
+                ) : (
+                  getCloudSyncNotice().message || "กำลังทำงานด้วย Local-First Database อย่างราบรื่น"
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+            <button
+              onClick={() => {
+                const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
+                navigator.clipboard.writeText(rules);
+                setCopiedRule(true);
+                setTimeout(() => setCopiedRule(false), 3000);
+              }}
+              className="px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {copiedRule ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-700" />
+                  <span>คัดลอก Rules แล้ว</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>คัดลอก Firestore Rules</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setDismissCloudNotice(true)}
+              className="p-1.5 text-amber-700 hover:bg-amber-100 rounded-xl transition-colors cursor-pointer"
+              title="ปิดการแจ้งเตือน"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* METRICS ROW */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -937,9 +1056,16 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
             </div>
             
             <form onSubmit={handleCabinetSubmit} className="p-6 space-y-4 font-sans text-xs">
+              {cabinetError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+                  <span>{cabinetError}</span>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="cab-name-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  ชื่อตู้เก็บของ
+                  ชื่อตู้เก็บของ <span className="text-rose-500">*</span>
                 </label>
                 <input
                   id="cab-name-input"
@@ -953,7 +1079,7 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
 
               <div>
                 <label htmlFor="cab-location-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  สถานที่ตั้งตู้เก็บของ
+                  สถานที่ตั้งตู้เก็บของ <span className="text-rose-500">*</span>
                 </label>
                 <input
                   id="cab-location-input"
@@ -1029,16 +1155,25 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
               <div className="flex gap-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={isSavingCabinet}
                   onClick={() => setShowCabinetModal(false)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer transition-all"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer transition-all"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                  disabled={isSavingCabinet}
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-75 text-white font-semibold text-xs rounded-xl shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5"
                 >
-                  ตกลงและบันทึก
+                  {isSavingCabinet ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>กำลังบันทึกข้อมูล...</span>
+                    </>
+                  ) : (
+                    <span>ตกลงและบันทึก</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -1058,9 +1193,16 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
             </div>
 
             <form onSubmit={handleConsumableSubmit} className="p-6 space-y-4 font-sans text-xs">
+              {consumableError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+                  <span>{consumableError}</span>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="con-cabinet-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  เลือกจัดสรรลงตู้เก็บของ
+                  เลือกจัดสรรลงตู้เก็บของ <span className="text-rose-500">*</span>
                 </label>
                 <select
                   id="con-cabinet-select"
@@ -1077,7 +1219,7 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
 
               <div>
                 <label htmlFor="con-name-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  ชื่อวัสดุสิ้นเปลือง / พัสดุ
+                  ชื่อวัสดุสิ้นเปลือง / พัสดุ <span className="text-rose-500">*</span>
                 </label>
                 <input
                   id="con-name-input"
@@ -1174,16 +1316,25 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
               <div className="flex gap-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={isSavingConsumable}
                   onClick={() => setShowConsumableModal(false)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer transition-all"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer transition-all"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+                  disabled={isSavingConsumable}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-75 text-white font-semibold text-xs rounded-xl shadow-md cursor-pointer transition-all flex items-center justify-center gap-1.5"
                 >
-                  จัดเก็บลงตู้
+                  {isSavingConsumable ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>กำลังจัดเก็บ...</span>
+                    </>
+                  ) : (
+                    <span>จัดเก็บลงตู้</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -1287,6 +1438,14 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 bg-slate-950/95 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold animate-slide-up backdrop-blur-sm">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
       )}
 
