@@ -6,6 +6,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import HelperCountView from "./components/HelperCountView";
 import QCConsumeView from "./components/QCConsumeView";
 import { seedDatabaseIfEmpty, getConsumables } from "./lib/dbService";
+import { auth, signOut } from "./lib/firebase";
 import { 
   Package, 
   Shield, 
@@ -95,7 +96,12 @@ export default function App() {
     localStorage.setItem("cabinet_tracker_user", JSON.stringify(profile));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error("Sign out error:", e);
+    }
     setUser(null);
     localStorage.removeItem("cabinet_tracker_user");
     // Clean up query param on logout
