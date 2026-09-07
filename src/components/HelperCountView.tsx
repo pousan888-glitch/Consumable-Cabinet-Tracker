@@ -5,6 +5,7 @@ import {
   getConsumables, 
   saveCountHistory 
 } from "../lib/dbService";
+import ImagePreviewModal from "./ImagePreviewModal";
 import { 
   Check, 
   Plus, 
@@ -16,7 +17,10 @@ import {
   Loader2, 
   Sparkles, 
   Clock, 
-  Search 
+  Search,
+  Eye,
+  Camera,
+  Maximize2
 } from "lucide-react";
 
 interface HelperCountViewProps {
@@ -40,6 +44,7 @@ export default function HelperCountView({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
 
   // Load cabinets initially
   useEffect(() => {
@@ -254,20 +259,33 @@ export default function HelperCountView({
 
         {/* Cabinet Hero Header */}
         <div className="bg-white rounded-2xl shadow-md border border-slate-100 overflow-hidden mb-8">
-          <div className="relative h-44 sm:h-52 bg-slate-900">
+          <div 
+            className="relative h-44 sm:h-52 bg-slate-900 cursor-pointer group"
+            onClick={() => setPreviewImage({
+              url: selectedCabinet.photoUrl,
+              title: selectedCabinet.name,
+              subtitle: `สถานที่: ${selectedCabinet.location} | แผนก: ${selectedCabinet.departments.join(", ")}`
+            })}
+            title="แตะเพื่อดูรูปตู้เก็บพัสดุขนาดใหญ่"
+          >
             <img 
               src={selectedCabinet.photoUrl} 
               alt={selectedCabinet.name} 
-              className="w-full h-full object-cover opacity-85"
+              className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-300"
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent flex flex-col justify-end p-6">
-              <div className="flex gap-2 mb-2">
-                {selectedCabinet.departments.map(dept => (
-                  <span key={dept} className="bg-indigo-600/95 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
-                    {dept}
-                  </span>
-                ))}
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedCabinet.departments.map(dept => (
+                    <span key={dept} className="bg-indigo-600/95 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+                      {dept}
+                    </span>
+                  ))}
+                </div>
+                <span className="inline-flex items-center gap-1 bg-black/60 backdrop-blur-sm text-white text-[11px] font-semibold px-2.5 py-1 rounded-full border border-white/20">
+                  <Maximize2 className="h-3 w-3" /> แตะดูรูปตู้ใหญ่
+                </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-tight font-display">
                 {selectedCabinet.name}
@@ -281,7 +299,7 @@ export default function HelperCountView({
           
           <div className="p-4 bg-indigo-50/50 border-t border-indigo-100 flex items-center gap-2.5 text-[11px] sm:text-xs text-indigo-800 font-medium">
             <Sparkles className="h-4 w-4 text-indigo-600 shrink-0" />
-            <span>คำแนะนำ: กรุณาตรวจนับพัสดุทีละรายการ คีย์จำนวนที่ตรวจพบบนชั้นวาง และกดยืนยันบันทึก</span>
+            <span>คำแนะนำ: แตะที่รูปพัสดุเพื่อดูภาพจริง คีย์จำนวนที่ตรวจพบบนชั้นวาง และกดยืนยันบันทึก</span>
           </div>
         </div>
 
@@ -302,16 +320,31 @@ export default function HelperCountView({
                   key={item.id} 
                   className="bg-white rounded-xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:shadow-md transition-all duration-150"
                 >
-                  {/* Left: Consumable Info */}
+                  {/* Left: Consumable Info with Clickable Photo */}
                   <div className="flex items-center gap-4">
-                    <div className="h-14 w-14 rounded-lg bg-slate-100 overflow-hidden border border-slate-200/60 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage({
+                        url: item.imageUrl,
+                        title: item.name,
+                        subtitle: `แผนก: ${item.department} | หน่วยนับ: ${item.unit} | เกณฑ์เตือนสต็อกต่ำ: ${item.minThreshold}`
+                      })}
+                      className="relative h-16 w-16 rounded-xl bg-slate-100 overflow-hidden border-2 border-slate-200/80 shrink-0 cursor-pointer group shadow-sm active:scale-95 transition-all text-left"
+                      title="แตะเพื่อดูรูปภาพของจริงขนาดใหญ่"
+                    >
                       <img 
                         src={item.imageUrl} 
                         alt={item.name} 
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                         referrerPolicy="no-referrer"
                       />
-                    </div>
+                      <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <Eye className="h-4 w-4 drop-shadow" />
+                      </div>
+                      <span className="absolute bottom-0 inset-x-0 bg-slate-950/70 text-white text-[8px] font-bold text-center py-0.5">
+                        แตะดูรูป
+                      </span>
+                    </button>
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded border border-slate-200/50">
@@ -391,6 +424,16 @@ export default function HelperCountView({
               </>
             )}
           </button>
+        )}
+
+        {/* Full Image Preview Modal */}
+        {previewImage && (
+          <ImagePreviewModal
+            imageUrl={previewImage.url}
+            title={previewImage.title}
+            subtitle={previewImage.subtitle}
+            onClose={() => setPreviewImage(null)}
+          />
         )}
       </div>
     );
@@ -472,6 +515,16 @@ export default function HelperCountView({
           ))
         )}
       </div>
+
+      {/* Full Image Preview Modal in Directory */}
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage.url}
+          title={previewImage.title}
+          subtitle={previewImage.subtitle}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
     </div>
   );
 }

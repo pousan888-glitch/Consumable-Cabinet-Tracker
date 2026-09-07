@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Cabinet, Consumable, CountHistory, QCConsumptionHistory } from "../types";
+import { Cabinet, Consumable, CountHistory, QCConsumptionHistory, DepartmentRecord } from "../types";
 import { 
   getCabinets, 
   getConsumables, 
@@ -14,11 +14,15 @@ import {
   getCloudSyncNotice,
   testAndSyncAllToCloud,
   resetCloudSyncNotice,
+  getDepartments,
   CABINET_PRESETS,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
 import { getActiveFirebaseConfig } from "../lib/firebase";
 import UserRoleManagement from "./UserRoleManagement";
+import DepartmentSettings from "./DepartmentSettings";
+import ImageUploadInput from "./ImageUploadInput";
+import ImagePreviewModal from "./ImagePreviewModal";
 import { 
   Plus, 
   Edit, 
@@ -46,7 +50,9 @@ import {
   RefreshCw,
   Users,
   Crown,
-  ShieldCheck
+  ShieldCheck,
+  Building2,
+  Camera
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -62,12 +68,14 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   const [consumables, setConsumables] = useState<Consumable[]>([]);
   const [countLogs, setCountLogs] = useState<CountHistory[]>([]);
   const [qcLogs, setQcLogs] = useState<QCConsumptionHistory[]>([]);
+  const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
   
   // Loading & View States
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"cabinets" | "consumables" | "history" | "qc" | "users">("cabinets");
+  const [activeTab, setActiveTab] = useState<"cabinets" | "consumables" | "history" | "qc" | "users" | "settings">("cabinets");
   const [searchTerm, setSearchTerm] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [previewModalImage, setPreviewModalImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
 
   // Cabinet Modals / Form
   const [showCabinetModal, setShowCabinetModal] = useState(false);
@@ -126,6 +134,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         setCountLogs(histories);
         const qcHistories = await getQCConsumptionHistory();
         setQcLogs(qcHistories);
+        const depts = await getDepartments();
+        setDepartments(depts);
       } else {
         setSyncErrorMsg(res.message);
       }
@@ -143,8 +153,10 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   // History detail drawer
   const [selectedLog, setSelectedLog] = useState<CountHistory | null>(null);
 
-  // Departments List
-  const FACTORY_DEPARTMENTS = ["Production", "QC", "Maintenance", "Warehouse", "Office"];
+  // Departments List (dynamic from database with fallback)
+  const availableDepartmentNames = departments.length > 0
+    ? departments.map(d => d.name)
+    : ["Production", "QC", "Maintenance", "Warehouse", "Office"];
 
   useEffect(() => {
     async function loadAllData() {
@@ -161,6 +173,9 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
         const qcHistories = await getQCConsumptionHistory();
         setQcLogs(qcHistories);
+
+        const depts = await getDepartments();
+        setDepartments(depts);
       } catch (err) {
         console.error("Error loading admin dashboard data:", err);
       } finally {
@@ -739,6 +754,22 @@ service cloud.firestore {
             ประวัติ QC หยิบใช้ของ
           </button>
 
+          {/* Department Settings Tab: Accessible by Admin & Super Admin */}
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "settings"
+                ? "border-indigo-600 text-indigo-600 font-bold"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Building2 className="h-4 w-4" />
+            <span>จัดการแผนกโรงงาน</span>
+            <span className="px-1.5 py-0.5 text-[9px] font-black bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
+              {departments.length}
+            </span>
+          </button>
+
           {isUserSuperAdmin && (
             <button
               onClick={() => setActiveTab("users")}
@@ -759,7 +790,7 @@ service cloud.firestore {
       </div>
 
       {/* SEARCH/SEARCH CONTROLS */}
-      {activeTab !== "history" && activeTab !== "qc" && activeTab !== "users" && (
+      {activeTab !== "history" && activeTab !== "qc" && activeTab !== "users" && activeTab !== "settings" && (
         <div className="relative mb-6 max-w-sm">
           <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
           <input
@@ -793,13 +824,26 @@ service cloud.firestore {
                   <div key={cabinet.id} className="bg-white rounded-2xl overflow-hidden border-2 border-slate-100 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
                     <div>
                       {/* Photo Header */}
-                      <div className="relative h-40 bg-slate-100">
+                      <div 
+                        className="relative h-40 bg-slate-100 cursor-pointer group overflow-hidden"
+                        onClick={() => setPreviewModalImage({ 
+                          url: cabinet.photoUrl, 
+                          title: cabinet.name, 
+                          subtitle: `ที่ตั้ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}` 
+                        })}
+                        title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
+                      >
                         <img 
                           src={cabinet.photoUrl} 
                           alt={cabinet.name} 
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           referrerPolicy="no-referrer"
                         />
+                        <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="px-2.5 py-1 bg-white/90 rounded-full text-[10px] font-bold text-slate-900 shadow flex items-center gap-1">
+                            <Eye className="h-3 w-3" /> ดูรูปใหญ่
+                          </span>
+                        </div>
                         <div className="absolute top-3 left-3 flex flex-wrap gap-1">
                           {cabinet.departments.map(d => (
                             <span key={d} className="bg-indigo-600/90 text-white font-bold text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow">
@@ -923,12 +967,25 @@ service cloud.firestore {
                         <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-4 px-6 font-semibold">
                             <div className="flex items-center gap-3">
-                              <img 
-                                src={item.imageUrl} 
-                                alt={item.name} 
-                                className="h-10 w-10 rounded-lg object-cover border border-slate-100 shrink-0"
-                                referrerPolicy="no-referrer"
-                              />
+                              <div 
+                                className="relative h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 cursor-pointer group"
+                                onClick={() => setPreviewModalImage({ 
+                                  url: item.imageUrl, 
+                                  title: item.name, 
+                                  subtitle: `ตู้: ${getCabinetName(item.cabinetId)} | แผนก: ${item.department} | คงเหลือ: ${item.currentQty} ${item.unit}` 
+                                })}
+                                title="คลิกเพื่อดูรูปภาพขยาย"
+                              >
+                                <img 
+                                  src={item.imageUrl} 
+                                  alt={item.name} 
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                                  <Eye className="h-3 w-3" />
+                                </div>
+                              </div>
                               <div>
                                 <span className="font-bold text-slate-900 block leading-tight">{item.name}</span>
                                 <span className="text-[10px] text-slate-400 font-medium block mt-0.5">ID: {item.id}</span>
@@ -1237,6 +1294,25 @@ service cloud.firestore {
         />
       )}
 
+      {/* 6. DEPARTMENT SETTINGS TAB (ADMIN & SUPER ADMIN) */}
+      {activeTab === "settings" && (
+        <DepartmentSettings
+          departments={departments}
+          cabinets={cabinets}
+          consumables={consumables}
+          currentUserEmail={userEmail}
+          isSuperAdmin={isUserSuperAdmin}
+          onRefresh={async () => {
+            const depts = await getDepartments();
+            setDepartments(depts);
+          }}
+          onToast={(msg) => {
+            setToastMessage(msg);
+            setTimeout(() => setToastMessage(null), 4000);
+          }}
+        />
+      )}
+
       {/* ========================================================================= */}
       {/* MODALS SECTION */}
       
@@ -1289,11 +1365,23 @@ service cloud.firestore {
 
               {/* Department Checkboxes */}
               <div>
-                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  กำหนดแผนกที่ดูแล / เข้าตรวจเช็ก (เลือกได้มากกว่า 1)
-                </span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    กำหนดแผนกที่ดูแล / เข้าตรวจเช็ก (เลือกได้มากกว่า 1)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCabinetModal(false);
+                      setActiveTab("settings");
+                    }}
+                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    + จัดการแผนก
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {FACTORY_DEPARTMENTS.map(dept => {
+                  {availableDepartmentNames.map(dept => {
                     const checked = cabinetForm.departments.includes(dept);
                     return (
                       <label key={dept} className="flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700">
@@ -1322,31 +1410,19 @@ service cloud.firestore {
                 </div>
               </div>
 
-              {/* Cabinet Preset Images Selection */}
-              <div>
-                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  เลือกรูปภาพสัญลักษณ์ของตู้เก็บของ
-                </span>
-                <div className="grid grid-cols-4 gap-2">
-                  {CABINET_PRESETS.map((preset, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setCabinetForm({ ...cabinetForm, photoUrl: preset })}
-                      className={`h-14 rounded-lg overflow-hidden border-2 relative cursor-pointer ${
-                        cabinetForm.photoUrl === preset ? "border-indigo-650 shadow-sm" : "border-transparent opacity-60"
-                      }`}
-                    >
-                      <img src={preset} alt="preset" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      {cabinetForm.photoUrl === preset && (
-                        <div className="absolute inset-0 bg-indigo-650/20 flex items-center justify-center">
-                          <Check className="h-4 w-4 text-white font-extrabold" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Cabinet Image with Upload / Camera / Presets */}
+              <ImageUploadInput
+                label="รูปภาพตู้เก็บพัสดุ (ถ่ายรูปจริง หรือเลือกตัวอย่าง)"
+                helperText="รูปถ่ายจริงช่วยให้เจ้าหน้าที่ค้นหาตู้ในโรงงานได้ง่ายและแม่นยำ"
+                value={cabinetForm.photoUrl}
+                onChange={(newUrl) => setCabinetForm({ ...cabinetForm, photoUrl: newUrl })}
+                presets={CABINET_PRESETS.map((url, idx) => ({
+                  key: `cab-${idx}`,
+                  label: idx === 0 ? "ตู้ล็อกเกอร์เหล็ก" : idx === 1 ? "ชั้นวางอะไหล่" : idx === 2 ? "กล่องอุตสาหกรรม" : "ตู้ช็อปช่าง",
+                  url
+                }))}
+                onPreviewFullImage={(url) => setPreviewModalImage({ url, title: cabinetForm.name || "ตู้เก็บของ", subtitle: cabinetForm.location })}
+              />
 
               <div className="flex gap-2 pt-4 border-t border-slate-100">
                 <button
@@ -1429,16 +1505,28 @@ service cloud.firestore {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="con-dept-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    แผนกรับผิดชอบ
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label htmlFor="con-dept-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      แผนกรับผิดชอบ
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowConsumableModal(false);
+                        setActiveTab("settings");
+                      }}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                    >
+                      + จัดการแผนก
+                    </button>
+                  </div>
                   <select
                     id="con-dept-select"
                     value={consumableForm.department}
                     onChange={(e) => setConsumableForm({ ...consumableForm, department: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
                   >
-                    {FACTORY_DEPARTMENTS.map(d => (
+                    {availableDepartmentNames.map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}
                   </select>
@@ -1487,27 +1575,35 @@ service cloud.firestore {
                 </div>
               </div>
 
-              {/* Consumable presets */}
-              <div>
-                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  เลือกรูปสัญลักษณ์สินค้าที่ใกล้เคียง
-                </span>
-                <div className="grid grid-cols-6 gap-2">
-                  {Object.entries(CONSUMABLE_PRESETS).map(([key, value]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setConsumableForm({ ...consumableForm, imageUrl: value })}
-                      className={`h-11 rounded-lg overflow-hidden border-2 relative cursor-pointer ${
-                        consumableForm.imageUrl === value ? "border-indigo-600" : "border-transparent opacity-60"
-                      }`}
-                      title={key}
-                    >
-                      <img src={value} alt={key} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* Consumable Image with Upload / Camera / Presets */}
+              <ImageUploadInput
+                label="รูปภาพพัสดุ / วัสดุสิ้นเปลือง (ถ่ายรูปจริง หรือเลือกตัวอย่าง)"
+                helperText="รูปถ่ายจริงช่วยให้ Helper ตรวจนับสต็อกได้รวดเร็ว ชัดเจน ไม่สับสนรุ่น/ขนาด"
+                value={consumableForm.imageUrl}
+                onChange={(newUrl) => setConsumableForm({ ...consumableForm, imageUrl: newUrl })}
+                presets={Object.entries(CONSUMABLE_PRESETS).map(([key, url]) => {
+                  const labels: Record<string, string> = {
+                    glove: "ถุงมือยาง",
+                    mask: "หน้ากากอนามัย",
+                    alcohol: "แอลกอฮอล์สเปรย์",
+                    tape: "เทปพันเกลียว",
+                    paper: "กระดาษทิชชู่",
+                    grease: "จาระบี/น้ำมัน",
+                    goggles: "แว่นตานิรภัย",
+                    tubes: "หลอดทดลอง/ขวด"
+                  };
+                  return {
+                    key,
+                    label: labels[key] || key,
+                    url
+                  };
+                })}
+                onPreviewFullImage={(url) => setPreviewModalImage({ 
+                  url, 
+                  title: consumableForm.name || "วัสดุสิ้นเปลือง", 
+                  subtitle: `หน่วย: ${consumableForm.unit || "ชิ้น"}` 
+                })}
+              />
 
               <div className="flex gap-2 pt-4 border-t border-slate-100">
                 <button
@@ -1635,6 +1731,16 @@ service cloud.firestore {
 
           </div>
         </div>
+      )}
+
+      {/* FULL IMAGE PREVIEW MODAL */}
+      {previewModalImage && (
+        <ImagePreviewModal
+          imageUrl={previewModalImage.url}
+          title={previewModalImage.title}
+          subtitle={previewModalImage.subtitle}
+          onClose={() => setPreviewModalImage(null)}
+        />
       )}
 
       {/* FLOATING TOAST NOTIFICATION */}

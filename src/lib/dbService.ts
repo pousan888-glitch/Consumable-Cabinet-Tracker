@@ -15,26 +15,28 @@ import {
   writeBatch,
   isOfflineFallback
 } from "./firebase";
-import { Cabinet, Consumable, CountHistory, QCConsumptionHistory, AppUserRecord, UserRole } from "../types";
+import { Cabinet, Consumable, CountHistory, QCConsumptionHistory, AppUserRecord, UserRole, DepartmentRecord } from "../types";
 
 // Generate unique ID
 const generateId = () => Math.random().toString(36).substring(2, 11);
 
-// Standard image presets
+// Standard image presets (tested and reliable)
 export const CABINET_PRESETS = [
   "https://images.unsplash.com/photo-1595225476474-87563907a212?auto=format&fit=crop&q=80&w=400", // metal locker cabinet
   "https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&q=80&w=400", // storage shelves
   "https://images.unsplash.com/photo-1540638349517-3abd5afc5847?auto=format&fit=crop&q=80&w=400", // blue industrial box
-  "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&q=80&w=400"  // wooden cabinet
+  "https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&q=80&w=400"  // workshop metal cabinet
 ];
 
 export const CONSUMABLE_PRESETS: Record<string, string> = {
-  "glove": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=400", // gloves
-  "mask": "https://images.unsplash.com/photo-1586942593568-29361efcd571?auto=format&fit=crop&q=80&w=400",  // masks
-  "alcohol": "https://images.unsplash.com/photo-1607619056574-7b8f304b3c86?auto=format&fit=crop&q=80&w=400", // alcohol/cleaning
-  "tape": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=400",    // maintenance tape
-  "paper": "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=400",   // industrial tissue
-  "grease": "https://images.unsplash.com/photo-1530124560676-10551fe77b2f?auto=format&fit=crop&q=80&w=400"  // tools/grease
+  "glove": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=400", // nitrile gloves
+  "mask": "https://images.unsplash.com/photo-1586942593568-29361efcd571?auto=format&fit=crop&q=80&w=400",  // 3-ply mask
+  "alcohol": "https://images.unsplash.com/photo-1584483766114-2cea6facdf57?auto=format&fit=crop&q=80&w=400", // alcohol sanitizer spray
+  "tape": "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=400",    // industrial tape
+  "paper": "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=400",   // industrial wipes
+  "grease": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&q=80&w=400",  // lubricant / grease
+  "goggles": "https://images.unsplash.com/photo-1584036561566-baf8f5f1b144?auto=format&fit=crop&q=80&w=400", // safety goggles
+  "tubes": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&q=80&w=400"    // lab test tubes / bottles
 };
 
 // Local storage helper functions for offline/demo fallback
@@ -92,6 +94,23 @@ const getLocalQCConsumptionHistory = (): QCConsumptionHistory[] => {
 const getLocalUsers = (): AppUserRecord[] => {
   const list = getLocal<any>("local_users");
   return list.map(item => convertToTimestamps<AppUserRecord>(item));
+};
+
+export const DEFAULT_DEPARTMENTS: DepartmentRecord[] = [
+  { id: "dept-prod", name: "Production", description: "ฝ่ายผลิตและประกอบชิ้นงาน", color: "#4f46e5" },
+  { id: "dept-qc", name: "QC", description: "ฝ่ายควบคุมและตรวจสอบคุณภาพ", color: "#9333ea" },
+  { id: "dept-maint", name: "Maintenance", description: "ฝ่ายซ่อมบำรุงและเครื่องจักร", color: "#f59e0b" },
+  { id: "dept-wh", name: "Warehouse", description: "ฝ่ายคลังสินค้าและจัดส่ง", color: "#10b981" },
+  { id: "dept-office", name: "Office", description: "ฝ่ายธุรการและสำนักงาน", color: "#64748b" }
+];
+
+export const getLocalDepartments = (): DepartmentRecord[] => {
+  const list = getLocal<any>("local_departments");
+  if (!list || list.length === 0) {
+    setLocal("local_departments", DEFAULT_DEPARTMENTS);
+    return DEFAULT_DEPARTMENTS;
+  }
+  return list.map(item => convertToTimestamps<DepartmentRecord>(item));
 };
 
 // Global Cloud Sync Status tracking to inform the user if Firestore Rules need attention
@@ -169,6 +188,7 @@ export async function testAndSyncAllToCloud(): Promise<{
     const localCount = getLocalCountHistory();
     const localQC = getLocalQCConsumptionHistory();
     const localUsers = getLocalUsers();
+    const localDepts = getLocalDepartments();
 
     const batch = writeBatch(db);
     for (const cab of localCabs) {
@@ -185,6 +205,9 @@ export async function testAndSyncAllToCloud(): Promise<{
     }
     for (const usr of localUsers) {
       batch.set(doc(db, "users", usr.id), usr);
+    }
+    for (const dept of localDepts) {
+      batch.set(doc(db, "departments", dept.id), dept);
     }
 
     await batch.commit();
@@ -1138,3 +1161,112 @@ export async function fetchOrRegisterUser(
 
   return { role: newRecord.role, isSuperAdmin: false };
 }
+
+// =========================================================================
+// DEPARTMENT MANAGEMENT (ACCESSIBLE BY SUPER ADMIN & ADMIN)
+// =========================================================================
+
+export async function getDepartments(): Promise<DepartmentRecord[]> {
+  const localList = getLocalDepartments();
+  if (isOfflineFallback) {
+    return localList;
+  }
+
+  try {
+    const q = query(collection(db, "departments"), orderBy("name", "asc"));
+    const snapshot = await withTimeout(getDocs(q), 3500);
+    if (snapshot.empty) {
+      // Seed default departments to Cloud Firestore
+      for (const d of localList) {
+        setDoc(doc(db, "departments", d.id), {
+          ...d,
+          createdAt: Timestamp.now()
+        }).catch(() => {});
+      }
+      return localList;
+    }
+
+    const cloudList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DepartmentRecord));
+    setLocal("local_departments", cloudList);
+    return cloudList;
+  } catch (err) {
+    recordCloudError(err);
+    return localList;
+  }
+}
+
+export async function addDepartment(
+  name: string,
+  description?: string,
+  color?: string,
+  createdBy?: string
+): Promise<DepartmentRecord> {
+  const cleanName = name.trim();
+  const id = "dept-" + generateId();
+  const newDept: DepartmentRecord = {
+    id,
+    name: cleanName,
+    description: description?.trim() || "",
+    color: color || "#4f46e5",
+    createdAt: Timestamp.now(),
+    createdBy: createdBy || "admin"
+  };
+
+  const list = getLocalDepartments();
+  // Check duplicate
+  const existingIdx = list.findIndex(d => d.name.toLowerCase() === cleanName.toLowerCase());
+  if (existingIdx !== -1) {
+    throw new Error(`แผนก "${cleanName}" มีอยู่ในระบบแล้ว`);
+  }
+
+  list.push(newDept);
+  setLocal("local_departments", list);
+
+  if (!isOfflineFallback) {
+    try {
+      await setDoc(doc(db, "departments", id), newDept);
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+
+  return newDept;
+}
+
+export async function updateDepartment(
+  id: string,
+  updates: Partial<DepartmentRecord>
+): Promise<void> {
+  const list = getLocalDepartments();
+  const idx = list.findIndex(d => d.id === id);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...updates };
+    setLocal("local_departments", list);
+  }
+
+  if (!isOfflineFallback) {
+    try {
+      await updateDoc(doc(db, "departments", id), updates);
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+}
+
+export async function deleteDepartment(id: string): Promise<void> {
+  const list = getLocalDepartments();
+  const target = list.find(d => d.id === id);
+  if (!target) return;
+
+  const updated = list.filter(d => d.id !== id);
+  setLocal("local_departments", updated);
+
+  if (!isOfflineFallback) {
+    try {
+      await deleteDoc(doc(db, "departments", id));
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+}
+

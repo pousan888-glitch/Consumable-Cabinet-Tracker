@@ -68,6 +68,15 @@ export interface QCConsumedItem {
   cabinetName: string;
 }
 
+export interface DepartmentRecord {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  createdAt?: any;
+  createdBy?: string;
+}
+
 export interface QCConsumptionHistory {
   id: string;
   department: string;

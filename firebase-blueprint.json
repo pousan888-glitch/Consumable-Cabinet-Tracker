@@ -43,6 +43,19 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["email", "role"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Factory department entity for grouping cabinets and consumables",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "color": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name"]
     }
   },
   "firestore": {
@@ -57,6 +70,10 @@
     "/users/{userId}": {
       "schema": "AppUser",
       "description": "App user roles and access control"
+    },
+    "/departments/{deptId}": {
+      "schema": "Department",
+      "description": "Factory departments list"
     }
   }
 }
