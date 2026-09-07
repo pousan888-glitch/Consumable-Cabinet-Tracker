@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "Cabinet": {
+      "title": "Cabinet",
+      "description": "Storage cabinet holding consumables",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "departments": { "type": "array" },
+        "photoUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "location"]
+    },
+    "Consumable": {
+      "title": "Consumable",
+      "description": "Consumable item stored in a cabinet",
+      "type": "object",
+      "properties": {
+        "cabinetId": { "type": "string" },
+        "name": { "type": "string" },
+        "department": { "type": "string" },
+        "currentQty": { "type": "number" },
+        "minThreshold": { "type": "number" },
+        "unit": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "lastUpdated": { "type": "string" },
+        "lastUpdatedBy": { "type": "string" }
+      },
+      "required": ["cabinetId", "name", "currentQty"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "User permission and role profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "QC", "HELPER"] },
+        "isSuperAdmin": { "type": "boolean" },
+        "assignedBy": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/cabinets/{cabinetId}": {
+      "schema": "Cabinet",
+      "description": "Cabinets list"
+    },
+    "/consumables/{consumableId}": {
+      "schema": "Consumable",
+      "description": "Consumables inventory list"
+    },
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "App user roles and access control"
+    }
+  }
+}

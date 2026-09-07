@@ -174,7 +174,12 @@ export default function App() {
       />
 
       <main className="flex-grow">
-        {user.role === "ADMIN" && <AdminDashboard userEmail={user.email} />}
+        {user.role === "ADMIN" && (
+          <AdminDashboard 
+            userEmail={user.email} 
+            isSuperAdmin={user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com"} 
+          />
+        )}
         {user.role === "HELPER" && (
           <HelperCountView 
             userEmail={user.email} 
@@ -191,48 +196,50 @@ export default function App() {
         )}
       </main>
 
-      {/* QUICK ACCESS BAR FOR ADMINISTRATORS AND TESTING TEAM IN FOOTER */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-3 px-4 z-40 shadow-lg">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div className="flex items-center gap-1.5 font-medium">
-            <Sparkles className="h-4.5 w-4.5 text-amber-500 shrink-0" />
-            <span>โหมดเข้าถึงเร่งด่วน: สามารถกดสลับดูหน้าต่างการทำงานของแผนกอื่นได้ทันทีเพื่อทดสอบโฟลว์</span>
-          </div>
+      {/* QUICK ACCESS TESTING BAR - RESERVED FOR SUPER ADMIN & SIMULATION */}
+      {(user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com" || user.isSimulation) && (
+        <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2.5 px-4 z-40 shadow-lg">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <div className="flex items-center gap-1.5 font-medium">
+              <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
+              <span>โหมดทดสอบสิทธิ์ (เฉพาะผู้ดูแลระบบสูงสุด): สลับดูหน้าจอของแต่ละบทบาทได้ทันที</span>
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => handleChangeRole("ADMIN")}
-              className={`px-3 py-1.5 rounded-lg font-bold border transition-all cursor-pointer ${
-                user.role === "ADMIN" 
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              ดูหน้า Admin
-            </button>
-            <button
-              onClick={() => handleChangeRole("HELPER")}
-              className={`px-3 py-1.5 rounded-lg font-bold border transition-all cursor-pointer ${
-                user.role === "HELPER" 
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              ดูหน้าทีมงานนับของ (Helper)
-            </button>
-            <button
-              onClick={() => handleChangeRole("QC")}
-              className={`px-3 py-1.5 rounded-lg font-bold border transition-all cursor-pointer ${
-                user.role === "QC" 
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-              }`}
-            >
-              ดูหน้า QC หยิบของใช้
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleChangeRole("ADMIN")}
+                className={`px-3 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
+                  user.role === "ADMIN" 
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                หน้า Admin
+              </button>
+              <button
+                onClick={() => handleChangeRole("HELPER")}
+                className={`px-3 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
+                  user.role === "HELPER" 
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                ทีมนับของ (Helper)
+              </button>
+              <button
+                onClick={() => handleChangeRole("QC")}
+                className={`px-3 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
+                  user.role === "QC" 
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                QC เบิกของใช้
+              </button>
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

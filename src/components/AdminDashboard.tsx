@@ -12,9 +12,13 @@ import {
   getCountHistory,
   getQCConsumptionHistory,
   getCloudSyncNotice,
+  testAndSyncAllToCloud,
+  resetCloudSyncNotice,
   CABINET_PRESETS,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
+import { getActiveFirebaseConfig } from "../lib/firebase";
+import UserRoleManagement from "./UserRoleManagement";
 import { 
   Plus, 
   Edit, 
@@ -37,14 +41,22 @@ import {
   Printer,
   Copy,
   CheckCircle2,
-  X
+  X,
+  ExternalLink,
+  RefreshCw,
+  Users,
+  Crown,
+  ShieldCheck
 } from "lucide-react";
 
 interface AdminDashboardProps {
   userEmail: string;
+  isSuperAdmin?: boolean;
 }
 
-export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
+export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboardProps) {
+  const isUserSuperAdmin = isSuperAdmin || userEmail.toLowerCase() === "pousan888@gmail.com";
+
   // Database States
   const [cabinets, setCabinets] = useState<Cabinet[]>([]);
   const [consumables, setConsumables] = useState<Consumable[]>([]);
@@ -53,7 +65,7 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
   
   // Loading & View States
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"cabinets" | "consumables" | "history" | "qc">("cabinets");
+  const [activeTab, setActiveTab] = useState<"cabinets" | "consumables" | "history" | "qc" | "users">("cabinets");
   const [searchTerm, setSearchTerm] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -88,6 +100,41 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [dismissCloudNotice, setDismissCloudNotice] = useState(false);
   const [copiedRule, setCopiedRule] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
+  const [syncErrorMsg, setSyncErrorMsg] = useState<string | null>(null);
+
+  const activeProjectId = getActiveFirebaseConfig().config.projectId || "warehouse-consumables-monitor";
+  const firebaseRulesUrl = `https://console.firebase.google.com/project/${activeProjectId}/firestore/rules`;
+
+  const handleSyncToCloud = async () => {
+    setIsSyncingCloud(true);
+    setSyncSuccessMsg(null);
+    setSyncErrorMsg(null);
+    try {
+      const res = await testAndSyncAllToCloud();
+      if (res.success) {
+        setSyncSuccessMsg(res.message);
+        setToastMessage("ซิงค์ข้อมูลขึ้น Cloud เรียบร้อยแล้ว!");
+        setTimeout(() => setToastMessage(null), 4000);
+        // Refresh all data
+        const cabs = await getCabinets();
+        setCabinets(cabs);
+        const items = await getConsumables();
+        setConsumables(items);
+        const histories = await getCountHistory();
+        setCountLogs(histories);
+        const qcHistories = await getQCConsumptionHistory();
+        setQcLogs(qcHistories);
+      } else {
+        setSyncErrorMsg(res.message);
+      }
+    } catch (err: any) {
+      setSyncErrorMsg(err?.message || "เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
 
   // QR Code Modal
   const [showQRModal, setShowQRModal] = useState(false);
@@ -340,6 +387,19 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <button
+            onClick={handleSyncToCloud}
+            disabled={isSyncingCloud}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/10 cursor-pointer transition-all"
+            title="ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Cloud Firestore เพื่อให้ทุกเครื่องเห็นตรงกัน"
+          >
+            {isSyncingCloud ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span>{isSyncingCloud ? "กำลังซิงค์..." : "ซิงค์ขึ้น Cloud"}</span>
+          </button>
+          <button
             onClick={() => {
               setEditingCabinet(null);
               setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
@@ -372,59 +432,166 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
         </div>
       </div>
 
-      {/* CLOUD FIRESTORE RULES NOTICE BANNER */}
-      {getCloudSyncNotice().hasError && !dismissCloudNotice && (
-        <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs animate-fade-in shadow-xs">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0 mt-0.5">
-              <AlertTriangle className="h-5 w-5" />
+      {/* CLOUD SYNC SUCCESS BANNER */}
+      {syncSuccessMsg && (
+        <div className="mb-8 p-5 bg-emerald-50 border-2 border-emerald-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs animate-fade-in shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-600 text-white rounded-xl shrink-0 shadow-xs">
+              <CheckCircle2 className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-bold text-amber-900 text-sm mb-1">
-                ระบบเปิดใช้งาน Local-First Storage สำเร็จ: ข้อมูลของคุณถูกบันทึกอย่างปลอดภัยในเครื่อง
+              <p className="font-bold text-emerald-950 text-sm mb-0.5">
+                เชื่อมต่อ Cloud สำเร็จและซิงค์ข้อมูลขึ้นระบบคลาวด์เรียบร้อยแล้ว!
               </p>
-              <p className="text-amber-800 leading-relaxed max-w-3xl">
-                {getCloudSyncNotice().code === "permission-denied" ? (
-                  <>
-                    Cloud Firestore ปฏิเสธการเข้าถึง (Permission Denied) เนื่องจากยังไม่ได้ตั้งค่าสิทธิ์ใน Firebase Console 
-                    แต่ระบบได้บันทึกตู้และพัสดุทั้งหมดของคุณไว้ในเครื่องให้ทันที สามารถใช้งาน สร้างตู้ และเช็กสต็อกได้ตามปกติ! 
-                    หากต้องการเปิดให้พนักงานเครื่องอื่นมองเห็นข้อมูลร่วมกันบนคลาวด์ ให้ไปที่ <b>Firebase Console &gt; Firestore Database &gt; Rules</b>
-                  </>
-                ) : (
-                  getCloudSyncNotice().message || "กำลังทำงานด้วย Local-First Database อย่างราบรื่น"
-                )}
+              <p className="text-emerald-800 leading-relaxed">
+                {syncSuccessMsg}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-            <button
-              onClick={() => {
-                const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
-                navigator.clipboard.writeText(rules);
-                setCopiedRule(true);
-                setTimeout(() => setCopiedRule(false), 3000);
-              }}
-              className="px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              {copiedRule ? (
-                <>
-                  <Check className="h-3.5 w-3.5 text-emerald-700" />
-                  <span>คัดลอก Rules แล้ว</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5" />
-                  <span>คัดลอก Firestore Rules</span>
-                </>
-              )}
-            </button>
+          <button
+            onClick={() => setSyncSuccessMsg(null)}
+            className="p-1.5 text-emerald-700 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer"
+            title="ปิด"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* CLOUD FIRESTORE RULES NOTICE BANNER & QUICK RESOLUTION GUIDE */}
+      {getCloudSyncNotice().hasError && !dismissCloudNotice && (
+        <div className="mb-8 p-6 bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-300 rounded-2xl text-xs animate-fade-in shadow-sm">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-amber-500 text-white rounded-xl shrink-0 shadow-sm mt-0.5">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                  วิธีแก้ปัญหา: ทำไมเปิดในเครื่องอื่นแล้วไม่เห็นข้อมูลที่เพิ่งเพิ่ม?
+                </h3>
+                <p className="text-slate-600 mt-1 leading-relaxed max-w-4xl">
+                  เพราะฐานข้อมูล Cloud Firestore ใน Firebase Console ปฏิเสธการเข้าถึง (Permission Denied) เนื่องจากยังไม่ได้เปิดสิทธิ์ Rules ทำให้ระบบต้องเซฟตู้และพัสดุไว้ในความจำเครื่องนี้ชั่วคราว (Local Storage) เครื่องอื่นจึงยังมองไม่เห็น 
+                  <b> ทำตาม 3 ขั้นตอนนี้เพียง 1 นาที เพื่อเปิดให้ทุกเครื่องและมือถือซิงค์ข้อมูลตรงกัน:</b>
+                </p>
+              </div>
+            </div>
             <button
               onClick={() => setDismissCloudNotice(true)}
-              className="p-1.5 text-amber-700 hover:bg-amber-100 rounded-xl transition-colors cursor-pointer"
-              title="ปิดการแจ้งเตือน"
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-100/60 rounded-xl transition-colors cursor-pointer shrink-0"
+              title="ซ่อนคำแนะนำนี้ชั่วคราว"
             >
               <X className="h-4 w-4" />
             </button>
+          </div>
+
+          {/* 3 ACTION STEPS */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+            {/* STEP 1 */}
+            <div className="bg-white p-4 rounded-xl border border-amber-200/90 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">1</span>
+                  <span className="font-bold text-slate-900">คัดลอก Firestore Rules</span>
+                </div>
+                <p className="text-slate-500 text-[11px] mb-2.5 leading-relaxed">
+                  คลิกปุ่มด้านล่างเพื่อคัดลอกโค้ดสิทธิ์อนุญาต:
+                </p>
+                <pre className="bg-slate-900 text-amber-200 p-2.5 rounded-lg text-[10px] font-mono overflow-x-auto mb-3">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}
+                </pre>
+              </div>
+              <button
+                onClick={() => {
+                  const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
+                  navigator.clipboard.writeText(rules);
+                  setCopiedRule(true);
+                  setTimeout(() => setCopiedRule(false), 3500);
+                }}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                {copiedRule ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    <span>คัดลอกโค้ด Rules สำเร็จแล้ว!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    <span>คลิกเพื่อคัดลอกโค้ด Rules</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* STEP 2 */}
+            <div className="bg-white p-4 rounded-xl border border-amber-200/90 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">2</span>
+                  <span className="font-bold text-slate-900">ไปที่ Firebase &gt; Firestore Rules</span>
+                </div>
+                <p className="text-slate-500 text-[11px] mb-2 leading-relaxed">
+                  คลิกปุ่มด้านล่างเพื่อเปิดหน้าโปรเจกต์ <b>{activeProjectId}</b>:
+                </p>
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-[10.5px] mb-3 space-y-1.5 leading-relaxed">
+                  <div className="font-semibold text-rose-600">⚠️ ต้องเป็น &quot;Firestore Database&quot; เท่านั้น (ไม่ใช่ Realtime Database):</div>
+                  <div>• <b>ถ้าเห็นปุ่ม &quot;Create database&quot; (สร้างฐานข้อมูล):</b> ให้กดปุ่มนี้ &gt; เลือก <b>&quot;Start in test mode&quot;</b> &gt; กด Next &gt; กด Enable ได้เลย (ระบบจะเปิดสิทธิ์ให้อัตโนมัติทันที!)</div>
+                  <div>• <b>ถ้ามีฐานข้อมูลแล้ว:</b> ดูที่แถบเมนูด้านบนจอ จะมีแท็บ <b>[ Data ]  [ Rules / กฎ ]</b> ให้คลิกที่ <b>Rules</b> นำโค้ดที่คัดลอกไปวาง แล้วกดปุ่มสีฟ้า <b>Publish</b></div>
+                </div>
+              </div>
+              <a
+                href={firebaseRulesUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs text-center"
+              >
+                <span>เปิดหน้า Firebase Firestore ทันที</span>
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+
+            {/* STEP 3 */}
+            <div className="bg-white p-4 rounded-xl border border-amber-200/90 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="h-6 w-6 rounded-full bg-emerald-100 text-emerald-900 font-black text-xs flex items-center justify-center">3</span>
+                  <span className="font-bold text-slate-900">ส่งข้อมูลขึ้น Cloud</span>
+                </div>
+                <p className="text-slate-500 text-[11px] mb-2 leading-relaxed">
+                  เมื่อกด Publish ใน Firebase แล้ว ให้กดปุ่มนี้เพื่อส่งตู้และพัสดุจากเครื่องนี้ขึ้น Cloud:
+                </p>
+                {syncErrorMsg && (
+                  <div className="p-2 mb-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-[11px] leading-relaxed font-semibold">
+                    {syncErrorMsg}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleSyncToCloud}
+                disabled={isSyncingCloud}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-75 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                {isSyncingCloud ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>กำลังทดสอบและซิงค์...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    <span>ทดสอบและซิงค์ข้อมูลขึ้น Cloud เดี๋ยวนี้</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -571,11 +738,28 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
             <Activity className="h-4 w-4" />
             ประวัติ QC หยิบใช้ของ
           </button>
+
+          {isUserSuperAdmin && (
+            <button
+              onClick={() => setActiveTab("users")}
+              className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                activeTab === "users"
+                  ? "border-amber-500 text-amber-700 font-bold"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Users className="h-4 w-4 text-amber-600" />
+              <span>จัดการสิทธิ์ผู้ใช้งาน</span>
+              <span className="px-1.5 py-0.5 text-[9px] font-black bg-amber-100 text-amber-900 rounded-full border border-amber-300">
+                Super Admin
+              </span>
+            </button>
+          )}
         </nav>
       </div>
 
       {/* SEARCH/SEARCH CONTROLS */}
-      {activeTab !== "history" && activeTab !== "qc" && (
+      {activeTab !== "history" && activeTab !== "qc" && activeTab !== "users" && (
         <div className="relative mb-6 max-w-sm">
           <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
           <input
@@ -1039,6 +1223,18 @@ export default function AdminDashboard({ userEmail }: AdminDashboardProps) {
             </table>
           </div>
         </div>
+      )}
+
+      {/* 5. USER ROLES & PERMISSIONS TAB (SUPER ADMIN ONLY) */}
+      {activeTab === "users" && (
+        <UserRoleManagement
+          currentUserEmail={userEmail}
+          isSuperAdmin={isUserSuperAdmin}
+          onToast={(msg) => {
+            setToastMessage(msg);
+            setTimeout(() => setToastMessage(null), 4000);
+          }}
+        />
       )}
 
       {/* ========================================================================= */}

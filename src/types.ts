@@ -4,7 +4,19 @@ export interface UserProfile {
   email: string;
   name: string;
   role: UserRole;
+  isSuperAdmin?: boolean;
   isSimulation?: boolean;
+}
+
+export interface AppUserRecord {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  isSuperAdmin?: boolean;
+  assignedBy?: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface Cabinet {

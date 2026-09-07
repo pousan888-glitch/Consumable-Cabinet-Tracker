@@ -10,18 +10,21 @@ interface HeaderProps {
 }
 
 export default function Header({ user, onChangeRole, onLogout, lowStockCount }: HeaderProps) {
-  const getRoleLabel = (role: UserRole) => {
+  const getRoleLabel = (role: UserRole, isSuperAdmin?: boolean) => {
+    if (isSuperAdmin) {
+      return { text: "👑 ผู้ดูแลระบบสูงสุด", bg: "bg-amber-50 text-amber-800 border-amber-300 font-bold" };
+    }
     switch (role) {
       case "ADMIN":
-        return { text: "ผู้ดูแลระบบ (Admin)", bg: "bg-red-50 text-red-700 border-red-100" };
+        return { text: "🛡️ แอดมิน (Admin)", bg: "bg-red-50 text-red-700 border-red-200" };
       case "HELPER":
-        return { text: "เจ้าหน้าที่นับสต็อก (Helper)", bg: "bg-indigo-50 text-indigo-700 border-indigo-100" };
+        return { text: "📋 นับสต็อก (Helper)", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" };
       case "QC":
-        return { text: "ผู้เบิกใช้ QC (QC Consumer)", bg: "bg-purple-50 text-purple-700 border-purple-100" };
+        return { text: "🔬 เบิกใช้ QC", bg: "bg-purple-50 text-purple-700 border-purple-200" };
     }
   };
 
-  const roleStyle = getRoleLabel(user.role);
+  const roleStyle = getRoleLabel(user.role, user.isSuperAdmin);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50 font-sans shadow-sm">

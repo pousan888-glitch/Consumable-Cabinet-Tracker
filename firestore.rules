@@ -17,5 +17,9 @@ service cloud.firestore {
     match /qc_consumption_history/{historyId} {
       allow read, write: if true;
     }
+    
+    match /users/{userId} {
+      allow read, write: if true;
+    }
   }
 }

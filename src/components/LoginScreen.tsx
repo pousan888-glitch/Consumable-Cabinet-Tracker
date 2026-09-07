@@ -7,6 +7,7 @@ import {
   saveInAppFirebaseConfig, 
   clearInAppFirebaseConfig 
 } from "../lib/firebase";
+import { fetchOrRegisterUser } from "../lib/dbService";
 import { UserProfile, UserRole } from "../types";
 import { 
   QrCode, 
@@ -57,13 +58,13 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       const user = result.user;
       
       const emailLower = user.email?.toLowerCase() || "";
-      const isUserAdmin = emailLower === "pousan888@gmail.com";
-      const role: UserRole = isUserAdmin ? "ADMIN" : "HELPER";
+      const userMeta = await fetchOrRegisterUser(emailLower, user.displayName || user.email || "");
 
       onLogin({
         email: emailLower,
         name: user.displayName || user.email || "ผู้ใช้งาน",
-        role,
+        role: userMeta.role,
+        isSuperAdmin: userMeta.isSuperAdmin,
         isSimulation: false
       });
     } catch (err: any) {
@@ -121,7 +122,30 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12 sm:px-6 lg:px-8 font-sans">
+    <div className="min-h-screen relative flex items-center justify-center bg-slate-50 px-4 py-12 sm:px-6 lg:px-8 font-sans">
+      {/* Top Right: System Status & Setup Guide (Moved out of central card to corner) */}
+      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+        <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-white/90 backdrop-blur-xs rounded-full border border-slate-200/90 text-xs shadow-xs">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="font-medium text-slate-600">
+            ระบบจริง: <strong className="text-emerald-700 font-mono text-[11px]">warehouse-consumables-monitor</strong>
+          </span>
+        </div>
+
+        <button
+          onClick={() => setShowSetupModal(true)}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 rounded-full border border-slate-200/90 text-xs font-medium shadow-xs transition-colors cursor-pointer"
+          title="ตั้งค่าตัวแปร Firebase & คู่มือ Vercel"
+        >
+          <Settings className="h-3.5 w-3.5 text-indigo-600" />
+          <span className="hidden sm:inline">ตัวแปร Vercel / คู่มือ</span>
+          <span className="sm:hidden">ตัวแปร Vercel</span>
+        </button>
+      </div>
+
       <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
         <div className="text-center">
           <div className="mx-auto h-16 w-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-4">
@@ -133,26 +157,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           <p className="mt-2 text-sm text-slate-500 font-sans">
             ระบบตรวจสอบและติดตามพัสดุวัสดุสิ้นเปลืองประจำตู้เก็บของแผนก
           </p>
-        </div>
-
-        {/* Real Mode Status Indicator */}
-        <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <span className="font-medium text-slate-700">
-              ระบบจริง: <strong className="text-emerald-700 font-mono">warehouse-consumables-monitor</strong>
-            </span>
-          </div>
-          <button
-            onClick={() => setShowSetupModal(true)}
-            className="text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 hover:underline cursor-pointer"
-          >
-            <Settings className="h-3.5 w-3.5" />
-            ตัวแปร Vercel
-          </button>
         </div>
 
         {error && (
@@ -173,7 +177,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           </div>
         )}
 
-        <div className="space-y-3 pt-1">
+        <div className="pt-1">
           <button
             id="google-signin-btn"
             onClick={handleGoogleSignIn}
@@ -187,14 +191,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               />
             </svg>
             {loading ? "กำลังเปิดหน้าต่าง Google..." : "เข้าสู่ระบบด้วย Google Account"}
-          </button>
-
-          <button
-            onClick={() => setShowSetupModal(true)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200/80 rounded-xl font-medium transition-colors cursor-pointer"
-          >
-            <Key className="h-3.5 w-3.5 text-indigo-600" />
-            วิธีเอาค่าคอนฟิกจาก Firebase มาใส่ Vercel (ขั้นตอนละเอียด)
           </button>
         </div>
 

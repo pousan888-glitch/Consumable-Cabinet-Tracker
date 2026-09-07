@@ -15,7 +15,7 @@ import {
   writeBatch,
   isOfflineFallback
 } from "./firebase";
-import { Cabinet, Consumable, CountHistory, QCConsumptionHistory } from "../types";
+import { Cabinet, Consumable, CountHistory, QCConsumptionHistory, AppUserRecord, UserRole } from "../types";
 
 // Generate unique ID
 const generateId = () => Math.random().toString(36).substring(2, 11);
@@ -89,11 +89,20 @@ const getLocalQCConsumptionHistory = (): QCConsumptionHistory[] => {
   return list.map(item => convertToTimestamps<QCConsumptionHistory>(item));
 };
 
+const getLocalUsers = (): AppUserRecord[] => {
+  const list = getLocal<any>("local_users");
+  return list.map(item => convertToTimestamps<AppUserRecord>(item));
+};
+
 // Global Cloud Sync Status tracking to inform the user if Firestore Rules need attention
 let cloudSyncNotice: { hasError: boolean; code?: string; message?: string } = { hasError: false };
 
 export function getCloudSyncNotice() {
   return cloudSyncNotice;
+}
+
+export function resetCloudSyncNotice() {
+  cloudSyncNotice = { hasError: false };
 }
 
 function recordCloudError(err: any) {
@@ -121,6 +130,94 @@ function withTimeout<T>(promise: Promise<T>, ms = 4500): Promise<T> {
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error("Firestore operation timed out")), ms))
   ]);
+}
+
+// Push all local items to Cloud Firestore and verify connection
+export async function testAndSyncAllToCloud(): Promise<{
+  success: boolean;
+  code?: string;
+  message: string;
+  syncedCabinets: number;
+  syncedConsumables: number;
+}> {
+  if (isOfflineFallback) {
+    return {
+      success: false,
+      code: "offline-mode",
+      message: "ระบบกำลังทำงานในโหมด Offline จำลอง",
+      syncedCabinets: 0,
+      syncedConsumables: 0
+    };
+  }
+
+  try {
+    // 1. Test ping to check Firestore Rules permission
+    const pingId = "ping-" + generateId();
+    await withTimeout(
+      setDoc(doc(db, "_sync_test", pingId), {
+        testAt: Timestamp.now(),
+        author: "admin"
+      }),
+      4000
+    );
+    // clean up ping
+    await deleteDoc(doc(db, "_sync_test", pingId)).catch(() => {});
+
+    // 2. Permission is GRANTED! Now push all local items up to Cloud Firestore
+    const localCabs = getLocalCabinets();
+    const localCons = getLocalConsumables();
+    const localCount = getLocalCountHistory();
+    const localQC = getLocalQCConsumptionHistory();
+    const localUsers = getLocalUsers();
+
+    const batch = writeBatch(db);
+    for (const cab of localCabs) {
+      batch.set(doc(db, "cabinets", cab.id), cab);
+    }
+    for (const con of localCons) {
+      batch.set(doc(db, "consumables", con.id), con);
+    }
+    for (const log of localCount) {
+      batch.set(doc(db, "count_history", log.id), log);
+    }
+    for (const qc of localQC) {
+      batch.set(doc(db, "qc_consumption_history", qc.id), qc);
+    }
+    for (const usr of localUsers) {
+      batch.set(doc(db, "users", usr.id), usr);
+    }
+
+    await batch.commit();
+
+    // 3. Reset error state
+    cloudSyncNotice = { hasError: false };
+
+    return {
+      success: true,
+      message: `ซิงค์ข้อมูลขึ้น Cloud Firestore สำเร็จแล้ว (${localCabs.length} ตู้, ${localCons.length} พัสดุ) ทุกเครื่องและมือถือจะมองเห็นข้อมูลตรงกันทันที!`,
+      syncedCabinets: localCabs.length,
+      syncedConsumables: localCons.length
+    };
+  } catch (err: any) {
+    recordCloudError(err);
+    const code = err?.code || "";
+    if (code === "permission-denied" || code.includes("permission")) {
+      return {
+        success: false,
+        code: "permission-denied",
+        message: "ยังติดสิทธิ์ Permission Denied: กรุณาเข้าไปที่ Firebase Console > Firestore Database > Rules และตั้งค่าให้อนุญาต (allow read, write: if true;) แล้วกด Publish ก่อนกดปุ่มนี้อีกครั้ง",
+        syncedCabinets: 0,
+        syncedConsumables: 0
+      };
+    }
+    return {
+      success: false,
+      code: "error",
+      message: err?.message || "ไม่สามารถเชื่อมต่อ Cloud Firestore ได้",
+      syncedCabinets: 0,
+      syncedConsumables: 0
+    };
+  }
 }
 
 // Seed initial data if database is empty (Handles both Cloud Firestore and local fallback)
@@ -447,6 +544,16 @@ export async function getCabinets(): Promise<Cabinet[]> {
     );
     const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cabinet));
     
+    // Cloud connection is healthy!
+    cloudSyncNotice = { hasError: false };
+
+    // Auto-sync: If local storage has cabinets that aren't on Cloud yet, upload them now!
+    for (const loc of localList) {
+      if (!cloudList.some(c => c.id === loc.id)) {
+        setDoc(doc(db, "cabinets", loc.id), loc).catch(e => console.warn("Auto-sync cabinet to cloud:", e));
+      }
+    }
+
     // If cloud has documents, merge or sync to local
     if (cloudList.length > 0) {
       // Merge any local items that haven't synced yet
@@ -460,8 +567,11 @@ export async function getCabinets(): Promise<Cabinet[]> {
       return combined;
     }
 
-    // If cloud was empty but local has items, return local
+    // If cloud was empty but local has items, upload all to cloud and return local
     if (localList.length > 0) {
+      for (const loc of localList) {
+        setDoc(doc(db, "cabinets", loc.id), loc).catch(e => console.warn("Auto-sync initial cabinet:", e));
+      }
       return localList;
     }
 
@@ -569,6 +679,16 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
     const snap = await withTimeout(getDocs(q), 4000);
     const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Consumable));
 
+    // Cloud connection is healthy!
+    cloudSyncNotice = { hasError: false };
+
+    // Auto-sync: If local items aren't on Cloud yet, upload them
+    for (const loc of localList) {
+      if (!cloudList.some(c => c.id === loc.id)) {
+        setDoc(doc(db, "consumables", loc.id), loc).catch(e => console.warn("Auto-sync consumable to cloud:", e));
+      }
+    }
+
     if (cloudList.length > 0) {
       // Merge with local if needed
       const combined = [...cloudList];
@@ -584,6 +704,9 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
     }
 
     if (localList.length > 0) {
+      for (const loc of localList) {
+        setDoc(doc(db, "consumables", loc.id), loc).catch(e => console.warn("Auto-sync initial consumable:", e));
+      }
       return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
     }
 
@@ -824,4 +947,194 @@ export async function getQCConsumptionHistory(): Promise<QCConsumptionHistory[]>
     recordCloudError(err);
     return localList;
   }
+}
+
+// ==========================================
+// USER PERMISSION & ROLE MANAGEMENT API
+// ==========================================
+
+const SUPER_ADMIN_EMAIL = "pousan888@gmail.com";
+
+// Fetch all registered users
+export async function getAppUsers(): Promise<AppUserRecord[]> {
+  let localList = getLocalUsers();
+
+  // Always ensure Super Admin pousan888@gmail.com exists in local
+  const superAdminIndex = localList.findIndex(u => u.email.toLowerCase() === SUPER_ADMIN_EMAIL);
+  if (superAdminIndex === -1) {
+    const superAdminRecord: AppUserRecord = {
+      id: "usr-superadmin",
+      email: SUPER_ADMIN_EMAIL,
+      name: "ผู้ดูแลระบบสูงสุด (Super Admin)",
+      role: "ADMIN",
+      isSuperAdmin: true,
+      assignedBy: "ระบบหลัก (System Default)",
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    };
+    localList.unshift(superAdminRecord);
+    setLocal("local_users", localList);
+  } else {
+    // Keep super admin properties strictly guaranteed
+    localList[superAdminIndex].role = "ADMIN";
+    localList[superAdminIndex].isSuperAdmin = true;
+  }
+
+  if (isOfflineFallback) return localList;
+
+  try {
+    const snap = await withTimeout(
+      getDocs(collection(db, "users")),
+      4000
+    );
+    let cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppUserRecord));
+    
+    // Ensure Super Admin is always in cloud list as well
+    const cloudSuperIndex = cloudList.findIndex(u => u.email.toLowerCase() === SUPER_ADMIN_EMAIL);
+    if (cloudSuperIndex === -1) {
+      const superAdminDoc: AppUserRecord = {
+        id: "usr-superadmin",
+        email: SUPER_ADMIN_EMAIL,
+        name: "ผู้ดูแลระบบสูงสุด (Super Admin)",
+        role: "ADMIN",
+        isSuperAdmin: true,
+        assignedBy: "ระบบหลัก (System Default)",
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+      cloudList.unshift(superAdminDoc);
+      // Auto push to cloud if possible
+      setDoc(doc(db, "users", "usr-superadmin"), superAdminDoc).catch(() => {});
+    } else {
+      cloudList[cloudSuperIndex].role = "ADMIN";
+      cloudList[cloudSuperIndex].isSuperAdmin = true;
+    }
+
+    if (cloudList.length > 0) {
+      setLocal("local_users", cloudList);
+      return cloudList;
+    }
+    return localList;
+  } catch (err) {
+    recordCloudError(err);
+    return localList;
+  }
+}
+
+// Add or update a user's role (ADMIN, QC, HELPER)
+export async function saveAppUserRole(
+  email: string,
+  name: string,
+  role: UserRole,
+  assignedBy: string
+): Promise<AppUserRecord> {
+  const emailClean = email.trim().toLowerCase();
+  const isSuperAdmin = emailClean === SUPER_ADMIN_EMAIL;
+  // Super Admin can NEVER be downgraded from ADMIN
+  const finalRole: UserRole = isSuperAdmin ? "ADMIN" : role;
+
+  const localUsers = getLocalUsers();
+  const existingIdx = localUsers.findIndex(u => u.email.toLowerCase() === emailClean);
+  const now = Timestamp.now();
+
+  let userRecord: AppUserRecord;
+  if (existingIdx !== -1) {
+    userRecord = {
+      ...localUsers[existingIdx],
+      name: name.trim() || localUsers[existingIdx].name,
+      role: finalRole,
+      isSuperAdmin,
+      assignedBy,
+      updatedAt: now
+    };
+    localUsers[existingIdx] = userRecord;
+  } else {
+    userRecord = {
+      id: isSuperAdmin ? "usr-superadmin" : "usr-" + generateId(),
+      email: emailClean,
+      name: name.trim() || emailClean.split("@")[0],
+      role: finalRole,
+      isSuperAdmin,
+      assignedBy,
+      createdAt: now,
+      updatedAt: now
+    };
+    localUsers.push(userRecord);
+  }
+
+  setLocal("local_users", localUsers);
+
+  if (isOfflineFallback) return userRecord;
+
+  try {
+    await setDoc(doc(db, "users", userRecord.id), userRecord, { merge: true });
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: User role saved locally, Cloud sync deferred:", err);
+  }
+
+  return userRecord;
+}
+
+// Delete / remove user from database
+export async function deleteAppUser(userId: string): Promise<void> {
+  const localUsers = getLocalUsers();
+  const targetUser = localUsers.find(u => u.id === userId);
+  if (targetUser && (targetUser.isSuperAdmin || targetUser.email.toLowerCase() === SUPER_ADMIN_EMAIL)) {
+    throw new Error("ไม่สามารถลบหรือลดสิทธิ์ของผู้ดูแลระบบสูงสุดได้");
+  }
+
+  const updated = localUsers.filter(u => u.id !== userId);
+  setLocal("local_users", updated);
+
+  if (isOfflineFallback) return;
+
+  try {
+    await deleteDoc(doc(db, "users", userId));
+  } catch (err) {
+    recordCloudError(err);
+    console.warn("Notice: User deleted locally, Cloud sync deferred:", err);
+  }
+}
+
+// Fetch or auto-register user on Google Login
+export async function fetchOrRegisterUser(
+  email: string,
+  displayName: string
+): Promise<{ role: UserRole; isSuperAdmin: boolean }> {
+  const emailClean = email.trim().toLowerCase();
+  const isSuperAdmin = emailClean === SUPER_ADMIN_EMAIL;
+
+  if (isSuperAdmin) {
+    try {
+      await saveAppUserRole(
+        emailClean,
+        displayName || "ผู้ดูแลระบบสูงสุด (Super Admin)",
+        "ADMIN",
+        "ระบบหลัก (System)"
+      );
+    } catch (e) {
+      console.error(e);
+    }
+    return { role: "ADMIN", isSuperAdmin: true };
+  }
+
+  // Lookup in existing users
+  const users = await getAppUsers();
+  const matched = users.find(u => u.email.toLowerCase() === emailClean);
+
+  if (matched) {
+    // Return existing assigned role (ADMIN, QC, or HELPER)
+    return { role: matched.role, isSuperAdmin: false };
+  }
+
+  // If first time login, register with default role HELPER
+  const newRecord = await saveAppUserRole(
+    emailClean,
+    displayName || emailClean.split("@")[0],
+    "HELPER",
+    "ระบบอัตโนมัติ (ลงชื่อเข้าใช้ครั้งแรก)"
+  );
+
+  return { role: newRecord.role, isSuperAdmin: false };
 }
