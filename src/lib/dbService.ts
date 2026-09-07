@@ -868,19 +868,29 @@ export async function saveCountHistory(
   }
 }
 
-// Save QC Consumption History (Fault-Tolerant)
+// Save QC / Cabinet Consumption History (Fault-Tolerant)
 export async function saveQCConsumption(
   department: string, 
   consumedBy: string, 
-  items: { consumableId: string; name: string; qtyTaken: number; unit: string; cabinetId: string; cabinetName: string }[]
+  items: { consumableId: string; name: string; qtyTaken: number; unit: string; cabinetId: string; cabinetName: string; imageUrl?: string }[],
+  extra?: {
+    source?: "QC" | "CABINET_QR" | "HELPER" | "DIRECT";
+    cabinetId?: string;
+    cabinetName?: string;
+    note?: string;
+  }
 ): Promise<void> {
-  const logId = "qc-" + generateId();
+  const logId = (extra?.source === "CABINET_QR" ? "wd-" : "qc-") + generateId();
   const qcLog: QCConsumptionHistory = {
     id: logId,
     department,
     consumedAt: Timestamp.now(),
     consumedBy,
-    items
+    items,
+    source: extra?.source || "QC",
+    cabinetId: extra?.cabinetId,
+    cabinetName: extra?.cabinetName,
+    note: extra?.note
   };
 
   // 1. Update locally
@@ -924,8 +934,36 @@ export async function saveQCConsumption(
     await batch.commit();
   } catch (err) {
     recordCloudError(err);
-    console.warn("Notice: QC consumption saved locally, Cloud sync deferred:", err);
+    console.warn("Notice: Consumption saved locally, Cloud sync deferred:", err);
   }
+}
+
+// Dedicated helper for Cabinet Withdrawals (From QR code or Helper view)
+export async function saveCabinetWithdrawal(
+  cabinetId: string,
+  cabinetName: string,
+  department: string,
+  withdrawnBy: string,
+  items: { consumableId: string; name: string; qtyTaken: number; unit: string; imageUrl?: string }[],
+  note?: string,
+  source: "CABINET_QR" | "HELPER" | "DIRECT" = "CABINET_QR"
+): Promise<void> {
+  const formattedItems = items.map(item => ({
+    consumableId: item.consumableId,
+    name: item.name,
+    qtyTaken: item.qtyTaken,
+    unit: item.unit,
+    cabinetId,
+    cabinetName,
+    imageUrl: item.imageUrl
+  }));
+
+  return saveQCConsumption(department, withdrawnBy, formattedItems, {
+    source,
+    cabinetId,
+    cabinetName,
+    note
+  });
 }
 
 // Fetch Counting History Logs (Fault-Tolerant)

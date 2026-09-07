@@ -66,6 +66,7 @@ export interface QCConsumedItem {
   unit: string;
   cabinetId: string;
   cabinetName: string;
+  imageUrl?: string;
 }
 
 export interface DepartmentRecord {
@@ -77,10 +78,16 @@ export interface DepartmentRecord {
   createdBy?: string;
 }
 
+export type ConsumptionSource = "QC" | "CABINET_QR" | "HELPER" | "DIRECT";
+
 export interface QCConsumptionHistory {
   id: string;
   department: string;
   consumedAt: any;
   consumedBy: string;
   items: QCConsumedItem[];
+  source?: ConsumptionSource;
+  cabinetId?: string;
+  cabinetName?: string;
+  note?: string;
 }

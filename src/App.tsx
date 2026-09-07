@@ -24,6 +24,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [cabinetParam, setCabinetParam] = useState<string | null>(null);
+  const [modeParam, setModeParam] = useState<"count" | "withdraw">("count");
 
   // Auto-seed database and restore session on startup
   useEffect(() => {
@@ -53,8 +54,12 @@ export default function App() {
         // 3. Check for QR code URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const cabId = urlParams.get("cabinetId");
+        const mode = urlParams.get("mode") as "count" | "withdraw" | null;
         if (cabId) {
           setCabinetParam(cabId);
+          if (mode === "withdraw" || mode === "count") {
+            setModeParam(mode);
+          }
         }
       } catch (err) {
         console.error("Initialization error:", err);
@@ -107,6 +112,7 @@ export default function App() {
     // Clean up query param on logout
     const url = new URL(window.location.href);
     url.searchParams.delete("cabinetId");
+    url.searchParams.delete("mode");
     window.history.pushState({}, "", url.toString());
     setCabinetParam(null);
   };
@@ -123,6 +129,7 @@ export default function App() {
     // Clean up browser URL
     const url = new URL(window.location.href);
     url.searchParams.delete("cabinetId");
+    url.searchParams.delete("mode");
     window.history.pushState({}, "", url.toString());
   };
 
@@ -143,7 +150,7 @@ export default function App() {
   // SIGNED IN -> render based on current state & role
 
   // A. QR Redirect Routing: If cabinetId is present in URL (scanned cabinet)
-  // We immediately bypass default dashboards and show the mobile counting screen!
+  // We immediately bypass default dashboards and show the mobile counting / withdrawing screen!
   if (cabinetParam) {
     return (
       <div className="bg-slate-50 min-h-screen">
@@ -157,6 +164,7 @@ export default function App() {
           userEmail={user.email} 
           userName={user.name} 
           selectedCabinetId={cabinetParam} 
+          initialMode={modeParam}
           onBackToMainMenu={handleBackToMenu} 
         />
       </div>

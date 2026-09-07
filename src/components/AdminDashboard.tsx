@@ -23,6 +23,7 @@ import UserRoleManagement from "./UserRoleManagement";
 import DepartmentSettings from "./DepartmentSettings";
 import ImageUploadInput from "./ImageUploadInput";
 import ImagePreviewModal from "./ImagePreviewModal";
+import CabinetQRModal from "./CabinetQRModal";
 import { 
   Plus, 
   Edit, 
@@ -52,7 +53,11 @@ import {
   Crown,
   ShieldCheck,
   Building2,
-  Camera
+  Camera,
+  PackageMinus,
+  Download,
+  Filter,
+  FileSpreadsheet
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -103,6 +108,12 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   });
   const [isSavingConsumable, setIsSavingConsumable] = useState(false);
   const [consumableError, setConsumableError] = useState<string | null>(null);
+
+  // Unified Consumption & Dispense History Filters
+  const [qcSourceFilter, setQcSourceFilter] = useState<string>("ALL");
+  const [qcDeptFilter, setQcDeptFilter] = useState<string>("ALL");
+  const [qcCabinetFilter, setQcCabinetFilter] = useState<string>("ALL");
+  const [qcSearchTerm, setQcSearchTerm] = useState<string>("");
 
   // Notifications & UI Helpers
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -751,7 +762,10 @@ service cloud.firestore {
             }`}
           >
             <Activity className="h-4 w-4" />
-            ประวัติ QC หยิบใช้ของ
+            <span>ประวัติเบิกและหยิบใช้ของ</span>
+            <span className="px-1.5 py-0.5 text-[9px] font-black bg-purple-100 text-purple-800 rounded-full">
+              {qcLogs.length}
+            </span>
           </button>
 
           {/* Department Settings Tab: Accessible by Admin & Super Admin */}
@@ -1206,81 +1220,388 @@ service cloud.firestore {
         </div>
       )}
 
-      {/* 4. QC LOGS TAB */}
-      {activeTab === "qc" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
-              บันทึกประวัติการเบิกใช้ของฝ่ายควบคุมคุณภาพ (QC Consume Logs)
-            </h3>
-            <span className="bg-purple-100 text-purple-800 font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase">
-              ทั้งหมด {qcLogs.length} รายการ
-            </span>
-          </div>
+      {/* 4. UNIFIED CONSUMPTION & DISPENSE LOGS TAB (ประวัติการเบิกและหยิบใช้ของ) */}
+      {activeTab === "qc" && (() => {
+        // Compute statistics
+        const totalEvents = qcLogs.length;
+        const cabinetQrEvents = qcLogs.filter(l => l.source === "CABINET_QR").length;
+        const qcDirectEvents = qcLogs.filter(l => l.source === "QC" || !l.source).length;
+        const totalUnits = qcLogs.reduce((sum, log) => 
+          sum + (log.items?.reduce((isum, it) => isum + (it.qtyTaken || 0), 0) || 0), 0
+        );
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                  <th className="py-4 px-6">วันที่เบิกใช้</th>
-                  <th className="py-4 px-6">ผู้ลงทะเบียนหยิบใช้</th>
-                  <th className="py-4 px-6">แผนกพัสดุ</th>
-                  <th className="py-4 px-6">รายการสินค้าที่เบิกออกไป</th>
-                  <th className="py-4 px-6 text-right">จำนวนที่เบิก</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                {qcLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-400">
-                      ยังไม่มีรายการเบิกใช้ QC ใดๆ ในระบบ
-                    </td>
-                  </tr>
-                ) : (
-                  qcLogs.map(log => {
-                    const dateStr = new Date(log.consumedAt?.toDate?.() || log.consumedAt).toLocaleString("th-TH");
-                    return (
-                      <React.Fragment key={log.id}>
-                        {log.items.map((item, idx) => (
-                          <tr key={`${log.id}-${idx}`} className="hover:bg-slate-50/50">
-                            {idx === 0 && (
-                              <>
-                                <td className="py-4 px-6 font-semibold text-slate-800" rowSpan={log.items.length}>
-                                  {dateStr}
-                                </td>
-                                <td className="py-4 px-6" rowSpan={log.items.length}>
-                                  <div className="flex flex-col">
-                                    <span className="font-bold text-slate-900">{log.consumedBy.split("@")[0]}</span>
-                                    <span className="text-[10px] text-slate-400">{log.consumedBy}</span>
-                                  </div>
-                                </td>
-                                <td className="py-4 px-6" rowSpan={log.items.length}>
-                                  <span className="bg-purple-50 border border-purple-100 text-purple-700 font-bold text-[9px] px-2 py-0.5 rounded uppercase">
-                                    {log.department}
-                                  </span>
-                                </td>
-                              </>
-                            )}
-                            <td className="py-4 px-6">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-slate-800">{item.name}</span>
-                                <span className="text-[10px] text-slate-400 font-semibold">จาก: {item.cabinetName}</span>
-                              </div>
-                            </td>
-                            <td className="py-4 px-6 text-right font-extrabold text-rose-600">
-                              - {item.qtyTaken} {item.unit}
-                            </td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+        // Filtered logs
+        const filteredLogs = qcLogs.filter(log => {
+          // Source filter
+          if (qcSourceFilter === "CABINET_QR" && log.source !== "CABINET_QR") return false;
+          if (qcSourceFilter === "QC" && log.source !== "QC" && log.source !== undefined) return false;
+
+          // Department filter
+          if (qcDeptFilter !== "ALL" && log.department !== qcDeptFilter) return false;
+
+          // Cabinet filter
+          if (qcCabinetFilter !== "ALL") {
+            const matchesLogCab = log.cabinetId === qcCabinetFilter;
+            const matchesItemCab = log.items.some(i => i.cabinetId === qcCabinetFilter || i.cabinetName === qcCabinetFilter);
+            if (!matchesLogCab && !matchesItemCab) return false;
+          }
+
+          // Search term
+          if (qcSearchTerm.trim()) {
+            const term = qcSearchTerm.toLowerCase();
+            const matchUser = log.consumedBy.toLowerCase().includes(term);
+            const matchDept = log.department.toLowerCase().includes(term);
+            const matchCab = (log.cabinetName || "").toLowerCase().includes(term);
+            const matchNote = (log.note || "").toLowerCase().includes(term);
+            const matchItem = log.items.some(i => 
+              i.name.toLowerCase().includes(term) || (i.cabinetName || "").toLowerCase().includes(term)
+            );
+            if (!matchUser && !matchDept && !matchCab && !matchNote && !matchItem) return false;
+          }
+
+          return true;
+        });
+
+        const handleExportCSV = () => {
+          const rows = [
+            ["วันที่และเวลา", "ผู้ทำรายการ", "ช่องทางการเบิก", "แผนกที่เบิก", "ตู้เก็บของ", "ชื่อสินค้า", "จำนวนที่เบิก", "หน่วยนับ", "หมายเหตุ/วัตถุประสงค์"]
+          ];
+          filteredLogs.forEach(log => {
+            const dateStr = new Date(log.consumedAt?.toDate?.() || log.consumedAt).toLocaleString("th-TH");
+            const sourceStr = log.source === "CABINET_QR" ? "เบิกผ่าน QR ตู้" : log.source === "QC" ? "QC หยิบใช้" : "เบิกทั่วไป";
+            log.items.forEach(item => {
+              rows.push([
+                `"${dateStr}"`,
+                `"${log.consumedBy}"`,
+                `"${sourceStr}"`,
+                `"${log.department}"`,
+                `"${item.cabinetName || log.cabinetName || ""}"`,
+                `"${item.name}"`,
+                `"${item.qtyTaken}"`,
+                `"${item.unit}"`,
+                `"${(log.note || "").replace(/"/g, '""')}"`
+              ]);
+            });
+          });
+
+          const csvContent = "\uFEFF" + rows.map(r => r.join(",")).join("\n");
+          const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.setAttribute("href", url);
+          link.setAttribute("download", `ประวัติการเบิกพัสดุ_${new Date().toISOString().slice(0, 10)}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        };
+
+        return (
+          <div className="space-y-6">
+            {/* Top Stat Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    ประวัติเบิกทั้งหมด
+                  </span>
+                  <span className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1 block">
+                    {totalEvents} <span className="text-xs font-semibold text-slate-400">ครั้ง</span>
+                  </span>
+                </div>
+                <div className="h-11 w-11 bg-slate-100 rounded-xl flex items-center justify-center text-slate-700">
+                  <Activity className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-orange-100 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-orange-600 uppercase tracking-wider block">
+                    เบิกผ่าน QR ตู้
+                  </span>
+                  <span className="text-xl sm:text-2xl font-extrabold text-orange-600 mt-1 block">
+                    {cabinetQrEvents} <span className="text-xs font-semibold text-orange-400">ครั้ง</span>
+                  </span>
+                </div>
+                <div className="h-11 w-11 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
+                  <PackageMinus className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-purple-100 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider block">
+                    QC หยิบใช้ตรง
+                  </span>
+                  <span className="text-xl sm:text-2xl font-extrabold text-purple-600 mt-1 block">
+                    {qcDirectEvents} <span className="text-xs font-semibold text-purple-400">ครั้ง</span>
+                  </span>
+                </div>
+                <div className="h-11 w-11 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
+                  <Activity className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-rose-100 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider block">
+                    ยอดพัสดุที่เบิกออกรวม
+                  </span>
+                  <span className="text-xl sm:text-2xl font-extrabold text-rose-600 mt-1 block">
+                    {totalUnits} <span className="text-xs font-semibold text-rose-400">ชิ้น/หน่วย</span>
+                  </span>
+                </div>
+                <div className="h-11 w-11 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
+                  <TrendingDown className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and Search Toolbar */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                {/* Search input */}
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="ค้นหาชื่อสินค้า, ผู้เบิก, หรือหมายเหตุ..."
+                    value={qcSearchTerm}
+                    onChange={(e) => setQcSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  {qcSearchTerm && (
+                    <button 
+                      onClick={() => setQcSearchTerm("")}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Source Filter */}
+                <select
+                  value={qcSourceFilter}
+                  onChange={(e) => setQcSourceFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="ALL">ทุกช่องทางการเบิก</option>
+                  <option value="CABINET_QR">📦 เบิกผ่าน QR ตู้ (Cabinet QR)</option>
+                  <option value="QC">🔬 QC หยิบใช้ตรง</option>
+                </select>
+
+                {/* Department Filter */}
+                <select
+                  value={qcDeptFilter}
+                  onChange={(e) => setQcDeptFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="ALL">ทุกแผนกที่เบิก</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+
+                {/* Cabinet Filter */}
+                <select
+                  value={qcCabinetFilter}
+                  onChange={(e) => setQcCabinetFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="ALL">ทุกตู้เก็บของ</option>
+                  {cabinets.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportCSV}
+                  disabled={filteredLogs.length === 0}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer shadow-2xs transition-all disabled:opacity-40"
+                  title="ดาวน์โหลดรายการเบิกเป็นไฟล์ CSV / Excel"
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                  <span>ส่งออก CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Table Container */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                    <span>ตารางประวัติการเบิกและหยิบใช้พัสดุ</span>
+                    <span className="bg-purple-100 text-purple-800 font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase">
+                      แสดง {filteredLogs.length} จาก {qcLogs.length} รายการ
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    บันทึกการเบิกของออกจากตู้ผ่าน QR Code, ฝ่าย QC และการเบิกใช้ของทีมงานทั้งหมด
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                      <th className="py-3.5 px-5">วันที่ & เวลาเบิก</th>
+                      <th className="py-3.5 px-5">ผู้ทำรายการเบิก</th>
+                      <th className="py-3.5 px-5">ช่องทาง & ตู้เก็บของ</th>
+                      <th className="py-3.5 px-5">แผนก</th>
+                      <th className="py-3.5 px-5">รายการสินค้าที่เบิก</th>
+                      <th className="py-3.5 px-5 text-right">จำนวนที่เบิก</th>
+                      <th className="py-3.5 px-5">หมายเหตุ / วัตถุประสงค์</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
+                    {filteredLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-14 text-center text-slate-400">
+                          <PackageMinus className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                          <p className="font-semibold text-slate-600">ไม่พบรายการเบิกพัสดุตามเงื่อนไขที่เลือก</p>
+                          <p className="text-xs text-slate-400 mt-1">ลองเปลี่ยนตัวกรอง หรือสแกน QR Code ประจำตู้เพื่อทดสอบการเบิกของ</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredLogs.map(log => {
+                        const dateStr = new Date(log.consumedAt?.toDate?.() || log.consumedAt).toLocaleString("th-TH", {
+                          dateStyle: "medium",
+                          timeStyle: "short"
+                        });
+                        const isCabinetQr = log.source === "CABINET_QR";
+                        const isQc = log.source === "QC" || !log.source;
+
+                        return (
+                          <React.Fragment key={log.id}>
+                            {log.items.map((item, idx) => {
+                              // Match consumable image
+                              const matchedConsumable = consumables.find(c => c.id === item.consumableId || c.name === item.name);
+                              const imageUrl = item.imageUrl || matchedConsumable?.imageUrl;
+                              const displayCabName = item.cabinetName || log.cabinetName || "ตู้ส่วนกลาง";
+
+                              return (
+                                <tr key={`${log.id}-${idx}`} className="hover:bg-slate-50/60 transition-colors">
+                                  {/* Grouped metadata on first row of log */}
+                                  {idx === 0 && (
+                                    <>
+                                      <td className="py-3.5 px-5 font-semibold text-slate-800 whitespace-nowrap align-top" rowSpan={log.items.length}>
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold">
+                                          <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                          <span>{dateStr}</span>
+                                        </div>
+                                      </td>
+                                      
+                                      <td className="py-3.5 px-5 align-top" rowSpan={log.items.length}>
+                                        <div className="flex flex-col">
+                                          <span className="font-extrabold text-slate-900">{log.consumedBy.split("@")[0]}</span>
+                                          <span className="text-[10px] text-slate-400 font-mono">{log.consumedBy}</span>
+                                        </div>
+                                      </td>
+
+                                      <td className="py-3.5 px-5 align-top" rowSpan={log.items.length}>
+                                        <div className="flex flex-col gap-1 items-start">
+                                          {isCabinetQr ? (
+                                            <span className="bg-orange-50 border border-orange-200 text-orange-700 font-bold text-[10px] px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                              <QrCode className="h-3 w-3" />
+                                              <span>เบิกผ่าน QR ตู้</span>
+                                            </span>
+                                          ) : isQc ? (
+                                            <span className="bg-purple-50 border border-purple-200 text-purple-700 font-bold text-[10px] px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                              <Activity className="h-3 w-3" />
+                                              <span>QC หยิบใช้ตรง</span>
+                                            </span>
+                                          ) : (
+                                            <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-[10px] px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                              <PackageMinus className="h-3 w-3" />
+                                              <span>เบิกทั่วไป</span>
+                                            </span>
+                                          )}
+                                          <span className="text-[11px] text-slate-600 font-semibold flex items-center gap-1">
+                                            <MapPin className="h-3 w-3 text-slate-400" />
+                                            {displayCabName}
+                                          </span>
+                                        </div>
+                                      </td>
+
+                                      <td className="py-3.5 px-5 align-top" rowSpan={log.items.length}>
+                                        <span className="bg-slate-100 border border-slate-200 text-slate-800 font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                          {log.department}
+                                        </span>
+                                      </td>
+                                    </>
+                                  )}
+
+                                  {/* Item specific column */}
+                                  <td className="py-3.5 px-5">
+                                    <div className="flex items-center gap-3">
+                                      {imageUrl && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setPreviewModalImage({
+                                            url: imageUrl,
+                                            title: item.name,
+                                            subtitle: `ตู้: ${displayCabName} • แผนก: ${log.department}`
+                                          })}
+                                          className="h-10 w-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 relative group/pic cursor-pointer"
+                                          title="คลิกเพื่อดูรูปภาพของจริงขนาดใหญ่"
+                                        >
+                                          <img 
+                                            src={imageUrl} 
+                                            alt={item.name} 
+                                            className="w-full h-full object-cover group-hover/pic:scale-110 transition-all"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/pic:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                            <Eye className="h-3 w-3" />
+                                          </div>
+                                        </button>
+                                      )}
+                                      <div className="flex flex-col">
+                                        <span className="font-extrabold text-slate-900 text-xs sm:text-sm">{item.name}</span>
+                                        <span className="text-[10px] text-slate-400 font-semibold">ตู้: {displayCabName}</span>
+                                      </div>
+                                    </div>
+                                  </td>
+
+                                  {/* Quantity column */}
+                                  <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                                    <span className="inline-flex items-center gap-1 font-extrabold text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg text-xs">
+                                      <TrendingDown className="h-3.5 w-3.5" />
+                                      - {item.qtyTaken} {item.unit}
+                                    </span>
+                                  </td>
+
+                                  {/* Note column */}
+                                  {idx === 0 && (
+                                    <td className="py-3.5 px-5 align-top text-xs text-slate-600 max-w-xs" rowSpan={log.items.length}>
+                                      {log.note ? (
+                                        <span className="bg-slate-50 border border-slate-200/60 p-2 rounded-xl block text-slate-700 italic">
+                                          "{log.note}"
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-300 font-mono">—</span>
+                                      )}
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 5. USER ROLES & PERMISSIONS TAB (SUPER ADMIN ONLY) */}
       {activeTab === "users" && (
@@ -1634,103 +1955,15 @@ service cloud.firestore {
         </div>
       )}
 
-      {/* C. QR PRINT POPUP MODAL */}
+      {/* C. QR PRINT & CONFIG MODAL (COUNT, WITHDRAW, DUAL) */}
       {showQRModal && qrCabinet && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-sm overflow-hidden animate-scale-up">
-            
-            {/* Printable Frame Area */}
-            <div id="printable-qr-card" className="p-8 text-center bg-white flex flex-col items-center font-sans">
-              <span className="text-[10px] bg-indigo-600 text-white font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
-                QR CABINET TAG
-              </span>
-              <h2 className="text-xl font-black text-slate-900 mt-3 leading-snug">
-                {qrCabinet.name}
-              </h2>
-              <p className="text-slate-400 text-xs font-semibold flex items-center gap-1 mt-1 justify-center mb-6">
-                <MapPin className="h-3.5 w-3.5" />
-                {qrCabinet.location}
-              </p>
-
-              {/* QR Image Box */}
-              <div className="p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl mb-6 relative group">
-                <img 
-                  src={getQRImageSrc(qrCabinet.id)} 
-                  alt="QR Code" 
-                  className="h-48 w-48 mx-auto mix-blend-multiply"
-                />
-              </div>
-
-              <p className="text-slate-500 font-bold text-xs max-w-xs leading-relaxed">
-                สแกนแสกน QR ข้างต้นด้วยกล้องสมาร์ทโฟน <br />
-                เพื่อเปิดใช้งานโมบายแอปเช็กพัสดุและคีย์จำนวนพัสดุในตู้นี้
-              </p>
-              
-              <div className="text-[9px] text-slate-300 font-mono mt-4 border-t border-slate-100 pt-3 w-full break-all leading-tight">
-                URL: {getQRUrl(qrCabinet.id)}
-              </div>
-            </div>
-
-            {/* Action buttons outside printable card */}
-            <div className="bg-slate-50 border-t border-slate-100 px-6 py-4 flex gap-2">
-              <button
-                onClick={() => {
-                  // Custom printing of the QR card
-                  const printContent = document.getElementById("printable-qr-card")?.innerHTML;
-                  const originalContent = document.body.innerHTML;
-                  if (printContent) {
-                    const printWindow = window.open("", "_blank");
-                    if (printWindow) {
-                      printWindow.document.write(`
-                        <html>
-                          <head>
-                            <title>Print QR Code - ${qrCabinet.name}</title>
-                            <style>
-                              body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 90vh; background: #fff; margin:0; padding:0; }
-                              #printable-qr-card { text-align: center; border: 2px solid #ccc; padding: 40px; border-radius: 20px; max-width: 380px; }
-                              h2 { font-size: 24px; margin: 15px 0 5px 0; font-weight: bold; }
-                              p { color: #666; font-size: 14px; margin: 5px 0 20px 0; }
-                              img { width: 250px; height: 250px; }
-                              span { background: #4f46e5; color: white; font-weight: bold; padding: 4px 12px; border-radius: 9999px; font-size: 11px; text-transform: uppercase; }
-                              .foot { font-size: 12px; color: #888; margin-top: 15px; font-weight: bold; }
-                            </style>
-                          </head>
-                          <body>
-                            <div id="printable-qr-card">
-                              <span>QR Cabinet Tag</span>
-                              <h2>${qrCabinet.name}</h2>
-                              <p>Location: ${qrCabinet.location}</p>
-                              <img src="${getQRImageSrc(qrCabinet.id)}" />
-                              <div class="foot">สแกน QR ด้วยกล้องสมาร์ทโฟน เพื่อบันทึกจำนวนของและเช็กสต็อก</div>
-                            </div>
-                            <script>
-                              window.onload = function() { window.print(); window.close(); }
-                            </script>
-                          </body>
-                        </html>
-                      `);
-                      printWindow.document.close();
-                    }
-                  }
-                }}
-                className="flex-1 flex items-center justify-center gap-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md transition-all"
-              >
-                <Printer className="h-4 w-4" />
-                พิมพ์ภาพ QR
-              </button>
-              <button
-                onClick={() => {
-                  setShowQRModal(false);
-                  setQrCabinet(null);
-                }}
-                className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer transition-all"
-              >
-                ปิดหน้าต่าง
-              </button>
-            </div>
-
-          </div>
-        </div>
+        <CabinetQRModal
+          cabinet={qrCabinet}
+          onClose={() => {
+            setShowQRModal(false);
+            setQrCabinet(null);
+          }}
+        />
       )}
 
       {/* FULL IMAGE PREVIEW MODAL */}
