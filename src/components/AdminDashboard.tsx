@@ -17,6 +17,8 @@ import {
   testAndSyncAllToCloud,
   resetCloudSyncNotice,
   getDepartments,
+  restoreDefaultConsumables,
+  autoAssignUnlinkedConsumables,
   CABINET_PRESETS,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
@@ -53,6 +55,7 @@ import {
   X,
   ExternalLink,
   RefreshCw,
+  RotateCcw,
   Users,
   Crown,
   ShieldCheck,
@@ -107,10 +110,12 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     department: "Production",
     currentQty: 10,
     minThreshold: 5,
+    maxCapacity: 30,
     unit: "ชิ้น",
     imageUrl: CONSUMABLE_PRESETS["glove"]
   });
   const [isSavingConsumable, setIsSavingConsumable] = useState(false);
+  const [isRestoringDemo, setIsRestoringDemo] = useState(false);
   const [consumableError, setConsumableError] = useState<string | null>(null);
 
   // Unified Consumption & Dispense History Filters
@@ -342,19 +347,24 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
     setIsSavingConsumable(true);
     try {
+      const minVal = Math.max(0, consumableForm.minThreshold || 0);
+      const maxVal = Math.max(minVal, consumableForm.maxCapacity || Math.max(minVal * 3, 20));
+
       const payload = {
         ...consumableForm,
         name: trimmedName,
         cabinetId: selectedCabinetId,
+        minThreshold: minVal,
+        maxCapacity: maxVal,
         lastUpdatedBy: userEmail
       };
 
       if (editingConsumable) {
         await updateConsumable(editingConsumable.id, payload);
-        setToastMessage("อัปเดตข้อมูลวัสดุสิ้นเปลืองเรียบร้อย");
+        setToastMessage(`อัปเดตข้อมูลพัสดุ "${trimmedName}" เรียบร้อย (Min: ${minVal}, Max: ${maxVal})`);
       } else {
         await addConsumable(payload);
-        setToastMessage("เพิ่มวัสดุสิ้นเปลืองลงในตู้สำเร็จเรียบร้อย!");
+        setToastMessage(`เพิ่มพัสดุ "${trimmedName}" ลงในตู้สำเร็จเรียบร้อย!`);
       }
 
       setShowConsumableModal(false);
@@ -364,6 +374,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         department: "Production",
         currentQty: 10,
         minThreshold: 5,
+        maxCapacity: 30,
         unit: "ชิ้น",
         imageUrl: CONSUMABLE_PRESETS["glove"]
       });
@@ -386,26 +397,60 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
       department: item.department,
       currentQty: item.currentQty,
       minThreshold: item.minThreshold,
+      maxCapacity: item.maxCapacity ?? Math.max(item.minThreshold * 3, item.currentQty, 20),
       unit: item.unit,
       imageUrl: item.imageUrl
     });
     setShowConsumableModal(true);
   };
 
-  const handleDeleteConsumable = async (id: string) => {
-    if (confirm("คุณแน่ใจหรือไม่ที่จะลบรายการวัสดุสิ้นเปลืองนี้?")) {
+  const handleDeleteConsumable = async (id: string, name?: string) => {
+    if (confirm(`คุณแน่ใจหรือไม่ที่จะลบรายการพัสดุ "${name || 'นี้'}" ออกจากระบบถาวร?\n\n(หมายเหตุ: หากต้องการนำชุดพัสดุตัวอย่างกลับมา สามารถกดปุ่ม 'คืนค่าพัสดุเริ่มต้น' ได้เสมอ)`)) {
       try {
         await deleteConsumable(id);
         triggerRefresh();
+        setToastMessage(`ลบรายการ "${name || 'พัสดุ'}" เรียบร้อย (หากต้องการนำกลับมา สามารถกด 'คืนค่าพัสดุเริ่มต้น' ได้)`);
+        setTimeout(() => setToastMessage(null), 5000);
       } catch (err) {
         console.error("Error deleting consumable:", err);
       }
     }
   };
 
+  const handleRestoreDefaultConsumables = async () => {
+    if (!confirm("คุณต้องการคืนค่าชุดพัสดุตัวอย่างเริ่มต้นใช่หรือไม่?\n\nระบบจะสร้าง/ซิงค์รายการพัสดุมาตรฐาน (พร้อมรูปภาพ, แผนก, Min, Max) และเชื่อมโยงเข้าตู้เก็บของที่มีอยู่ในระบบให้อัตโนมัติ")) {
+      return;
+    }
+    setIsRestoringDemo(true);
+    try {
+      const res = await restoreDefaultConsumables();
+      triggerRefresh();
+      setToastMessage(res.message);
+      setTimeout(() => setToastMessage(null), 5000);
+    } catch (err: any) {
+      console.error("Error restoring default consumables:", err);
+      setToastMessage("เกิดข้อผิดพลาดในการคืนค่าพัสดุเริ่มต้น");
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setIsRestoringDemo(false);
+    }
+  };
+
+  const handleAutoAssignCabinet = async (targetCabId: string) => {
+    try {
+      const count = await autoAssignUnlinkedConsumables(targetCabId);
+      triggerRefresh();
+      setToastMessage(`จัดสรรพัสดุที่ไม่มีตู้จำนวน ${count} รายการ เข้าตู้เรียบร้อย`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      console.error("Error auto assigning cabinets:", err);
+    }
+  };
+
   const handleQuickRestock = async (item: Consumable) => {
     try {
-      const restockAmt = 15; // default quick restock
+      const targetMax = item.maxCapacity || Math.max(item.minThreshold * 3, 20);
+      const restockAmt = Math.max(targetMax - item.currentQty, 10);
       await updateConsumable(item.id, {
         currentQty: item.currentQty + restockAmt,
         lastUpdatedBy: userEmail
@@ -491,6 +536,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                 department: "Production",
                 currentQty: 10,
                 minThreshold: 5,
+                maxCapacity: 30,
                 unit: "ชิ้น",
                 imageUrl: CONSUMABLE_PRESETS["glove"]
               });
@@ -501,6 +547,19 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           >
             <Plus className="h-4 w-4 stroke-[2.5]" />
             เพิ่มวัสดุสิ้นเปลือง
+          </button>
+          <button
+            onClick={handleRestoreDefaultConsumables}
+            disabled={isRestoringDemo}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            title="คืนค่าชุดพัสดุตัวอย่างเริ่มต้นมาตรฐาน พร้อมค่า Min-Max และผูกเข้าตู้ให้อัตโนมัติ"
+          >
+            {isRestoringDemo ? (
+              <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+            ) : (
+              <RotateCcw className="h-4 w-4 text-amber-600" />
+            )}
+            <span>คืนค่าพัสดุเริ่มต้น</span>
           </button>
           <button
             onClick={() => {
@@ -1004,119 +1063,292 @@ service cloud.firestore {
 
       {/* 2. CONSUMABLES TAB */}
       {activeTab === "consumables" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                  <th className="py-4 px-6">รูปภาพ & ชื่อวัสดุสิ้นเปลือง</th>
-                  <th className="py-4 px-6">ตำแหน่งจัดเก็บ (ตู้เก็บของ)</th>
-                  <th className="py-4 px-6">แผนก / เจ้าของพัสดุ</th>
-                  <th className="py-4 px-6 text-center">คงเหลือปัจจุบัน</th>
-                  <th className="py-4 px-6 text-center">เกณฑ์ความปลอดภัย</th>
-                  <th className="py-4 px-6 text-center">สถานะ</th>
-                  <th className="py-4 px-6 text-right">ดำเนินการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                {consumables.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      ยังไม่มีวัสดุสิ้นเปลืองในระบบ กรุณาเพิ่มที่ปุ่มด้านบน
-                    </td>
-                  </tr>
-                ) : (
-                  consumables
-                    .filter(item => 
-                      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      getCabinetName(item.cabinetId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      item.department.toLowerCase().includes(searchTerm.toLowerCase())
-                    )
-                    .map(item => {
-                      const isLow = item.currentQty <= item.minThreshold;
+        <div className="space-y-4">
+          {/* Unassigned Consumables Alert Banner */}
+          {(() => {
+            const unassignedConsumables = consumables.filter(item => !cabinets.some(c => c.id === item.cabinetId));
+            if (unassignedConsumables.length === 0) return null;
 
-                      return (
-                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 px-6 font-semibold">
-                            <div className="flex items-center gap-3">
-                              <div 
-                                className="relative h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 cursor-pointer group"
-                                onClick={() => setPreviewModalImage({ 
-                                  url: item.imageUrl, 
-                                  title: item.name, 
-                                  subtitle: `ตู้: ${getCabinetName(item.cabinetId)} | แผนก: ${item.department} | คงเหลือ: ${item.currentQty} ${item.unit}` 
-                                })}
-                                title="คลิกเพื่อดูรูปภาพขยาย"
-                              >
-                                <img 
-                                  src={item.imageUrl} 
-                                  alt={item.name} 
-                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                                  referrerPolicy="no-referrer"
-                                />
-                                <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                                  <Eye className="h-3 w-3" />
+            return (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-fade-in">
+                <div className="flex items-center gap-3 text-amber-900">
+                  <div className="p-2 bg-amber-100 rounded-xl text-amber-700 shrink-0">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm block">
+                      พบพัสดุ {unassignedConsumables.length} รายการที่ยังไม่มีตู้จัดเก็บ (ไม่ระบุตู้)
+                    </span>
+                    <span className="text-[11px] text-amber-700 mt-0.5 block">
+                      พัสดุเหล่านี้ยังไม่ได้ผูกกับตู้เก็บของที่ใช้งานอยู่ สามารถกดจัดสรรเข้าตู้ หรือกดคืนค่าตู้เริ่มต้นได้ทันที
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {cabinets.length > 0 ? (
+                    <button
+                      onClick={() => handleAutoAssignCabinet(cabinets[0].id)}
+                      className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 text-xs"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      <span>ผูกเข้าตู้ "{cabinets[0].name}" ทันที</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleRestoreDefaultConsumables}
+                      disabled={isRestoringDemo}
+                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 text-xs"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>คืนค่าตู้และพัสดุเริ่มต้น</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Consumables Table Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            {/* Header info toolbar */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-slate-700 font-bold">
+                <Package className="h-4 w-4 text-indigo-600" />
+                <span>พัสดุและวัสดุสิ้นเปลืองทั้งหมด ({consumables.length} รายการ)</span>
+                <span className="text-[11px] text-slate-400 font-medium">| ควบคุมด้วยเกณฑ์สต็อกต่ำสุด (Min) และสูงสุด (Max)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRestoreDefaultConsumables}
+                  disabled={isRestoringDemo}
+                  className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
+                  title="กู้คืนรายการพัสดุมาตรฐานเริ่มต้น พร้อมเกณฑ์ Min-Max และผูกเข้าตู้"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 text-amber-600" />
+                  <span>คืนค่าพัสดุเริ่มต้น</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingConsumable(null);
+                    setConsumableForm({
+                      name: "",
+                      department: "Production",
+                      currentQty: 10,
+                      minThreshold: 5,
+                      maxCapacity: 30,
+                      unit: "ชิ้น",
+                      imageUrl: CONSUMABLE_PRESETS["glove"]
+                    });
+                    if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
+                    setShowConsumableModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>เพิ่มพัสดุใหม่</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    <th className="py-4 px-6">รูปภาพ & ชื่อวัสดุสิ้นเปลือง</th>
+                    <th className="py-4 px-6">ตำแหน่งจัดเก็บ (ตู้เก็บของ)</th>
+                    <th className="py-4 px-6">แผนก / เจ้าของพัสดุ</th>
+                    <th className="py-4 px-6 text-center">คงเหลือปัจจุบัน</th>
+                    <th className="py-4 px-6 text-center">เกณฑ์สต็อก (Min - Max)</th>
+                    <th className="py-4 px-6 text-center">ระดับสต็อกเทียบ Max</th>
+                    <th className="py-4 px-6 text-center">สถานะ</th>
+                    <th className="py-4 px-6 text-right">ดำเนินการ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
+                  {consumables.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <div className="flex flex-col items-center gap-3">
+                          <Package className="h-10 w-10 text-slate-300" />
+                          <p className="font-semibold text-slate-500">ยังไม่มีวัสดุสิ้นเปลืองในระบบ</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              onClick={handleRestoreDefaultConsumables}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              <span>คืนค่าชุดพัสดุตัวอย่างเริ่มต้น (พร้อม Min-Max)</span>
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    consumables
+                      .filter(item => 
+                        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        getCabinetName(item.cabinetId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        item.department.toLowerCase().includes(searchTerm.toLowerCase())
+                      )
+                      .map(item => {
+                        const minVal = item.minThreshold;
+                        const maxVal = item.maxCapacity || Math.max(item.minThreshold * 3, 20);
+                        const isOutOfStock = item.currentQty === 0;
+                        const isLow = item.currentQty <= minVal && !isOutOfStock;
+                        const isOverstock = item.currentQty > maxVal;
+                        const pct = Math.min(Math.round((item.currentQty / maxVal) * 100), 100);
+                        const isCabinetUnassigned = !cabinets.some(c => c.id === item.cabinetId);
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-4 px-6 font-semibold">
+                              <div className="flex items-center gap-3">
+                                <div 
+                                  className="relative h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 cursor-pointer group"
+                                  onClick={() => setPreviewModalImage({ 
+                                    url: item.imageUrl, 
+                                    title: item.name, 
+                                    subtitle: `ตู้: ${getCabinetName(item.cabinetId)} | แผนก: ${item.department} | คงเหลือ: ${item.currentQty} ${item.unit} | Min: ${minVal} | Max: ${maxVal}` 
+                                  })}
+                                  title="คลิกเพื่อดูรูปภาพขยาย"
+                                >
+                                  <img 
+                                    src={item.imageUrl} 
+                                    alt={item.name} 
+                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                  <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                                    <Eye className="h-3 w-3" />
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="font-bold text-slate-900 block leading-tight">{item.name}</span>
+                                  <span className="text-[10px] text-slate-400 font-medium block mt-0.5">ID: {item.id}</span>
                                 </div>
                               </div>
-                              <div>
-                                <span className="font-bold text-slate-900 block leading-tight">{item.name}</span>
-                                <span className="text-[10px] text-slate-400 font-medium block mt-0.5">ID: {item.id}</span>
+                            </td>
+                            <td className="py-4 px-6">
+                              {isCabinetUnassigned ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[10px] px-2 py-0.5 rounded">
+                                    ไม่ระบุตู้
+                                  </span>
+                                  {cabinets.length > 0 && (
+                                    <button
+                                      onClick={() => handleAutoAssignCabinet(cabinets[0].id)}
+                                      className="text-[10px] text-indigo-600 hover:text-indigo-800 underline font-semibold cursor-pointer"
+                                      title={`ผูกเข้าตู้ ${cabinets[0].name}`}
+                                    >
+                                      ผูกตู้
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="font-semibold text-slate-700 block">{getCabinetName(item.cabinetId)}</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-6">
+                              <span className="bg-slate-100 border border-slate-200/50 text-slate-600 font-bold text-[9px] px-2 py-0.5 rounded uppercase">
+                                {item.department}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <span className={`font-black text-sm ${isOutOfStock ? "text-rose-600" : isLow ? "text-amber-600" : "text-slate-800"}`}>
+                                {item.currentQty} <span className="text-xs font-semibold text-slate-500">{item.unit}</span>
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <div className="inline-flex flex-col items-center gap-0.5">
+                                <div className="flex items-center gap-1 text-[11px] font-bold">
+                                  <span className="bg-amber-50 text-amber-800 border border-amber-200/70 px-1.5 py-0.5 rounded" title="สต็อกขั้นต่ำ (Minimum)">
+                                    Min: {minVal}
+                                  </span>
+                                  <span className="text-slate-300">-</span>
+                                  <span className="bg-blue-50 text-blue-800 border border-blue-200/70 px-1.5 py-0.5 rounded" title="สต็อกสูงสุด (Maximum)">
+                                    Max: {maxVal}
+                                  </span>
+                                </div>
+                                <span className="text-[9px] text-slate-400">{item.unit}</span>
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="font-semibold text-slate-700 block">{getCabinetName(item.cabinetId)}</span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="bg-slate-100 border border-slate-200/50 text-slate-600 font-bold text-[9px] px-2 py-0.5 rounded uppercase">
-                              {item.department}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <span className={`font-black text-sm ${isLow ? "text-rose-600" : "text-slate-800"}`}>
-                              {item.currentQty} {item.unit}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-center font-bold text-slate-500">
-                            {item.minThreshold} {item.unit}
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            {isLow ? (
-                              <span className="bg-rose-50 border border-rose-100 text-rose-700 font-bold text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-0.5">
-                                <span className="h-1 w-1 bg-rose-600 rounded-full"></span>
-                                ของใกล้หมด
-                              </span>
-                            ) : (
-                              <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-0.5">
-                                <span className="h-1 w-1 bg-emerald-600 rounded-full"></span>
-                                สต็อกปลอดภัย
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="flex justify-end gap-1.5">
-                              <button
-                                onClick={() => handleEditConsumable(item)}
-                                className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:border-slate-300 rounded-lg cursor-pointer transition-all"
-                                title="แก้ไขพัสดุ"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteConsumable(item.id)}
-                                className="p-1.5 bg-white border border-slate-200 text-rose-500 hover:text-rose-700 hover:border-rose-200 rounded-lg cursor-pointer transition-all"
-                                title="ลบวัสดุพัสดุ"
-                              >
-                                <Trash className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                )}
-              </tbody>
-            </table>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="w-24 mx-auto">
+                                <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
+                                  <span>{pct}%</span>
+                                  <span>{item.currentQty}/{maxVal}</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all ${
+                                      isOutOfStock 
+                                        ? "bg-slate-300"
+                                        : isLow 
+                                        ? "bg-rose-500" 
+                                        : isOverstock 
+                                        ? "bg-purple-500" 
+                                        : "bg-emerald-500"
+                                    }`}
+                                    style={{ width: `${Math.max(pct, isOutOfStock ? 0 : 5)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              {isOutOfStock ? (
+                                <span className="bg-rose-100 text-rose-800 font-bold text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 bg-rose-600 rounded-full"></span>
+                                  หมดสต็อก (0)
+                                </span>
+                              ) : isLow ? (
+                                <span className="bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                                  ของใกล้หมด (≤ Min)
+                                </span>
+                              ) : isOverstock ? (
+                                <span className="bg-purple-50 border border-purple-200 text-purple-700 font-bold text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 bg-purple-500 rounded-full"></span>
+                                  สต็อกล้น (&gt; Max)
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 bg-emerald-600 rounded-full"></span>
+                                  สต็อกสมดุล
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              <div className="flex justify-end gap-1.5">
+                                <button
+                                  onClick={() => handleQuickRestock(item)}
+                                  className="p-1.5 bg-white border border-slate-200 text-emerald-600 hover:text-emerald-800 hover:border-emerald-300 rounded-lg cursor-pointer transition-all"
+                                  title={`เติมสต็อกด่วนสู่เกณฑ์ Max (${maxVal} ${item.unit})`}
+                                >
+                                  <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+                                </button>
+                                <button
+                                  onClick={() => handleEditConsumable(item)}
+                                  className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:border-slate-300 rounded-lg cursor-pointer transition-all"
+                                  title="แก้ไขพัสดุและเกณฑ์ Min-Max"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteConsumable(item.id, item.name)}
+                                  className="p-1.5 bg-white border border-slate-200 text-rose-500 hover:text-rose-700 hover:border-rose-200 rounded-lg cursor-pointer transition-all"
+                                  title="ลบพัสดุ (สามารถกู้คืนชุดตัวอย่างได้ที่ปุ่มคืนค่า)"
+                                >
+                                  <Trash className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1995,32 +2227,104 @@ service cloud.firestore {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="con-qty-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    สต็อกคงเหลือเริ่มต้น
-                  </label>
-                  <input
-                    id="con-qty-input"
-                    type="number"
-                    value={consumableForm.currentQty}
-                    onChange={(e) => setConsumableForm({ ...consumableForm, currentQty: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold"
-                  />
+              {/* Stock Quantity, Minimum and Maximum Thresholds */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                    <Package className="h-3.5 w-3.5 text-indigo-600" />
+                    กำหนดจำนวนสต็อกและเกณฑ์ควบคุม (Min / Max)
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium">หน่วย: {consumableForm.unit || "ชิ้น"}</span>
                 </div>
 
-                <div>
-                  <label htmlFor="con-threshold-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    เกณฑ์แจ้งเตือนสต็อกต่ำ
-                  </label>
-                  <input
-                    id="con-threshold-input"
-                    type="number"
-                    value={consumableForm.minThreshold}
-                    onChange={(e) => setConsumableForm({ ...consumableForm, minThreshold: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold text-rose-600"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Current Qty */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                    <label htmlFor="con-qty-input" className="block text-[11px] font-bold text-slate-700 mb-1">
+                      สต็อกคงเหลือปัจจุบัน
+                    </label>
+                    <input
+                      id="con-qty-input"
+                      type="number"
+                      min="0"
+                      value={consumableForm.currentQty}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, currentQty: Math.max(0, parseInt(e.target.value) || 0) })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-black text-slate-800"
+                    />
+                    <span className="text-[9px] text-slate-400 mt-1 block">จำนวนที่มีอยู่ในตู้จริงขณะนี้</span>
+                  </div>
+
+                  {/* Minimum Threshold */}
+                  <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200/80 shadow-2xs">
+                    <label htmlFor="con-threshold-input" className="block text-[11px] font-bold text-amber-900 mb-1 flex items-center justify-between">
+                      <span>สต็อกขั้นต่ำ (Min)</span>
+                      <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded font-extrabold">เตือนสั่งซื้อ</span>
+                    </label>
+                    <input
+                      id="con-threshold-input"
+                      type="number"
+                      min="0"
+                      value={consumableForm.minThreshold}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, minThreshold: Math.max(0, parseInt(e.target.value) || 0) })}
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-sm font-black text-amber-800 bg-white"
+                    />
+                    <span className="text-[9px] text-amber-700 mt-1 block">ถ้า ≤ ค่านี้ จะเตือน "ของใกล้หมด"</span>
+                  </div>
+
+                  {/* Maximum Capacity */}
+                  <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-200/80 shadow-2xs">
+                    <label htmlFor="con-max-input" className="block text-[11px] font-bold text-blue-900 mb-1 flex items-center justify-between">
+                      <span>สต็อกสูงสุด (Max)</span>
+                      <span className="text-[9px] bg-blue-100 text-blue-800 px-1 rounded font-extrabold">ความจุตู้</span>
+                    </label>
+                    <input
+                      id="con-max-input"
+                      type="number"
+                      min="1"
+                      value={consumableForm.maxCapacity}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, maxCapacity: Math.max(1, parseInt(e.target.value) || 1) })}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-black text-blue-800 bg-white"
+                    />
+                    <span className="text-[9px] text-blue-700 mt-1 block">ความจุสูงสุด / สต็อกเต็มตู้</span>
+                  </div>
                 </div>
+
+                {/* Live Preview of Stock Status based on Min and Max */}
+                {(() => {
+                  const qty = consumableForm.currentQty;
+                  const min = consumableForm.minThreshold;
+                  const max = Math.max(min, consumableForm.maxCapacity || 1);
+                  const pct = Math.min(Math.round((qty / max) * 100), 100);
+                  const isLow = qty <= min && qty > 0;
+                  const isOutOfStock = qty === 0;
+                  const isOver = qty > max;
+
+                  return (
+                    <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-slate-600">สถานะตัวอย่าง:</span>
+                        {isOutOfStock ? (
+                          <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                            หมดสต็อก (0 {consumableForm.unit})
+                          </span>
+                        ) : isLow ? (
+                          <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                            ของใกล้หมด (≤ Min: {min} {consumableForm.unit})
+                          </span>
+                        ) : isOver ? (
+                          <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                            สต็อกล้นตู้ (&gt; Max: {max} {consumableForm.unit})
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                            สต็อกสมดุลปกติ ({qty}/{max} {consumableForm.unit})
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-black text-slate-600">{pct}% ความจุ</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Consumable Image with Upload / Camera / Presets */}

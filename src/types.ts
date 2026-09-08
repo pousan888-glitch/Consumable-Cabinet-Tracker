@@ -34,7 +34,8 @@ export interface Consumable {
   name: string;
   department: string; // The specific department it belongs to
   currentQty: number;
-  minThreshold: number; // Alerts when currentQty <= minThreshold
+  minThreshold: number; // Minimum stock level (Alerts when currentQty <= minThreshold)
+  maxCapacity?: number; // Maximum stock level (Safety capacity limit / Max stock)
   unit: string; // e.g., "ชิ้น", "กล่อง", "แพ็ค"
   imageUrl: string; // Visual reference for helpers to count correctly
   lastUpdated: any;

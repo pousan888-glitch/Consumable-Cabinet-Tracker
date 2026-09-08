@@ -283,6 +283,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 12,
         minThreshold: 5,
+        maxCapacity: 30,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["glove"],
         lastUpdated: Timestamp.now(),
@@ -295,6 +296,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 2, // Low stock
         minThreshold: 4,
+        maxCapacity: 25,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["mask"],
         lastUpdated: Timestamp.now(),
@@ -307,6 +309,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 15,
         minThreshold: 10,
+        maxCapacity: 40,
         unit: "แพ็ค",
         imageUrl: CONSUMABLE_PRESETS["alcohol"],
         lastUpdated: Timestamp.now(),
@@ -319,6 +322,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 3, // Low stock
         minThreshold: 8,
+        maxCapacity: 35,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["tape"],
         lastUpdated: Timestamp.now(),
@@ -331,6 +335,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 6,
         minThreshold: 3,
+        maxCapacity: 15,
         unit: "กระป๋อง",
         imageUrl: CONSUMABLE_PRESETS["grease"],
         lastUpdated: Timestamp.now(),
@@ -343,6 +348,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 20,
         minThreshold: 8,
+        maxCapacity: 50,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["paper"],
         lastUpdated: Timestamp.now(),
@@ -434,6 +440,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 12,
         minThreshold: 5,
+        maxCapacity: 30,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["glove"],
         lastUpdated: Timestamp.now(),
@@ -446,6 +453,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 2,
         minThreshold: 4,
+        maxCapacity: 25,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["mask"],
         lastUpdated: Timestamp.now(),
@@ -458,6 +466,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 15,
         minThreshold: 10,
+        maxCapacity: 40,
         unit: "แพ็ค",
         imageUrl: CONSUMABLE_PRESETS["alcohol"],
         lastUpdated: Timestamp.now(),
@@ -473,6 +482,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 3,
         minThreshold: 8,
+        maxCapacity: 35,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["tape"],
         lastUpdated: Timestamp.now(),
@@ -485,6 +495,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 6,
         minThreshold: 3,
+        maxCapacity: 15,
         unit: "กระป๋อง",
         imageUrl: CONSUMABLE_PRESETS["grease"],
         lastUpdated: Timestamp.now(),
@@ -497,6 +508,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 20,
         minThreshold: 8,
+        maxCapacity: 50,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["paper"],
         lastUpdated: Timestamp.now(),
@@ -1438,5 +1450,194 @@ export async function deleteDepartment(id: string): Promise<void> {
       recordCloudError(err);
     }
   }
+}
+
+// Restore default demo consumables and link them to available cabinets
+export async function restoreDefaultConsumables(): Promise<{ restoredCount: number; message: string }> {
+  // 1. Get or create cabinets if missing
+  let currentCabinets = await getCabinets();
+  if (currentCabinets.length === 0) {
+    const cab1Id = "cab-001";
+    const cab2Id = "cab-002";
+    const cab1: Cabinet = {
+      id: cab1Id,
+      name: "ตู้เก็บวัสดุแผนก QC & แล็บ 1",
+      location: "ห้องแล็บเคมี ตึก A ชั้น 2",
+      departments: ["QC", "Production"],
+      photoUrl: CABINET_PRESETS[0],
+      createdAt: Timestamp.now()
+    };
+    const cab2: Cabinet = {
+      id: cab2Id,
+      name: "ตู้พัสดุและอะไหล่ซ่อมบำรุงไลน์ 3",
+      location: "ไลน์การผลิต 3 หลังเครื่องปั๊ม",
+      departments: ["Production", "Maintenance"],
+      photoUrl: CABINET_PRESETS[1],
+      createdAt: Timestamp.now()
+    };
+    await addCabinet(cab1);
+    await addCabinet(cab2);
+    currentCabinets = [cab1, cab2];
+  }
+
+  const cab1Id = currentCabinets[0]?.id || "cab-001";
+  const cab2Id = currentCabinets[1]?.id || currentCabinets[0]?.id || "cab-002";
+
+  const standardConsumables: Consumable[] = [
+    {
+      id: "con-101",
+      cabinetId: cab1Id,
+      name: "ถุงมือยางไนไตรสีฟ้า (Size M)",
+      department: "QC",
+      currentQty: 12,
+      minThreshold: 5,
+      maxCapacity: 30,
+      unit: "กล่อง",
+      imageUrl: CONSUMABLE_PRESETS["glove"],
+      lastUpdated: Timestamp.now(),
+      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
+    },
+    {
+      id: "con-102",
+      cabinetId: cab1Id,
+      name: "หน้ากากอนามัย 3 ชั้นกันฝุ่น",
+      department: "Production",
+      currentQty: 2,
+      minThreshold: 4,
+      maxCapacity: 25,
+      unit: "กล่อง",
+      imageUrl: CONSUMABLE_PRESETS["mask"],
+      lastUpdated: Timestamp.now(),
+      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
+    },
+    {
+      id: "con-103",
+      cabinetId: cab1Id,
+      name: "แอลกอฮอล์ฆ่าเชื้อชนิดแผ่น 70%",
+      department: "QC",
+      currentQty: 15,
+      minThreshold: 10,
+      maxCapacity: 40,
+      unit: "แพ็ค",
+      imageUrl: CONSUMABLE_PRESETS["alcohol"],
+      lastUpdated: Timestamp.now(),
+      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
+    },
+    {
+      id: "con-201",
+      cabinetId: cab2Id,
+      name: "เทปพันเกลียวท่อประปาเหนียวพิเศษ",
+      department: "Maintenance",
+      currentQty: 3,
+      minThreshold: 8,
+      maxCapacity: 35,
+      unit: "ม้วน",
+      imageUrl: CONSUMABLE_PRESETS["tape"],
+      lastUpdated: Timestamp.now(),
+      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
+    },
+    {
+      id: "con-202",
+      cabinetId: cab2Id,
+      name: "จาระบีหล่อลื่นทนความร้อนสูง",
+      department: "Maintenance",
+      currentQty: 6,
+      minThreshold: 3,
+      maxCapacity: 15,
+      unit: "กระป๋อง",
+      imageUrl: CONSUMABLE_PRESETS["grease"],
+      lastUpdated: Timestamp.now(),
+      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
+    },
+    {
+      id: "con-203",
+      cabinetId: cab2Id,
+      name: "กระดาษทิชชู่ม้วนใหญ่อุตสาหกรรม",
+      department: "Production",
+      currentQty: 20,
+      minThreshold: 8,
+      maxCapacity: 50,
+      unit: "ม้วน",
+      imageUrl: CONSUMABLE_PRESETS["paper"],
+      lastUpdated: Timestamp.now(),
+      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
+    }
+  ];
+
+  const existingCons = getLocalConsumables();
+  const existingMap = new Map(existingCons.map(c => [c.id, c]));
+
+  let count = 0;
+  for (const item of standardConsumables) {
+    const existing = existingMap.get(item.id);
+    if (!existing) {
+      existingMap.set(item.id, item);
+      count++;
+    } else {
+      // Re-link cabinet if old cabinet was deleted
+      const isCabinetValid = currentCabinets.some(c => c.id === existing.cabinetId);
+      existingMap.set(item.id, {
+        ...existing,
+        cabinetId: isCabinetValid ? existing.cabinetId : item.cabinetId,
+        minThreshold: existing.minThreshold ?? item.minThreshold,
+        maxCapacity: existing.maxCapacity ?? item.maxCapacity
+      });
+      count++;
+    }
+  }
+
+  const mergedList = Array.from(existingMap.values());
+  setLocal("local_consumables", mergedList);
+
+  if (!isOfflineFallback) {
+    try {
+      const batch = writeBatch(db);
+      for (const item of mergedList) {
+        batch.set(doc(db, "consumables", item.id), item);
+      }
+      await batch.commit();
+    } catch (err) {
+      recordCloudError(err);
+      console.warn("Notice: Restored locally, cloud sync deferred:", err);
+    }
+  }
+
+  return {
+    restoredCount: count,
+    message: `คืนค่าและปรับปรุงพัสดุมาตรฐานสำเร็จ (${count} รายการ พร้อมระบุ Min-Max และผูกเข้าตู้เรียบร้อย)`
+  };
+}
+
+// Auto-assign any consumables that have no cabinet or invalid cabinet to a target cabinet
+export async function autoAssignUnlinkedConsumables(targetCabinetId: string): Promise<number> {
+  const currentCabinets = await getCabinets();
+  const validCabinetIds = new Set(currentCabinets.map(c => c.id));
+  const list = getLocalConsumables();
+  let updatedCount = 0;
+
+  for (const item of list) {
+    if (!item.cabinetId || !validCabinetIds.has(item.cabinetId)) {
+      item.cabinetId = targetCabinetId;
+      item.lastUpdated = Timestamp.now();
+      updatedCount++;
+    }
+  }
+
+  if (updatedCount > 0) {
+    setLocal("local_consumables", list);
+    if (!isOfflineFallback) {
+      try {
+        const batch = writeBatch(db);
+        for (const item of list) {
+          batch.set(doc(db, "consumables", item.id), item);
+        }
+        await batch.commit();
+      } catch (err) {
+        recordCloudError(err);
+      }
+    }
+  }
+
+  return updatedCount;
 }
 

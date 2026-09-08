@@ -341,8 +341,10 @@ export default function CabinetWithdrawView({
                       <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
                         {item.name}
                       </h3>
-                      <p className="text-xs text-slate-500 font-medium mt-0.5">
-                        คงเหลือในตู้: <span className="font-black text-slate-800">{item.currentQty}</span> {item.unit}
+                      <p className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span>คงเหลือในตู้: <span className="font-black text-slate-800">{item.currentQty}</span> {item.unit}</span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">เกณฑ์ Min: {item.minThreshold} / Max: {item.maxCapacity || Math.max(item.minThreshold * 3, 20)}</span>
                       </p>
                     </div>
                   </div>

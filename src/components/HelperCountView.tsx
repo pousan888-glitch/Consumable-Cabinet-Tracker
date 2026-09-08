@@ -460,10 +460,16 @@ export default function HelperCountView({
                           <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
                             {item.name}
                           </h3>
-                          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-semibold">
-                            <Clock className="h-3 w-3 shrink-0" />
-                            สต็อกเดิม: <span className="text-slate-700 underline font-bold">{item.currentQty} {item.unit}</span>
-                          </p>
+                          <div className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-semibold flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              สต็อกเดิม: <span className="text-slate-700 underline font-bold">{item.currentQty} {item.unit}</span>
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-[10px] text-slate-500 font-medium">
+                              (Min: <strong className="text-amber-700">{item.minThreshold}</strong> / Max: <strong className="text-blue-700">{item.maxCapacity || Math.max(item.minThreshold * 3, 20)}</strong>)
+                            </span>
+                          </div>
                         </div>
                       </div>
 
