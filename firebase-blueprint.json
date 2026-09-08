@@ -56,6 +56,35 @@
         "createdBy": { "type": "string" }
       },
       "required": ["name"]
+    },
+    "CountHistory": {
+      "title": "CountHistory",
+      "description": "Inventory counting session log",
+      "type": "object",
+      "properties": {
+        "cabinetId": { "type": "string" },
+        "cabinetName": { "type": "string" },
+        "checkedAt": { "type": "string" },
+        "checkedBy": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["cabinetId", "checkedBy"]
+    },
+    "QCConsumptionHistory": {
+      "title": "QCConsumptionHistory",
+      "description": "Item consumption and withdrawal log",
+      "type": "object",
+      "properties": {
+        "department": { "type": "string" },
+        "consumedAt": { "type": "string" },
+        "consumedBy": { "type": "string" },
+        "source": { "type": "string" },
+        "cabinetId": { "type": "string" },
+        "cabinetName": { "type": "string" },
+        "note": { "type": "string" },
+        "items": { "type": "array" }
+      },
+      "required": ["department", "consumedBy"]
     }
   },
   "firestore": {
@@ -66,6 +95,14 @@
     "/consumables/{consumableId}": {
       "schema": "Consumable",
       "description": "Consumables inventory list"
+    },
+    "/count_history/{historyId}": {
+      "schema": "CountHistory",
+      "description": "Inventory count session logs"
+    },
+    "/qc_consumption_history/{historyId}": {
+      "schema": "QCConsumptionHistory",
+      "description": "Consumption and withdrawal audit logs"
     },
     "/users/{userId}": {
       "schema": "AppUser",

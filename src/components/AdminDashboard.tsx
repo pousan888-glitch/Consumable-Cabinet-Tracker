@@ -11,6 +11,8 @@ import {
   deleteConsumable,
   getCountHistory,
   getQCConsumptionHistory,
+  deleteCountHistoryItem,
+  deleteQCConsumptionItem,
   getCloudSyncNotice,
   testAndSyncAllToCloud,
   resetCloudSyncNotice,
@@ -24,10 +26,12 @@ import DepartmentSettings from "./DepartmentSettings";
 import ImageUploadInput from "./ImageUploadInput";
 import ImagePreviewModal from "./ImagePreviewModal";
 import CabinetQRModal from "./CabinetQRModal";
+import ClearHistoryModal from "./ClearHistoryModal";
 import { 
   Plus, 
   Edit, 
   Trash, 
+  Trash2, 
   QrCode, 
   AlertTriangle, 
   Package, 
@@ -163,6 +167,49 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
   // History detail drawer
   const [selectedLog, setSelectedLog] = useState<CountHistory | null>(null);
+
+  // Clear History Modal states
+  const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
+  const [clearHistoryInitialType, setClearHistoryInitialType] = useState<"ALL" | "COUNT" | "QC">("ALL");
+  const [deletingCountLogId, setDeletingCountLogId] = useState<string | null>(null);
+  const [deletingQcLogId, setDeletingQcLogId] = useState<string | null>(null);
+
+  const handleDeleteSingleCountLog = async (logId: string, cabinetName: string) => {
+    if (!window.confirm(`ยืนยันลบประวัติการตรวจนับของตู้ "${cabinetName}" รายการนี้?`)) return;
+    try {
+      setDeletingCountLogId(logId);
+      await deleteCountHistoryItem(logId);
+      if (selectedLog?.id === logId) {
+        setSelectedLog(null);
+      }
+      const histories = await getCountHistory();
+      setCountLogs(histories);
+      setToastMessage("ลบประวัติการตรวจนับรายการนี้เรียบร้อยแล้ว");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      console.error("Delete count log error:", err);
+      alert("ไม่สามารถลบรายการได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setDeletingCountLogId(null);
+    }
+  };
+
+  const handleDeleteSingleQcLog = async (logId: string, department: string, itemCount: number) => {
+    if (!window.confirm(`ยืนยันลบประวัติการเบิกของแผนก "${department}" (${itemCount} ชนิดพัสดุ) นี้?`)) return;
+    try {
+      setDeletingQcLogId(logId);
+      await deleteQCConsumptionItem(logId);
+      const qcHistories = await getQCConsumptionHistory();
+      setQcLogs(qcHistories);
+      setToastMessage("ลบประวัติการเบิกรายการนี้เรียบร้อยแล้ว");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      console.error("Delete qc log error:", err);
+      alert("ไม่สามารถลบรายการได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setDeletingQcLogId(null);
+    }
+  };
 
   // Departments List (dynamic from database with fallback)
   const availableDepartmentNames = departments.length > 0
@@ -454,6 +501,17 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           >
             <Plus className="h-4 w-4 stroke-[2.5]" />
             เพิ่มวัสดุสิ้นเปลือง
+          </button>
+          <button
+            onClick={() => {
+              setClearHistoryInitialType("ALL");
+              setShowClearHistoryModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            title="เปิดเมนูล้างและเคลียร์ประวัติการตรวจนับ หรือประวัติการเบิกของ"
+          >
+            <Trash2 className="h-4 w-4 text-rose-600" />
+            <span>เคลียร์ประวัติ</span>
           </button>
         </div>
       </div>
@@ -1068,10 +1126,29 @@ service cloud.firestore {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* History list (Left part) */}
           <div className="lg:col-span-1 bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider mb-4 flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-slate-400" />
-              รายงานนับสต็อกแต่ละรอบ
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-slate-400" />
+                <span>รายงานนับสต็อกแต่ละรอบ</span>
+                <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                  {countLogs.length}
+                </span>
+              </h3>
+              {countLogs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClearHistoryInitialType("COUNT");
+                    setShowClearHistoryModal(true);
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-rose-200"
+                  title="ล้างประวัติการตรวจนับสต็อกทั้งหมดหรือตามช่วงเวลา"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>ล้างประวัตินับ</span>
+                </button>
+              )}
+            </div>
             
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
               {countLogs.length === 0 ? (
@@ -1089,7 +1166,7 @@ service cloud.firestore {
                     <div
                       key={log.id}
                       onClick={() => setSelectedLog(log)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer text-left ${
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer text-left group/card ${
                         isSelected
                           ? "bg-indigo-50 border-indigo-200 shadow-sm"
                           : "bg-white border-slate-100 hover:border-slate-200"
@@ -1099,9 +1176,27 @@ service cloud.firestore {
                         <span className="font-bold text-slate-900 text-xs sm:text-sm truncate max-w-[150px]">
                           {log.cabinetName}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          {dateStr}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {dateStr}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSingleCountLog(log.id, log.cabinetName);
+                            }}
+                            disabled={deletingCountLogId === log.id}
+                            className="p-1 text-slate-300 hover:text-rose-600 hover:bg-rose-100/70 rounded-md transition-all opacity-70 group-hover/card:opacity-100 cursor-pointer"
+                            title="ลบเฉพาะรายการนับสต็อกนี้"
+                          >
+                            {deletingCountLogId === log.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-500" />
+                            ) : (
+                              <Trash className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
                         <span className="flex items-center gap-1 truncate max-w-[130px]">
@@ -1426,6 +1521,20 @@ service cloud.firestore {
                   <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
                   <span>ส่งออก CSV</span>
                 </button>
+                {qcLogs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClearHistoryInitialType("QC");
+                      setShowClearHistoryModal(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl cursor-pointer shadow-2xs transition-all"
+                    title="ล้างประวัติการเบิกและหยิบใช้ของทั้งหมดหรือตามช่วงเวลา"
+                  >
+                    <Trash2 className="h-4 w-4 text-rose-600" />
+                    <span>ล้างประวัติการเบิก</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1456,12 +1565,13 @@ service cloud.firestore {
                       <th className="py-3.5 px-5">รายการสินค้าที่เบิก</th>
                       <th className="py-3.5 px-5 text-right">จำนวนที่เบิก</th>
                       <th className="py-3.5 px-5">หมายเหตุ / วัตถุประสงค์</th>
+                      <th className="py-3.5 px-4 text-center">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                     {filteredLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-14 text-center text-slate-400">
+                        <td colSpan={8} className="py-14 text-center text-slate-400">
                           <PackageMinus className="h-10 w-10 text-slate-300 mx-auto mb-2" />
                           <p className="font-semibold text-slate-600">ไม่พบรายการเบิกพัสดุตามเงื่อนไขที่เลือก</p>
                           <p className="text-xs text-slate-400 mt-1">ลองเปลี่ยนตัวกรอง หรือสแกน QR Code ประจำตู้เพื่อทดสอบการเบิกของ</p>
@@ -1578,15 +1688,32 @@ service cloud.firestore {
 
                                   {/* Note column */}
                                   {idx === 0 && (
-                                    <td className="py-3.5 px-5 align-top text-xs text-slate-600 max-w-xs" rowSpan={log.items.length}>
-                                      {log.note ? (
-                                        <span className="bg-slate-50 border border-slate-200/60 p-2 rounded-xl block text-slate-700 italic">
-                                          "{log.note}"
-                                        </span>
-                                      ) : (
-                                        <span className="text-slate-300 font-mono">—</span>
-                                      )}
-                                    </td>
+                                    <>
+                                      <td className="py-3.5 px-5 align-top text-xs text-slate-600 max-w-xs" rowSpan={log.items.length}>
+                                        {log.note ? (
+                                          <span className="bg-slate-50 border border-slate-200/60 p-2 rounded-xl block text-slate-700 italic">
+                                            "{log.note}"
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300 font-mono">—</span>
+                                        )}
+                                      </td>
+                                      <td className="py-3.5 px-4 align-top text-center" rowSpan={log.items.length}>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteSingleQcLog(log.id, log.department, log.items.length)}
+                                          disabled={deletingQcLogId === log.id}
+                                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center"
+                                          title="ลบประวัติการเบิกรายการนี้"
+                                        >
+                                          {deletingQcLogId === log.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
+                                          ) : (
+                                            <Trash className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                      </td>
+                                    </>
                                   )}
                                 </tr>
                               );
@@ -1962,6 +2089,26 @@ service cloud.firestore {
           onClose={() => {
             setShowQRModal(false);
             setQrCabinet(null);
+          }}
+        />
+      )}
+
+      {/* D. CLEAR HISTORY MODAL */}
+      {showClearHistoryModal && (
+        <ClearHistoryModal
+          initialType={clearHistoryInitialType}
+          totalCountLogs={countLogs.length}
+          totalQcLogs={qcLogs.length}
+          onClose={() => setShowClearHistoryModal(false)}
+          onSuccess={async (summary) => {
+            setToastMessage(summary);
+            setTimeout(() => setToastMessage(null), 4000);
+            // Refresh data
+            const histories = await getCountHistory();
+            setCountLogs(histories);
+            setSelectedLog(null);
+            const qcHistories = await getQCConsumptionHistory();
+            setQcLogs(qcHistories);
           }}
         />
       )}

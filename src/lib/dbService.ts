@@ -1011,6 +1011,138 @@ export async function getQCConsumptionHistory(): Promise<QCConsumptionHistory[]>
 }
 
 // ==========================================
+// HISTORY CLEAR & PURGE OPERATIONS
+// ==========================================
+
+function parseLogDateMs(val: any): number {
+  if (!val) return 0;
+  if (typeof val.toMillis === "function") return val.toMillis();
+  if (typeof val.toDate === "function") return val.toDate().getTime();
+  if (typeof val.seconds === "number") return val.seconds * 1000;
+  const parsed = new Date(val).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+async function deleteFirestoreDocsInChunks(collectionName: string, docIds: string[]): Promise<void> {
+  if (isOfflineFallback || docIds.length === 0) return;
+  const CHUNK_SIZE = 300;
+  for (let i = 0; i < docIds.length; i += CHUNK_SIZE) {
+    const chunk = docIds.slice(i, i + CHUNK_SIZE);
+    try {
+      const batch = writeBatch(db);
+      chunk.forEach(id => {
+        batch.delete(doc(db, collectionName, id));
+      });
+      await batch.commit();
+    } catch (err) {
+      recordCloudError(err);
+      console.warn(`Notice: Batch delete in ${collectionName} warning:`, err);
+    }
+  }
+}
+
+// Delete a single count log entry
+export async function deleteCountHistoryItem(id: string): Promise<void> {
+  const list = getLocalCountHistory();
+  const updated = list.filter(item => item.id !== id);
+  setLocal("local_count_history", updated);
+
+  if (!isOfflineFallback) {
+    try {
+      await deleteDoc(doc(db, "count_history", id));
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+}
+
+// Delete a single consumption/dispense log entry
+export async function deleteQCConsumptionItem(id: string): Promise<void> {
+  const list = getLocalQCConsumptionHistory();
+  const updated = list.filter(item => item.id !== id);
+  setLocal("local_qc_consumption_history", updated);
+
+  if (!isOfflineFallback) {
+    try {
+      await deleteDoc(doc(db, "qc_consumption_history", id));
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+}
+
+// Bulk clear count history (all or older than N days)
+export async function clearCountHistory(olderThanDays?: number): Promise<{ deletedCount: number }> {
+  const list = getLocalCountHistory();
+  const cutoffMs = olderThanDays && olderThanDays > 0 ? Date.now() - olderThanDays * 24 * 60 * 60 * 1000 : null;
+
+  const toDelete = cutoffMs
+    ? list.filter(item => parseLogDateMs(item.checkedAt) < cutoffMs)
+    : list;
+  const toKeep = cutoffMs
+    ? list.filter(item => parseLogDateMs(item.checkedAt) >= cutoffMs)
+    : [];
+
+  setLocal("local_count_history", toKeep);
+
+  if (!isOfflineFallback) {
+    try {
+      if (cutoffMs) {
+        const docIds = toDelete.map(d => d.id);
+        await deleteFirestoreDocsInChunks("count_history", docIds);
+      } else {
+        const snap = await getDocs(collection(db, "count_history"));
+        const docIds = snap.docs.map(d => d.id);
+        await deleteFirestoreDocsInChunks("count_history", docIds);
+      }
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+
+  return { deletedCount: toDelete.length };
+}
+
+// Bulk clear withdrawal & QC consumption history (all or older than N days)
+export async function clearQCConsumptionHistory(olderThanDays?: number): Promise<{ deletedCount: number }> {
+  const list = getLocalQCConsumptionHistory();
+  const cutoffMs = olderThanDays && olderThanDays > 0 ? Date.now() - olderThanDays * 24 * 60 * 60 * 1000 : null;
+
+  const toDelete = cutoffMs
+    ? list.filter(item => parseLogDateMs(item.consumedAt) < cutoffMs)
+    : list;
+  const toKeep = cutoffMs
+    ? list.filter(item => parseLogDateMs(item.consumedAt) >= cutoffMs)
+    : [];
+
+  setLocal("local_qc_consumption_history", toKeep);
+
+  if (!isOfflineFallback) {
+    try {
+      if (cutoffMs) {
+        const docIds = toDelete.map(d => d.id);
+        await deleteFirestoreDocsInChunks("qc_consumption_history", docIds);
+      } else {
+        const snap = await getDocs(collection(db, "qc_consumption_history"));
+        const docIds = snap.docs.map(d => d.id);
+        await deleteFirestoreDocsInChunks("qc_consumption_history", docIds);
+      }
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+
+  return { deletedCount: toDelete.length };
+}
+
+// Clear all types of histories together
+export async function clearAllHistories(olderThanDays?: number): Promise<{ countDeleted: number; qcDeleted: number }> {
+  const resCount = await clearCountHistory(olderThanDays);
+  const resQC = await clearQCConsumptionHistory(olderThanDays);
+  return { countDeleted: resCount.deletedCount, qcDeleted: resQC.deletedCount };
+}
+
+// ==========================================
 // USER PERMISSION & ROLE MANAGEMENT API
 // ==========================================
 
