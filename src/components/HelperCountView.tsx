@@ -426,7 +426,7 @@ export default function HelperCountView({
                           onClick={() => setPreviewImage({
                             url: item.imageUrl,
                             title: item.name,
-                            subtitle: `แผนก: ${item.department} | หน่วยนับ: ${item.unit} | เกณฑ์เตือนสต็อกต่ำ: ${item.minThreshold}`
+                            subtitle: `แผนก: ${item.department} | หน่วยนับ: ${item.unit} | เกณฑ์ Min: ${item.minThreshold}${item.maxThreshold ? ` / Max: ${item.maxThreshold}` : ""}`
                           })}
                           className="relative h-16 w-16 rounded-2xl bg-slate-100 overflow-hidden border-2 border-slate-200/80 shrink-0 cursor-pointer group shadow-sm active:scale-95 transition-all text-left"
                           title="แตะเพื่อดูรูปภาพของจริงขนาดใหญ่"
@@ -460,16 +460,13 @@ export default function HelperCountView({
                           <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
                             {item.name}
                           </h3>
-                          <div className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-semibold flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3 shrink-0" />
-                              สต็อกเดิม: <span className="text-slate-700 underline font-bold">{item.currentQty} {item.unit}</span>
+                          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-semibold">
+                            <Clock className="h-3 w-3 shrink-0" />
+                            สต็อกเดิม: <span className="text-slate-700 underline font-bold">{item.currentQty} {item.unit}</span>
+                            <span className="text-[11px] text-slate-400 font-normal">
+                              (เกณฑ์ Min: {item.minThreshold}{item.maxThreshold ? ` / Max: ${item.maxThreshold}` : ""})
                             </span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-[10px] text-slate-500 font-medium">
-                              (Min: <strong className="text-amber-700">{item.minThreshold}</strong> / Max: <strong className="text-blue-700">{item.maxCapacity || Math.max(item.minThreshold * 3, 20)}</strong>)
-                            </span>
-                          </div>
+                          </p>
                         </div>
                       </div>
 

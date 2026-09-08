@@ -23,6 +23,7 @@
         "department": { "type": "string" },
         "currentQty": { "type": "number" },
         "minThreshold": { "type": "number" },
+        "maxThreshold": { "type": "number" },
         "unit": { "type": "string" },
         "imageUrl": { "type": "string" },
         "lastUpdated": { "type": "string" },

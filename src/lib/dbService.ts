@@ -71,14 +71,60 @@ function convertToTimestamps<T>(obj: any): T {
   return newObj as T;
 }
 
+// Persistent tombstones to prevent deleted items from resurrecting/reappearing upon sync
+const DELETED_CONSUMABLES_KEY = "cabinet_deleted_consumables_tombstone";
+const DELETED_CABINETS_KEY = "cabinet_deleted_cabinets_tombstone";
+const DATABASE_SEEDED_KEY = "cabinet_database_seeded_flag";
+
+export const getDeletedConsumableIds = (): string[] => {
+  return getLocal<string>(DELETED_CONSUMABLES_KEY) || [];
+};
+
+export const recordDeletedConsumableId = (id: string) => {
+  const current = getDeletedConsumableIds();
+  if (!current.includes(id)) {
+    current.push(id);
+    setLocal(DELETED_CONSUMABLES_KEY, current);
+  }
+};
+
+export const unrecordDeletedConsumableId = (id: string) => {
+  const current = getDeletedConsumableIds().filter(x => x !== id);
+  setLocal(DELETED_CONSUMABLES_KEY, current);
+};
+
+export const getDeletedCabinetIds = (): string[] => {
+  return getLocal<string>(DELETED_CABINETS_KEY) || [];
+};
+
+export const recordDeletedCabinetId = (id: string) => {
+  const current = getDeletedCabinetIds();
+  if (!current.includes(id)) {
+    current.push(id);
+    setLocal(DELETED_CABINETS_KEY, current);
+  }
+};
+
+export const unrecordDeletedCabinetId = (id: string) => {
+  const current = getDeletedCabinetIds().filter(x => x !== id);
+  setLocal(DELETED_CABINETS_KEY, current);
+};
+
 const getLocalCabinets = (): Cabinet[] => {
+  const deletedCabIds = getDeletedCabinetIds();
   const list = getLocal<any>("local_cabinets");
-  return list.map(item => convertToTimestamps<Cabinet>(item));
+  return list
+    .map(item => convertToTimestamps<Cabinet>(item))
+    .filter(item => !deletedCabIds.includes(item.id));
 };
 
 const getLocalConsumables = (): Consumable[] => {
+  const deletedIds = getDeletedConsumableIds();
+  const deletedCabIds = getDeletedCabinetIds();
   const list = getLocal<any>("local_consumables");
-  return list.map(item => convertToTimestamps<Consumable>(item));
+  return list
+    .map(item => convertToTimestamps<Consumable>(item))
+    .filter(item => !deletedIds.includes(item.id) && !deletedCabIds.includes(item.cabinetId));
 };
 
 const getLocalCountHistory = (): CountHistory[] => {
@@ -191,6 +237,17 @@ export async function testAndSyncAllToCloud(): Promise<{
     const localDepts = getLocalDepartments();
 
     const batch = writeBatch(db);
+
+    // Also purge any deleted tombstones from Cloud
+    const deletedConsIds = getDeletedConsumableIds();
+    const deletedCabIds = getDeletedCabinetIds();
+    for (const delId of deletedConsIds) {
+      batch.delete(doc(db, "consumables", delId));
+    }
+    for (const delCabId of deletedCabIds) {
+      batch.delete(doc(db, "cabinets", delCabId));
+    }
+
     for (const cab of localCabs) {
       batch.set(doc(db, "cabinets", cab.id), cab);
     }
@@ -245,10 +302,18 @@ export async function testAndSyncAllToCloud(): Promise<{
 
 // Seed initial data if database is empty (Handles both Cloud Firestore and local fallback)
 export async function seedDatabaseIfEmpty() {
+  const isAlreadySeeded = localStorage.getItem(DATABASE_SEEDED_KEY) === "true";
+  const deletedCons = getDeletedConsumableIds();
+  const deletedCabs = getDeletedCabinetIds();
+  if (isAlreadySeeded || deletedCons.length > 0 || deletedCabs.length > 0) {
+    return false;
+  }
+
   if (isOfflineFallback) {
     const existingCabs = getLocalCabinets();
     if (existingCabs.length > 0) {
       console.log("[Offline Mode]: Database already has data. Skipping seed.");
+      localStorage.setItem(DATABASE_SEEDED_KEY, "true");
       return false;
     }
 
@@ -283,7 +348,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 12,
         minThreshold: 5,
-        maxCapacity: 30,
+        maxThreshold: 50,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["glove"],
         lastUpdated: Timestamp.now(),
@@ -296,7 +361,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 2, // Low stock
         minThreshold: 4,
-        maxCapacity: 25,
+        maxThreshold: 30,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["mask"],
         lastUpdated: Timestamp.now(),
@@ -309,7 +374,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 15,
         minThreshold: 10,
-        maxCapacity: 40,
+        maxThreshold: 60,
         unit: "แพ็ค",
         imageUrl: CONSUMABLE_PRESETS["alcohol"],
         lastUpdated: Timestamp.now(),
@@ -322,7 +387,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 3, // Low stock
         minThreshold: 8,
-        maxCapacity: 35,
+        maxThreshold: 40,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["tape"],
         lastUpdated: Timestamp.now(),
@@ -335,7 +400,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 6,
         minThreshold: 3,
-        maxCapacity: 15,
+        maxThreshold: 20,
         unit: "กระป๋อง",
         imageUrl: CONSUMABLE_PRESETS["grease"],
         lastUpdated: Timestamp.now(),
@@ -348,7 +413,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 20,
         minThreshold: 8,
-        maxCapacity: 50,
+        maxThreshold: 50,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["paper"],
         lastUpdated: Timestamp.now(),
@@ -394,6 +459,7 @@ export async function seedDatabaseIfEmpty() {
     setLocal("local_consumables", localConsumables);
     setLocal("local_count_history", [initialHistory]);
     setLocal("local_qc_consumption_history", []);
+    localStorage.setItem(DATABASE_SEEDED_KEY, "true");
     return true;
   }
 
@@ -402,6 +468,7 @@ export async function seedDatabaseIfEmpty() {
     const cabinetSnap = await getDocs(collection(db, "cabinets"));
     if (!cabinetSnap.empty) {
       console.log("Database already has data. Skipping seed.");
+      localStorage.setItem(DATABASE_SEEDED_KEY, "true");
       return false;
     }
 
@@ -440,7 +507,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 12,
         minThreshold: 5,
-        maxCapacity: 30,
+        maxThreshold: 50,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["glove"],
         lastUpdated: Timestamp.now(),
@@ -453,7 +520,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 2,
         minThreshold: 4,
-        maxCapacity: 25,
+        maxThreshold: 30,
         unit: "กล่อง",
         imageUrl: CONSUMABLE_PRESETS["mask"],
         lastUpdated: Timestamp.now(),
@@ -466,7 +533,7 @@ export async function seedDatabaseIfEmpty() {
         department: "QC",
         currentQty: 15,
         minThreshold: 10,
-        maxCapacity: 40,
+        maxThreshold: 60,
         unit: "แพ็ค",
         imageUrl: CONSUMABLE_PRESETS["alcohol"],
         lastUpdated: Timestamp.now(),
@@ -482,7 +549,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 3,
         minThreshold: 8,
-        maxCapacity: 35,
+        maxThreshold: 40,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["tape"],
         lastUpdated: Timestamp.now(),
@@ -495,7 +562,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Maintenance",
         currentQty: 6,
         minThreshold: 3,
-        maxCapacity: 15,
+        maxThreshold: 20,
         unit: "กระป๋อง",
         imageUrl: CONSUMABLE_PRESETS["grease"],
         lastUpdated: Timestamp.now(),
@@ -508,7 +575,7 @@ export async function seedDatabaseIfEmpty() {
         department: "Production",
         currentQty: 20,
         minThreshold: 8,
-        maxCapacity: 50,
+        maxThreshold: 50,
         unit: "ม้วน",
         imageUrl: CONSUMABLE_PRESETS["paper"],
         lastUpdated: Timestamp.now(),
@@ -518,6 +585,7 @@ export async function seedDatabaseIfEmpty() {
 
     consumables1.forEach(c => batch.set(doc(db, "consumables", c.id), c));
     consumables2.forEach(c => batch.set(doc(db, "consumables", c.id), c));
+    localStorage.setItem(DATABASE_SEEDED_KEY, "true");
 
     const historyId = "log-001";
     const initialHistory: CountHistory = {
@@ -566,7 +634,8 @@ export async function seedDatabaseIfEmpty() {
 
 // Fetch all cabinets (Fault-Tolerant & Local-First Resilient)
 export async function getCabinets(): Promise<Cabinet[]> {
-  const localList = getLocalCabinets();
+  const deletedCabIds = getDeletedCabinetIds();
+  const localList = getLocalCabinets(); // Already filtered by tombstone
 
   if (isOfflineFallback) {
     return localList;
@@ -577,24 +646,33 @@ export async function getCabinets(): Promise<Cabinet[]> {
       getDocs(query(collection(db, "cabinets"), orderBy("createdAt", "desc"))),
       4000
     );
-    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cabinet));
+
+    // Clean up any cloud docs that were deleted locally
+    for (const d of snap.docs) {
+      if (deletedCabIds.includes(d.id)) {
+        deleteDoc(d.ref).catch(() => {});
+      }
+    }
+
+    const cloudList = snap.docs
+      .filter(doc => !deletedCabIds.includes(doc.id))
+      .map(doc => ({ id: doc.id, ...doc.data() } as Cabinet));
     
     // Cloud connection is healthy!
     cloudSyncNotice = { hasError: false };
 
     // Auto-sync: If local storage has cabinets that aren't on Cloud yet, upload them now!
     for (const loc of localList) {
-      if (!cloudList.some(c => c.id === loc.id)) {
+      if (!cloudList.some(c => c.id === loc.id) && !deletedCabIds.includes(loc.id)) {
         setDoc(doc(db, "cabinets", loc.id), loc).catch(e => console.warn("Auto-sync cabinet to cloud:", e));
       }
     }
 
     // If cloud has documents, merge or sync to local
     if (cloudList.length > 0) {
-      // Merge any local items that haven't synced yet
       const combined = [...cloudList];
       for (const loc of localList) {
-        if (!combined.some(c => c.id === loc.id)) {
+        if (!combined.some(c => c.id === loc.id) && !deletedCabIds.includes(loc.id)) {
           combined.push(loc);
         }
       }
@@ -605,7 +683,9 @@ export async function getCabinets(): Promise<Cabinet[]> {
     // If cloud was empty but local has items, upload all to cloud and return local
     if (localList.length > 0) {
       for (const loc of localList) {
-        setDoc(doc(db, "cabinets", loc.id), loc).catch(e => console.warn("Auto-sync initial cabinet:", e));
+        if (!deletedCabIds.includes(loc.id)) {
+          setDoc(doc(db, "cabinets", loc.id), loc).catch(e => console.warn("Auto-sync initial cabinet:", e));
+        }
       }
       return localList;
     }
@@ -621,6 +701,8 @@ export async function getCabinets(): Promise<Cabinet[]> {
 // Add Cabinet (Always persists locally first, then syncs to Cloud Firestore)
 export async function addCabinet(cabinet: Omit<Cabinet, "id" | "createdAt">): Promise<string> {
   const id = "cab-" + generateId();
+  unrecordDeletedCabinetId(id);
+
   const newCabinet: Cabinet = {
     ...cabinet,
     id,
@@ -628,7 +710,7 @@ export async function addCabinet(cabinet: Omit<Cabinet, "id" | "createdAt">): Pr
   };
 
   // 1. Immediately save to LocalStorage so the user NEVER loses their cabinet!
-  const list = getLocalCabinets();
+  const list = getLocal<any>("local_cabinets") || [];
   list.unshift(newCabinet);
   setLocal("local_cabinets", list);
 
@@ -652,8 +734,8 @@ export async function addCabinet(cabinet: Omit<Cabinet, "id" | "createdAt">): Pr
 // Update Cabinet (Fault-Tolerant)
 export async function updateCabinet(id: string, updates: Partial<Cabinet>): Promise<void> {
   // 1. Update in local storage
-  const list = getLocalCabinets();
-  const index = list.findIndex(c => c.id === id);
+  const list = getLocal<any>("local_cabinets") || [];
+  const index = list.findIndex((c: any) => c.id === id);
   if (index !== -1) {
     list[index] = { ...list[index], ...updates };
     setLocal("local_cabinets", list);
@@ -670,20 +752,26 @@ export async function updateCabinet(id: string, updates: Partial<Cabinet>): Prom
   }
 }
 
-// Delete Cabinet and its consumables (Fault-Tolerant)
+// Delete Cabinet and its consumables (Fault-Tolerant & Instant Permanent Tombstone)
 export async function deleteCabinet(id: string): Promise<void> {
-  // 1. Delete locally
-  const list = getLocalCabinets();
-  const updated = list.filter(c => c.id !== id);
+  // 1. Record in permanent tombstone blacklist
+  recordDeletedCabinetId(id);
+
+  const allConsumables = getLocal<any>("local_consumables") || [];
+  const itemsInCabinet = allConsumables.filter((c: any) => c.cabinetId === id);
+  itemsInCabinet.forEach((c: any) => recordDeletedConsumableId(c.id));
+
+  // 2. Delete locally
+  const list = getLocal<any>("local_cabinets") || [];
+  const updated = list.filter((c: any) => c.id !== id);
   setLocal("local_cabinets", updated);
 
-  const consumables = getLocalConsumables();
-  const remainingConsumables = consumables.filter(c => c.cabinetId !== id);
+  const remainingConsumables = allConsumables.filter((c: any) => c.cabinetId !== id);
   setLocal("local_consumables", remainingConsumables);
 
   if (isOfflineFallback) return;
 
-  // 2. Delete from Cloud Firestore
+  // 3. Delete from Cloud Firestore
   try {
     await deleteDoc(doc(db, "cabinets", id));
     const consumablesSnap = await getDocs(query(collection(db, "consumables"), where("cabinetId", "==", id)));
@@ -698,9 +786,11 @@ export async function deleteCabinet(id: string): Promise<void> {
   }
 }
 
-// Fetch consumables (Fault-Tolerant)
+// Fetch consumables (Fault-Tolerant with Tombstone Shield)
 export async function getConsumables(cabinetId?: string): Promise<Consumable[]> {
-  const localList = getLocalConsumables();
+  const deletedIds = getDeletedConsumableIds();
+  const deletedCabIds = getDeletedCabinetIds();
+  const localList = getLocalConsumables(); // Already filtered by tombstones
 
   if (isOfflineFallback) {
     return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
@@ -712,23 +802,33 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
       q = query(collection(db, "consumables"), where("cabinetId", "==", cabinetId));
     }
     const snap = await withTimeout(getDocs(q), 4000);
-    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Consumable));
+
+    // Clean up any cloud docs that were deleted by user
+    for (const d of snap.docs) {
+      if (deletedIds.includes(d.id) || deletedCabIds.includes(d.data().cabinetId)) {
+        deleteDoc(d.ref).catch(() => {});
+      }
+    }
+
+    const cloudList = snap.docs
+      .filter(doc => !deletedIds.includes(doc.id) && !deletedCabIds.includes(doc.data().cabinetId))
+      .map(doc => ({ id: doc.id, ...doc.data() } as Consumable));
 
     // Cloud connection is healthy!
     cloudSyncNotice = { hasError: false };
 
-    // Auto-sync: If local items aren't on Cloud yet, upload them
+    // Auto-sync: If local items aren't on Cloud yet, upload them (if not deleted!)
     for (const loc of localList) {
-      if (!cloudList.some(c => c.id === loc.id)) {
+      if (!cloudList.some(c => c.id === loc.id) && !deletedIds.includes(loc.id) && !deletedCabIds.includes(loc.cabinetId)) {
         setDoc(doc(db, "consumables", loc.id), loc).catch(e => console.warn("Auto-sync consumable to cloud:", e));
       }
     }
 
     if (cloudList.length > 0) {
-      // Merge with local if needed
+      // Merge with local if needed, strictly rejecting any tombstoned IDs
       const combined = [...cloudList];
       for (const loc of localList) {
-        if (!combined.some(c => c.id === loc.id)) {
+        if (!combined.some(c => c.id === loc.id) && !deletedIds.includes(loc.id) && !deletedCabIds.includes(loc.cabinetId)) {
           if (!cabinetId || loc.cabinetId === cabinetId) {
             combined.push(loc);
           }
@@ -740,7 +840,9 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
 
     if (localList.length > 0) {
       for (const loc of localList) {
-        setDoc(doc(db, "consumables", loc.id), loc).catch(e => console.warn("Auto-sync initial consumable:", e));
+        if (!deletedIds.includes(loc.id) && !deletedCabIds.includes(loc.cabinetId)) {
+          setDoc(doc(db, "consumables", loc.id), loc).catch(e => console.warn("Auto-sync initial consumable:", e));
+        }
       }
       return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
     }
@@ -756,6 +858,8 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
 // Add Consumable (Fault-Tolerant)
 export async function addConsumable(consumable: Omit<Consumable, "id" | "lastUpdated">): Promise<string> {
   const id = "con-" + generateId();
+  unrecordDeletedConsumableId(id);
+
   const newConsumable: Consumable = {
     ...consumable,
     id,
@@ -763,7 +867,7 @@ export async function addConsumable(consumable: Omit<Consumable, "id" | "lastUpd
   };
 
   // 1. Immediately save locally
-  const list = getLocalConsumables();
+  const list = getLocal<any>("local_consumables") || [];
   list.push(newConsumable);
   setLocal("local_consumables", list);
 
@@ -783,8 +887,8 @@ export async function addConsumable(consumable: Omit<Consumable, "id" | "lastUpd
 // Update Consumable (Fault-Tolerant)
 export async function updateConsumable(id: string, updates: Partial<Consumable>): Promise<void> {
   // 1. Update locally
-  const list = getLocalConsumables();
-  const index = list.findIndex(c => c.id === id);
+  const list = getLocal<any>("local_consumables") || [];
+  const index = list.findIndex((c: any) => c.id === id);
   if (index !== -1) {
     list[index] = { 
       ...list[index], 
@@ -808,14 +912,19 @@ export async function updateConsumable(id: string, updates: Partial<Consumable>)
   }
 }
 
-// Delete Consumable (Fault-Tolerant)
+// Delete Consumable (Fault-Tolerant & Instant Permanent Tombstone)
 export async function deleteConsumable(id: string): Promise<void> {
-  const list = getLocalConsumables();
-  const updated = list.filter(c => c.id !== id);
+  // 1. Immediately mark ID in persistent tombstone blacklist
+  recordDeletedConsumableId(id);
+
+  // 2. Remove from local storage immediately
+  const list = getLocal<any>("local_consumables") || [];
+  const updated = list.filter((c: any) => c.id !== id);
   setLocal("local_consumables", updated);
 
   if (isOfflineFallback) return;
 
+  // 3. Delete from Cloud Firestore
   try {
     await deleteDoc(doc(db, "consumables", id));
   } catch (err) {
@@ -1450,194 +1559,5 @@ export async function deleteDepartment(id: string): Promise<void> {
       recordCloudError(err);
     }
   }
-}
-
-// Restore default demo consumables and link them to available cabinets
-export async function restoreDefaultConsumables(): Promise<{ restoredCount: number; message: string }> {
-  // 1. Get or create cabinets if missing
-  let currentCabinets = await getCabinets();
-  if (currentCabinets.length === 0) {
-    const cab1Id = "cab-001";
-    const cab2Id = "cab-002";
-    const cab1: Cabinet = {
-      id: cab1Id,
-      name: "ตู้เก็บวัสดุแผนก QC & แล็บ 1",
-      location: "ห้องแล็บเคมี ตึก A ชั้น 2",
-      departments: ["QC", "Production"],
-      photoUrl: CABINET_PRESETS[0],
-      createdAt: Timestamp.now()
-    };
-    const cab2: Cabinet = {
-      id: cab2Id,
-      name: "ตู้พัสดุและอะไหล่ซ่อมบำรุงไลน์ 3",
-      location: "ไลน์การผลิต 3 หลังเครื่องปั๊ม",
-      departments: ["Production", "Maintenance"],
-      photoUrl: CABINET_PRESETS[1],
-      createdAt: Timestamp.now()
-    };
-    await addCabinet(cab1);
-    await addCabinet(cab2);
-    currentCabinets = [cab1, cab2];
-  }
-
-  const cab1Id = currentCabinets[0]?.id || "cab-001";
-  const cab2Id = currentCabinets[1]?.id || currentCabinets[0]?.id || "cab-002";
-
-  const standardConsumables: Consumable[] = [
-    {
-      id: "con-101",
-      cabinetId: cab1Id,
-      name: "ถุงมือยางไนไตรสีฟ้า (Size M)",
-      department: "QC",
-      currentQty: 12,
-      minThreshold: 5,
-      maxCapacity: 30,
-      unit: "กล่อง",
-      imageUrl: CONSUMABLE_PRESETS["glove"],
-      lastUpdated: Timestamp.now(),
-      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
-    },
-    {
-      id: "con-102",
-      cabinetId: cab1Id,
-      name: "หน้ากากอนามัย 3 ชั้นกันฝุ่น",
-      department: "Production",
-      currentQty: 2,
-      minThreshold: 4,
-      maxCapacity: 25,
-      unit: "กล่อง",
-      imageUrl: CONSUMABLE_PRESETS["mask"],
-      lastUpdated: Timestamp.now(),
-      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
-    },
-    {
-      id: "con-103",
-      cabinetId: cab1Id,
-      name: "แอลกอฮอล์ฆ่าเชื้อชนิดแผ่น 70%",
-      department: "QC",
-      currentQty: 15,
-      minThreshold: 10,
-      maxCapacity: 40,
-      unit: "แพ็ค",
-      imageUrl: CONSUMABLE_PRESETS["alcohol"],
-      lastUpdated: Timestamp.now(),
-      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
-    },
-    {
-      id: "con-201",
-      cabinetId: cab2Id,
-      name: "เทปพันเกลียวท่อประปาเหนียวพิเศษ",
-      department: "Maintenance",
-      currentQty: 3,
-      minThreshold: 8,
-      maxCapacity: 35,
-      unit: "ม้วน",
-      imageUrl: CONSUMABLE_PRESETS["tape"],
-      lastUpdated: Timestamp.now(),
-      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
-    },
-    {
-      id: "con-202",
-      cabinetId: cab2Id,
-      name: "จาระบีหล่อลื่นทนความร้อนสูง",
-      department: "Maintenance",
-      currentQty: 6,
-      minThreshold: 3,
-      maxCapacity: 15,
-      unit: "กระป๋อง",
-      imageUrl: CONSUMABLE_PRESETS["grease"],
-      lastUpdated: Timestamp.now(),
-      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
-    },
-    {
-      id: "con-203",
-      cabinetId: cab2Id,
-      name: "กระดาษทิชชู่ม้วนใหญ่อุตสาหกรรม",
-      department: "Production",
-      currentQty: 20,
-      minThreshold: 8,
-      maxCapacity: 50,
-      unit: "ม้วน",
-      imageUrl: CONSUMABLE_PRESETS["paper"],
-      lastUpdated: Timestamp.now(),
-      lastUpdatedBy: "ระบบ (ค่าเริ่มต้น)"
-    }
-  ];
-
-  const existingCons = getLocalConsumables();
-  const existingMap = new Map(existingCons.map(c => [c.id, c]));
-
-  let count = 0;
-  for (const item of standardConsumables) {
-    const existing = existingMap.get(item.id);
-    if (!existing) {
-      existingMap.set(item.id, item);
-      count++;
-    } else {
-      // Re-link cabinet if old cabinet was deleted
-      const isCabinetValid = currentCabinets.some(c => c.id === existing.cabinetId);
-      existingMap.set(item.id, {
-        ...existing,
-        cabinetId: isCabinetValid ? existing.cabinetId : item.cabinetId,
-        minThreshold: existing.minThreshold ?? item.minThreshold,
-        maxCapacity: existing.maxCapacity ?? item.maxCapacity
-      });
-      count++;
-    }
-  }
-
-  const mergedList = Array.from(existingMap.values());
-  setLocal("local_consumables", mergedList);
-
-  if (!isOfflineFallback) {
-    try {
-      const batch = writeBatch(db);
-      for (const item of mergedList) {
-        batch.set(doc(db, "consumables", item.id), item);
-      }
-      await batch.commit();
-    } catch (err) {
-      recordCloudError(err);
-      console.warn("Notice: Restored locally, cloud sync deferred:", err);
-    }
-  }
-
-  return {
-    restoredCount: count,
-    message: `คืนค่าและปรับปรุงพัสดุมาตรฐานสำเร็จ (${count} รายการ พร้อมระบุ Min-Max และผูกเข้าตู้เรียบร้อย)`
-  };
-}
-
-// Auto-assign any consumables that have no cabinet or invalid cabinet to a target cabinet
-export async function autoAssignUnlinkedConsumables(targetCabinetId: string): Promise<number> {
-  const currentCabinets = await getCabinets();
-  const validCabinetIds = new Set(currentCabinets.map(c => c.id));
-  const list = getLocalConsumables();
-  let updatedCount = 0;
-
-  for (const item of list) {
-    if (!item.cabinetId || !validCabinetIds.has(item.cabinetId)) {
-      item.cabinetId = targetCabinetId;
-      item.lastUpdated = Timestamp.now();
-      updatedCount++;
-    }
-  }
-
-  if (updatedCount > 0) {
-    setLocal("local_consumables", list);
-    if (!isOfflineFallback) {
-      try {
-        const batch = writeBatch(db);
-        for (const item of list) {
-          batch.set(doc(db, "consumables", item.id), item);
-        }
-        await batch.commit();
-      } catch (err) {
-        recordCloudError(err);
-      }
-    }
-  }
-
-  return updatedCount;
 }
 
