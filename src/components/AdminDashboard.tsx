@@ -314,10 +314,17 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   };
 
   const handleDeleteCabinet = async (id: string) => {
-    if (confirm("คุณแน่ใจหรือไม่ที่จะลบตู้นี้? การลบตู้จะทำให้วัสดุสิ้นเปลืองทั้งหมดในตู้นี้ถูกลบไปด้วย และไม่สามารถกู้คืนได้")) {
+    if (confirm("คุณแน่ใจหรือไม่ที่จะลบตู้นี้? การลบตู้จะทำให้ตู้และรายการพัสดุทั้งหมดในตู้นี้ถูกลบอย่างถาวรทันที")) {
       try {
+        // 1. Optimistic instant UI purge so cabinet never flickers or bounces back
+        setCabinets(prev => prev.filter(c => c.id !== id));
+        setConsumables(prev => prev.filter(c => c.cabinetId !== id));
+        if (selectedCabinetId === id) {
+          setSelectedCabinetId("");
+        }
+        // 2. Permanent deletion in storage and Cloud Tombstones
         await deleteCabinet(id);
-        setToastMessage("ลบตู้เก็บของและรายการพัสดุในตู้เรียบร้อย");
+        setToastMessage("ลบตู้เก็บของและรายการพัสดุในตู้เรียบร้อยอย่างถาวร");
         triggerRefresh();
         setTimeout(() => setToastMessage(null), 4000);
       } catch (err) {

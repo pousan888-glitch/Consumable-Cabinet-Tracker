@@ -77,38 +77,120 @@ const DELETED_CABINETS_KEY = "cabinet_deleted_cabinets_tombstone";
 const DATABASE_SEEDED_KEY = "cabinet_database_seeded_flag";
 
 export const getDeletedConsumableIds = (): string[] => {
-  return getLocal<string>(DELETED_CONSUMABLES_KEY) || [];
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(DELETED_CONSUMABLES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return (parsed as any[]).flat(Infinity).map(x => String(x).trim()).filter(Boolean);
+    }
+    return [];
+  } catch {
+    return [];
+  }
 };
 
 export const recordDeletedConsumableId = (id: string) => {
+  if (!id || typeof window === "undefined") return;
   const current = getDeletedConsumableIds();
   if (!current.includes(id)) {
     current.push(id);
-    setLocal(DELETED_CONSUMABLES_KEY, current);
+    localStorage.setItem(DELETED_CONSUMABLES_KEY, JSON.stringify(current));
   }
 };
 
 export const unrecordDeletedConsumableId = (id: string) => {
+  if (!id || typeof window === "undefined") return;
   const current = getDeletedConsumableIds().filter(x => x !== id);
-  setLocal(DELETED_CONSUMABLES_KEY, current);
+  localStorage.setItem(DELETED_CONSUMABLES_KEY, JSON.stringify(current));
 };
 
 export const getDeletedCabinetIds = (): string[] => {
-  return getLocal<string>(DELETED_CABINETS_KEY) || [];
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(DELETED_CABINETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return (parsed as any[]).flat(Infinity).map(x => String(x).trim()).filter(Boolean);
+    }
+    return [];
+  } catch {
+    return [];
+  }
 };
 
 export const recordDeletedCabinetId = (id: string) => {
+  if (!id || typeof window === "undefined") return;
   const current = getDeletedCabinetIds();
   if (!current.includes(id)) {
     current.push(id);
-    setLocal(DELETED_CABINETS_KEY, current);
+    localStorage.setItem(DELETED_CABINETS_KEY, JSON.stringify(current));
   }
 };
 
 export const unrecordDeletedCabinetId = (id: string) => {
+  if (!id || typeof window === "undefined") return;
   const current = getDeletedCabinetIds().filter(x => x !== id);
-  setLocal(DELETED_CABINETS_KEY, current);
+  localStorage.setItem(DELETED_CABINETS_KEY, JSON.stringify(current));
 };
+
+// Sync deletion tombstones with Cloud Firestore so deletions are shared across all devices and never bounce back
+export async function syncCloudTombstones(): Promise<{ deletedCabIds: string[]; deletedConsIds: string[] }> {
+  const localCabIds = getDeletedCabinetIds();
+  const localConsIds = getDeletedConsumableIds();
+
+  if (isOfflineFallback) {
+    return { deletedCabIds: localCabIds, deletedConsIds: localConsIds };
+  }
+
+  try {
+    const tombSnap = await withTimeout(getDocs(collection(db, "_tombstones")), 3500);
+    const cloudCabIds: string[] = [];
+    const cloudConsIds: string[] = [];
+
+    tombSnap.docs.forEach(docSnap => {
+      const data = docSnap.data();
+      const type = data?.type;
+      const targetId = docSnap.id;
+      if (type === "cabinet" || targetId.startsWith("cab-")) {
+        cloudCabIds.push(targetId);
+      } else if (type === "consumable" || targetId.startsWith("con-")) {
+        cloudConsIds.push(targetId);
+      }
+    });
+
+    // Merge cloud tombstones into local
+    cloudCabIds.forEach(id => recordDeletedCabinetId(id));
+    cloudConsIds.forEach(id => recordDeletedConsumableId(id));
+
+    // Upload local tombstones to cloud if missing
+    for (const id of localCabIds) {
+      if (!cloudCabIds.includes(id)) {
+        setDoc(doc(db, "_tombstones", id), {
+          type: "cabinet",
+          deletedAt: Timestamp.now()
+        }).catch(() => {});
+      }
+    }
+    for (const id of localConsIds) {
+      if (!cloudConsIds.includes(id)) {
+        setDoc(doc(db, "_tombstones", id), {
+          type: "consumable",
+          deletedAt: Timestamp.now()
+        }).catch(() => {});
+      }
+    }
+
+    return {
+      deletedCabIds: getDeletedCabinetIds(),
+      deletedConsIds: getDeletedConsumableIds()
+    };
+  } catch {
+    return { deletedCabIds: localCabIds, deletedConsIds: localConsIds };
+  }
+}
 
 const getLocalCabinets = (): Cabinet[] => {
   const deletedCabIds = getDeletedCabinetIds();
@@ -303,9 +385,21 @@ export async function testAndSyncAllToCloud(): Promise<{
 // Seed initial data if database is empty (Handles both Cloud Firestore and local fallback)
 export async function seedDatabaseIfEmpty() {
   const isAlreadySeeded = localStorage.getItem(DATABASE_SEEDED_KEY) === "true";
+  if (isAlreadySeeded) {
+    return false;
+  }
+
+  // Check and sync cloud tombstones first
+  try {
+    await syncCloudTombstones();
+  } catch {
+    // Non-blocking
+  }
+
   const deletedCons = getDeletedConsumableIds();
   const deletedCabs = getDeletedCabinetIds();
-  if (isAlreadySeeded || deletedCons.length > 0 || deletedCabs.length > 0) {
+  if (deletedCons.length > 0 || deletedCabs.length > 0) {
+    localStorage.setItem(DATABASE_SEEDED_KEY, "true");
     return false;
   }
 
@@ -466,8 +560,9 @@ export async function seedDatabaseIfEmpty() {
   // standard Cloud Firestore seeding
   try {
     const cabinetSnap = await getDocs(collection(db, "cabinets"));
-    if (!cabinetSnap.empty) {
-      console.log("Database already has data. Skipping seed.");
+    const tombSnap = await getDocs(collection(db, "_tombstones")).catch(() => null);
+    if (!cabinetSnap.empty || (tombSnap && !tombSnap.empty)) {
+      console.log("Database already has data or tombstones. Skipping seed.");
       localStorage.setItem(DATABASE_SEEDED_KEY, "true");
       return false;
     }
@@ -632,8 +727,15 @@ export async function seedDatabaseIfEmpty() {
   }
 }
 
-// Fetch all cabinets (Fault-Tolerant & Local-First Resilient)
+// Fetch all cabinets (Fault-Tolerant & Local-First Resilient with Cloud Tombstone Shield)
 export async function getCabinets(): Promise<Cabinet[]> {
+  // 1. Sync tombstones from Cloud so all browsers/devices know what was deleted
+  try {
+    await syncCloudTombstones();
+  } catch {
+    // Non-blocking
+  }
+
   const deletedCabIds = getDeletedCabinetIds();
   const localList = getLocalCabinets(); // Already filtered by tombstone
 
@@ -642,12 +744,13 @@ export async function getCabinets(): Promise<Cabinet[]> {
   }
 
   try {
+    // Use simple collection query to avoid missing documents if createdAt is not indexed
     const snap = await withTimeout(
-      getDocs(query(collection(db, "cabinets"), orderBy("createdAt", "desc"))),
+      getDocs(collection(db, "cabinets")),
       4000
     );
 
-    // Clean up any cloud docs that were deleted locally
+    // Clean up any cloud docs that were deleted locally or in tombstones
     for (const d of snap.docs) {
       if (deletedCabIds.includes(d.id)) {
         deleteDoc(d.ref).catch(() => {});
@@ -658,39 +761,45 @@ export async function getCabinets(): Promise<Cabinet[]> {
       .filter(doc => !deletedCabIds.includes(doc.id))
       .map(doc => ({ id: doc.id, ...doc.data() } as Cabinet));
     
+    // Sort in memory by createdAt descending
+    cloudList.sort((a, b) => {
+      const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return bTime - aTime;
+    });
+
     // Cloud connection is healthy!
     cloudSyncNotice = { hasError: false };
 
-    // Auto-sync: If local storage has cabinets that aren't on Cloud yet, upload them now!
+    // Auto-sync: If local storage has cabinets that aren't on Cloud yet, upload them (ONLY IF NOT IN TOMBSTONES!)
     for (const loc of localList) {
       if (!cloudList.some(c => c.id === loc.id) && !deletedCabIds.includes(loc.id)) {
         setDoc(doc(db, "cabinets", loc.id), loc).catch(e => console.warn("Auto-sync cabinet to cloud:", e));
       }
     }
 
-    // If cloud has documents, merge or sync to local
-    if (cloudList.length > 0) {
-      const combined = [...cloudList];
-      for (const loc of localList) {
-        if (!combined.some(c => c.id === loc.id) && !deletedCabIds.includes(loc.id)) {
-          combined.push(loc);
-        }
+    // Merge and deduplicate by ID, strictly filtering out any tombstoned IDs
+    const cabinetMap = new Map<string, Cabinet>();
+    cloudList.forEach(c => {
+      if (!deletedCabIds.includes(c.id)) {
+        cabinetMap.set(c.id, c);
       }
-      setLocal("local_cabinets", combined);
-      return combined;
-    }
-
-    // If cloud was empty but local has items, upload all to cloud and return local
-    if (localList.length > 0) {
-      for (const loc of localList) {
-        if (!deletedCabIds.includes(loc.id)) {
-          setDoc(doc(db, "cabinets", loc.id), loc).catch(e => console.warn("Auto-sync initial cabinet:", e));
-        }
+    });
+    localList.forEach(loc => {
+      if (!deletedCabIds.includes(loc.id) && !cabinetMap.has(loc.id)) {
+        cabinetMap.set(loc.id, loc);
       }
-      return localList;
-    }
+    });
 
-    return [];
+    const combined = Array.from(cabinetMap.values());
+    combined.sort((a, b) => {
+      const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return bTime - aTime;
+    });
+
+    setLocal("local_cabinets", combined);
+    return combined;
   } catch (err) {
     recordCloudError(err);
     console.warn("Could not fetch cabinets from Cloud, serving from local cache:", err);
@@ -752,16 +861,16 @@ export async function updateCabinet(id: string, updates: Partial<Cabinet>): Prom
   }
 }
 
-// Delete Cabinet and its consumables (Fault-Tolerant & Instant Permanent Tombstone)
+// Delete Cabinet and its consumables (Fault-Tolerant & Permanent Cloud Tombstone)
 export async function deleteCabinet(id: string): Promise<void> {
-  // 1. Record in permanent tombstone blacklist
+  // 1. Record in permanent local tombstone blacklist
   recordDeletedCabinetId(id);
 
   const allConsumables = getLocal<any>("local_consumables") || [];
   const itemsInCabinet = allConsumables.filter((c: any) => c.cabinetId === id);
   itemsInCabinet.forEach((c: any) => recordDeletedConsumableId(c.id));
 
-  // 2. Delete locally
+  // 2. Delete locally immediately so UI is 100% clean
   const list = getLocal<any>("local_cabinets") || [];
   const updated = list.filter((c: any) => c.id !== id);
   setLocal("local_cabinets", updated);
@@ -771,15 +880,35 @@ export async function deleteCabinet(id: string): Promise<void> {
 
   if (isOfflineFallback) return;
 
-  // 3. Delete from Cloud Firestore
+  // 3. Record in Cloud Firestore Tombstones so no other device will ever resurrect or auto-sync it
+  setDoc(doc(db, "_tombstones", id), {
+    type: "cabinet",
+    id,
+    deletedAt: Timestamp.now()
+  }).catch(() => {});
+
+  // 4. Delete from Cloud Firestore
   try {
     await deleteDoc(doc(db, "cabinets", id));
-    const consumablesSnap = await getDocs(query(collection(db, "consumables"), where("cabinetId", "==", id)));
-    const batch = writeBatch(db);
-    consumablesSnap.docs.forEach(d => {
-      batch.delete(d.ref);
-    });
-    await batch.commit();
+    
+    // Find any remaining consumables in this cabinet on Cloud and delete them
+    try {
+      const consumablesSnap = await getDocs(query(collection(db, "consumables"), where("cabinetId", "==", id)));
+      if (!consumablesSnap.empty) {
+        for (const d of consumablesSnap.docs) {
+          recordDeletedConsumableId(d.id);
+          deleteDoc(d.ref).catch(() => {});
+          setDoc(doc(db, "_tombstones", d.id), {
+            type: "consumable",
+            id: d.id,
+            cabinetId: id,
+            deletedAt: Timestamp.now()
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // Non-blocking
+    }
   } catch (err) {
     recordCloudError(err);
     console.warn("Notice: Cabinet deleted from local storage, Cloud sync deferred:", err);
@@ -912,7 +1041,7 @@ export async function updateConsumable(id: string, updates: Partial<Consumable>)
   }
 }
 
-// Delete Consumable (Fault-Tolerant & Instant Permanent Tombstone)
+// Delete Consumable (Fault-Tolerant & Permanent Cloud Tombstone)
 export async function deleteConsumable(id: string): Promise<void> {
   // 1. Immediately mark ID in persistent tombstone blacklist
   recordDeletedConsumableId(id);
@@ -924,7 +1053,14 @@ export async function deleteConsumable(id: string): Promise<void> {
 
   if (isOfflineFallback) return;
 
-  // 3. Delete from Cloud Firestore
+  // 3. Record in Cloud Firestore Tombstones
+  setDoc(doc(db, "_tombstones", id), {
+    type: "consumable",
+    id,
+    deletedAt: Timestamp.now()
+  }).catch(() => {});
+
+  // 4. Delete from Cloud Firestore
   try {
     await deleteDoc(doc(db, "consumables", id));
   } catch (err) {

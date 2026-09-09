@@ -25,5 +25,13 @@ service cloud.firestore {
     match /departments/{deptId} {
       allow read, write: if true;
     }
+    
+    match /_tombstones/{tombstoneId} {
+      allow read, write: if true;
+    }
+
+    match /_metadata/{metaId} {
+      allow read, write: if true;
+    }
   }
 }
