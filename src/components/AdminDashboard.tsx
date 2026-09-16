@@ -107,7 +107,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   const [editingConsumable, setEditingConsumable] = useState<Consumable | null>(null);
   const [consumableForm, setConsumableForm] = useState({
     name: "",
-    department: "Production",
+    department: "CMT",
     currentQty: 10,
     minThreshold: 5,
     maxThreshold: 50,
@@ -215,29 +215,46 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     }
   };
 
-  // Departments List (dynamic from database with fallback)
+  // Departments List (dynamic from database with fallback, strictly omitting Production)
   const availableDepartmentNames = departments.length > 0
-    ? departments.map(d => d.name)
-    : ["Production", "QC", "Maintenance", "Warehouse", "Office"];
+    ? departments.map(d => d.name).filter(n => n.toLowerCase() !== "production")
+    : ["CMT", "DNM", "WL", "SBS", "QC"];
 
   useEffect(() => {
     async function loadAllData() {
       setLoading(true);
       try {
+        const depts = await getDepartments();
+        const activeDepts = depts.filter(d => d.name.toLowerCase() !== "production");
+        setDepartments(activeDepts);
+
         const cabs = await getCabinets();
         setCabinets(cabs);
 
         const items = await getConsumables();
-        setConsumables(items);
+        
+        // Auto-migrate any items with legacy "Production" department to their cabinet department or CMT
+        const hasLegacyProd = items.some(c => c.department?.toLowerCase() === "production");
+        if (hasLegacyProd) {
+          const updatedItems = items.map(c => {
+            if (c.department?.toLowerCase() === "production") {
+              const cab = cabs.find(cb => cb.id === c.cabinetId);
+              const targetDept = cab?.departments?.[0] || activeDepts[0]?.name || "CMT";
+              updateConsumable(c.id, { department: targetDept }).catch(() => {});
+              return { ...c, department: targetDept };
+            }
+            return c;
+          });
+          setConsumables(updatedItems);
+        } else {
+          setConsumables(items);
+        }
 
         const histories = await getCountHistory();
         setCountLogs(histories);
 
         const qcHistories = await getQCConsumptionHistory();
         setQcLogs(qcHistories);
-
-        const depts = await getDepartments();
-        setDepartments(depts);
       } catch (err) {
         console.error("Error loading admin dashboard data:", err);
       } finally {
@@ -370,9 +387,12 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
       setShowConsumableModal(false);
       setEditingConsumable(null);
+      const defaultDept = departments.find(d => d.name.toLowerCase() === "cmt")?.name 
+        || departments[0]?.name 
+        || "CMT";
       setConsumableForm({
         name: "",
-        department: "Production",
+        department: defaultDept,
         currentQty: 10,
         minThreshold: 5,
         maxThreshold: 50,
@@ -468,16 +488,27 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
   const handleAddConsumableForDept = (deptName: string) => {
     setEditingConsumable(null);
+    const targetDept = (deptName && deptName !== "ALL")
+      ? deptName
+      : (departments.find(d => d.name.toLowerCase() === "cmt")?.name || departments[0]?.name || "CMT");
+
     setConsumableForm({
       name: "",
-      department: deptName || "Production",
+      department: targetDept,
       currentQty: 10,
       minThreshold: 5,
       maxThreshold: 50,
       unit: "ชิ้น",
       imageUrl: CONSUMABLE_PRESETS["glove"]
     });
-    if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
+
+    // Auto-select cabinet matching this department if available
+    const matchingCab = cabinets.find(c => c.departments?.some(d => d.toLowerCase() === targetDept.toLowerCase()));
+    if (matchingCab) {
+      setSelectedCabinetId(matchingCab.id);
+    } else if (cabinets.length > 0) {
+      setSelectedCabinetId(cabinets[0].id);
+    }
     setShowConsumableModal(true);
   };
 
@@ -536,9 +567,14 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           <button
             onClick={() => {
               setEditingConsumable(null);
+              const firstCab = cabinets[0];
+              const targetDept = firstCab?.departments?.[0]
+                || departments.find(d => d.name.toLowerCase() === "cmt")?.name
+                || departments[0]?.name
+                || "CMT";
               setConsumableForm({
                 name: "",
-                department: "Production",
+                department: targetDept,
                 currentQty: 10,
                 minThreshold: 5,
                 unit: "ชิ้น",
@@ -1870,7 +1906,20 @@ service cloud.firestore {
                 <select
                   id="con-cabinet-select"
                   value={selectedCabinetId}
-                  onChange={(e) => setSelectedCabinetId(e.target.value)}
+                  onChange={(e) => {
+                    const newCabId = e.target.value;
+                    setSelectedCabinetId(newCabId);
+                    const selCab = cabinets.find(c => c.id === newCabId);
+                    // Automatically sync department with the cabinet's primary department if not set
+                    if (selCab && selCab.departments && selCab.departments.length > 0) {
+                      if (!selCab.departments.includes(consumableForm.department)) {
+                        setConsumableForm(prev => ({
+                          ...prev,
+                          department: selCab.departments[0]
+                        }));
+                      }
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-700"
                 >
                   <option value="" disabled>-- กรุณาเลือกตู้จัดเก็บ --</option>
@@ -1878,6 +1927,34 @@ service cloud.firestore {
                     <option key={c.id} value={c.id}>{c.name} ({c.location})</option>
                   ))}
                 </select>
+
+                {(() => {
+                  const selCab = cabinets.find(c => c.id === selectedCabinetId);
+                  if (selCab && selCab.departments && selCab.departments.length > 0) {
+                    return (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <span className="font-semibold">แผนกของตู้นี้:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {selCab.departments.map(d => (
+                            <button
+                              type="button"
+                              key={d}
+                              onClick={() => setConsumableForm(prev => ({ ...prev, department: d }))}
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${
+                                consumableForm.department?.toLowerCase() === d.toLowerCase()
+                                  ? "bg-emerald-600 text-white shadow-2xs"
+                                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+                              }`}
+                            >
+                              ✓ {d} {consumableForm.department?.toLowerCase() === d.toLowerCase() ? "(เลือกอยู่)" : ""}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               <div>
@@ -1915,8 +1992,11 @@ service cloud.firestore {
                     id="con-dept-select"
                     value={consumableForm.department}
                     onChange={(e) => setConsumableForm({ ...consumableForm, department: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold text-slate-800"
                   >
+                    {!availableDepartmentNames.includes(consumableForm.department) && consumableForm.department && (
+                      <option value={consumableForm.department}>{consumableForm.department}</option>
+                    )}
                     {availableDepartmentNames.map(d => (
                       <option key={d} value={d}>{d}</option>
                     ))}

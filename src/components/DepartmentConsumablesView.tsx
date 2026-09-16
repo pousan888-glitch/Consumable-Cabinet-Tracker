@@ -51,13 +51,22 @@ export default function DepartmentConsumablesView({
   const [sortBy, setSortBy] = useState<"DEFAULT" | "QTY_ASC" | "NAME">("DEFAULT");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // Compute union of all departments
+  // Compute union of all departments (strictly excluding Production)
   const allDeptNames = useMemo(() => {
     const names = new Set<string>();
-    departments.forEach(d => names.add(d.name));
-    consumables.forEach(c => {
-      if (c.department) names.add(c.department);
+    departments.forEach(d => {
+      if (d.name && d.name.toLowerCase() !== "production") {
+        names.add(d.name);
+      }
     });
+    consumables.forEach(c => {
+      if (c.department && c.department.toLowerCase() !== "production") {
+        names.add(c.department);
+      }
+    });
+    if (names.size === 0) {
+      ["CMT", "DNM", "WL", "SBS", "QC"].forEach(n => names.add(n));
+    }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [departments, consumables]);
 
@@ -173,7 +182,7 @@ export default function DepartmentConsumablesView({
             </span>
           </div>
           <button
-            onClick={() => onAddConsumableForDept(selectedDept === "ALL" ? (allDeptNames[0] || "Production") : selectedDept)}
+            onClick={() => onAddConsumableForDept(selectedDept === "ALL" ? (allDeptNames[0] || "CMT") : selectedDept)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
           >
             <Plus className="h-3.5 w-3.5" />

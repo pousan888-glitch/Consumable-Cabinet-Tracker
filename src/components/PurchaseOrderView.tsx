@@ -50,13 +50,22 @@ export default function PurchaseOrderView({
   // Custom order quantities overrides per item ID: { [consumableId]: number }
   const [customOrderQtys, setCustomOrderQtys] = useState<Record<string, number>>({});
 
-  // Compute union of all departments
+  // Compute union of all departments (strictly excluding Production)
   const allDeptNames = useMemo(() => {
     const names = new Set<string>();
-    departments.forEach(d => names.add(d.name));
-    consumables.forEach(c => {
-      if (c.department) names.add(c.department);
+    departments.forEach(d => {
+      if (d.name && d.name.toLowerCase() !== "production") {
+        names.add(d.name);
+      }
     });
+    consumables.forEach(c => {
+      if (c.department && c.department.toLowerCase() !== "production") {
+        names.add(c.department);
+      }
+    });
+    if (names.size === 0) {
+      ["CMT", "DNM", "WL", "SBS", "QC"].forEach(n => names.add(n));
+    }
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [departments, consumables]);
 

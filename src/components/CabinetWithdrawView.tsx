@@ -42,7 +42,7 @@ export default function CabinetWithdrawView({
 }: CabinetWithdrawViewProps) {
   const [withdrawnBy, setWithdrawnBy] = useState(userName || userEmail);
   const [selectedDept, setSelectedDept] = useState(
-    cabinet.departments[0] || (departments[0]?.name || "Production")
+    cabinet.departments[0] || (departments.find(d => d.name.toLowerCase() === "cmt")?.name || departments[0]?.name || "CMT")
   );
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});

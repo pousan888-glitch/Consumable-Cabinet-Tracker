@@ -225,20 +225,35 @@ const getLocalUsers = (): AppUserRecord[] => {
 };
 
 export const DEFAULT_DEPARTMENTS: DepartmentRecord[] = [
-  { id: "dept-prod", name: "Production", description: "ฝ่ายผลิตและประกอบชิ้นงาน", color: "#4f46e5" },
-  { id: "dept-qc", name: "QC", description: "ฝ่ายควบคุมและตรวจสอบคุณภาพ", color: "#9333ea" },
-  { id: "dept-maint", name: "Maintenance", description: "ฝ่ายซ่อมบำรุงและเครื่องจักร", color: "#f59e0b" },
-  { id: "dept-wh", name: "Warehouse", description: "ฝ่ายคลังสินค้าและจัดส่ง", color: "#10b981" },
-  { id: "dept-office", name: "Office", description: "ฝ่ายธุรการและสำนักงาน", color: "#64748b" }
+  { id: "dept-cmt", name: "CMT", description: "ฝ่าย CMT", color: "#10b981" },
+  { id: "dept-dnm", name: "DNM", description: "ฝ่าย DNM", color: "#4f46e5" },
+  { id: "dept-wl", name: "WL", description: "ฝ่าย WL", color: "#06b6d4" },
+  { id: "dept-sbs", name: "SBS", description: "ฝ่าย SBS", color: "#f59e0b" },
+  { id: "dept-qc", name: "QC", description: "ฝ่ายควบคุมและตรวจสอบคุณภาพ (QC)", color: "#9333ea" }
 ];
 
+const DELETED_DEPARTMENTS_KEY = "deleted_department_ids";
+export const getDeletedDepartmentIds = (): string[] => {
+  return getLocal<string>(DELETED_DEPARTMENTS_KEY) || [];
+};
+export const addDeletedDepartmentId = (id: string): void => {
+  const current = getDeletedDepartmentIds();
+  if (!current.includes(id)) {
+    setLocal(DELETED_DEPARTMENTS_KEY, [...current, id]);
+  }
+};
+
 export const getLocalDepartments = (): DepartmentRecord[] => {
-  const list = getLocal<any>("local_departments");
+  const deletedIds = getDeletedDepartmentIds();
+  let list = getLocal<any>("local_departments");
   if (!list || list.length === 0) {
     setLocal("local_departments", DEFAULT_DEPARTMENTS);
-    return DEFAULT_DEPARTMENTS;
+    list = DEFAULT_DEPARTMENTS;
   }
-  return list.map(item => convertToTimestamps<DepartmentRecord>(item));
+  // Filter out any departments that were deleted or named "Production"
+  return list
+    .map(item => convertToTimestamps<DepartmentRecord>(item))
+    .filter(d => !deletedIds.includes(d.id) && d.name?.toLowerCase() !== "production");
 };
 
 // Global Cloud Sync Status tracking to inform the user if Firestore Rules need attention
@@ -420,7 +435,7 @@ export async function seedDatabaseIfEmpty() {
         id: cabinet1Id,
         name: "ตู้เก็บวัสดุแผนก QC & แล็บ 1",
         location: "ห้องแล็บเคมี ตึก A ชั้น 2",
-        departments: ["QC", "Production"],
+        departments: ["QC", "CMT"],
         photoUrl: CABINET_PRESETS[0],
         createdAt: Timestamp.now()
       },
@@ -428,7 +443,7 @@ export async function seedDatabaseIfEmpty() {
         id: cabinet2Id,
         name: "ตู้พัสดุและอะไหล่ซ่อมบำรุงไลน์ 3",
         location: "ไลน์การผลิต 3 หลังเครื่องปั๊ม",
-        departments: ["Production", "Maintenance"],
+        departments: ["CMT", "DNM"],
         photoUrl: CABINET_PRESETS[1],
         createdAt: Timestamp.now()
       }
@@ -452,7 +467,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-102",
         cabinetId: cabinet1Id,
         name: "หน้ากากอนามัย 3 ชั้นกันฝุ่น",
-        department: "Production",
+        department: "CMT",
         currentQty: 2, // Low stock
         minThreshold: 4,
         maxThreshold: 30,
@@ -478,7 +493,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-201",
         cabinetId: cabinet2Id,
         name: "เทปพันเกลียวท่อประปาเหนียวพิเศษ",
-        department: "Maintenance",
+        department: "DNM",
         currentQty: 3, // Low stock
         minThreshold: 8,
         maxThreshold: 40,
@@ -491,7 +506,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-202",
         cabinetId: cabinet2Id,
         name: "จาระบีหล่อลื่นทนความร้อนสูง",
-        department: "Maintenance",
+        department: "DNM",
         currentQty: 6,
         minThreshold: 3,
         maxThreshold: 20,
@@ -504,7 +519,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-203",
         cabinetId: cabinet2Id,
         name: "กระดาษทิชชู่ม้วนใหญ่อุตสาหกรรม",
-        department: "Production",
+        department: "CMT",
         currentQty: 20,
         minThreshold: 8,
         maxThreshold: 50,
@@ -536,7 +551,7 @@ export async function seedDatabaseIfEmpty() {
           prevQty: 5,
           newQty: 2,
           unit: "กล่อง",
-          department: "Production"
+          department: "CMT"
         },
         {
           consumableId: "con-103",
@@ -577,7 +592,7 @@ export async function seedDatabaseIfEmpty() {
       id: cabinet1Id,
       name: "ตู้เก็บวัสดุแผนก QC & แล็บ 1",
       location: "ห้องแล็บเคมี ตึก A ชั้น 2",
-      departments: ["QC", "Production"],
+      departments: ["QC", "CMT"],
       photoUrl: CABINET_PRESETS[0],
       createdAt: Timestamp.now()
     };
@@ -586,7 +601,7 @@ export async function seedDatabaseIfEmpty() {
       id: cabinet2Id,
       name: "ตู้พัสดุและอะไหล่ซ่อมบำรุงไลน์ 3",
       location: "ไลน์การผลิต 3 หลังเครื่องปั๊ม",
-      departments: ["Production", "Maintenance"],
+      departments: ["CMT", "DNM"],
       photoUrl: CABINET_PRESETS[1],
       createdAt: Timestamp.now()
     };
@@ -612,7 +627,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-102",
         cabinetId: cabinet1Id,
         name: "หน้ากากอนามัย 3 ชั้นกันฝุ่น",
-        department: "Production",
+        department: "CMT",
         currentQty: 2,
         minThreshold: 4,
         maxThreshold: 30,
@@ -641,7 +656,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-201",
         cabinetId: cabinet2Id,
         name: "เทปพันเกลียวท่อประปาเหนียวพิเศษ",
-        department: "Maintenance",
+        department: "DNM",
         currentQty: 3,
         minThreshold: 8,
         maxThreshold: 40,
@@ -654,7 +669,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-202",
         cabinetId: cabinet2Id,
         name: "จาระบีหล่อลื่นทนความร้อนสูง",
-        department: "Maintenance",
+        department: "DNM",
         currentQty: 6,
         minThreshold: 3,
         maxThreshold: 20,
@@ -667,7 +682,7 @@ export async function seedDatabaseIfEmpty() {
         id: "con-203",
         cabinetId: cabinet2Id,
         name: "กระดาษทิชชู่ม้วนใหญ่อุตสาหกรรม",
-        department: "Production",
+        department: "CMT",
         currentQty: 20,
         minThreshold: 8,
         maxThreshold: 50,
@@ -704,7 +719,7 @@ export async function seedDatabaseIfEmpty() {
           prevQty: 5,
           newQty: 2,
           unit: "กล่อง",
-          department: "Production"
+          department: "CMT"
         },
         {
           consumableId: "con-103",
@@ -963,16 +978,31 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
           }
         }
       }
+
+      // Auto-migrate any legacy "Production" items to CMT (so orphaned/ghost production department never persists)
+      for (const item of combined) {
+        if (item.department && item.department.toLowerCase() === "production") {
+          item.department = "CMT";
+          if (!isOfflineFallback) {
+            updateDoc(doc(db, "consumables", item.id), { department: "CMT" }).catch(() => {});
+          }
+        }
+      }
+
       setLocal("local_consumables", combined);
       return cabinetId ? combined.filter(c => c.cabinetId === cabinetId) : combined;
     }
 
     if (localList.length > 0) {
       for (const loc of localList) {
+        if (loc.department && loc.department.toLowerCase() === "production") {
+          loc.department = "CMT";
+        }
         if (!deletedIds.includes(loc.id) && !deletedCabIds.includes(loc.cabinetId)) {
           setDoc(doc(db, "consumables", loc.id), loc).catch(e => console.warn("Auto-sync initial consumable:", e));
         }
       }
+      setLocal("local_consumables", localList);
       return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
     }
 
@@ -1594,6 +1624,7 @@ export async function fetchOrRegisterUser(
 // =========================================================================
 
 export async function getDepartments(): Promise<DepartmentRecord[]> {
+  const deletedIds = getDeletedDepartmentIds();
   const localList = getLocalDepartments();
   if (isOfflineFallback) {
     return localList;
@@ -1613,7 +1644,16 @@ export async function getDepartments(): Promise<DepartmentRecord[]> {
       return localList;
     }
 
-    const cloudList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DepartmentRecord));
+    // Clean up any cloud docs that were deleted locally or are legacy "Production"
+    for (const d of snapshot.docs) {
+      if (deletedIds.includes(d.id) || d.data().name?.toLowerCase() === "production") {
+        deleteDoc(d.ref).catch(() => {});
+      }
+    }
+
+    const cloudList = snapshot.docs
+      .filter(doc => !deletedIds.includes(doc.id) && doc.data().name?.toLowerCase() !== "production")
+      .map(doc => ({ id: doc.id, ...doc.data() } as DepartmentRecord));
     setLocal("local_departments", cloudList);
     return cloudList;
   } catch (err) {
@@ -1681,6 +1721,7 @@ export async function updateDepartment(
 }
 
 export async function deleteDepartment(id: string): Promise<void> {
+  addDeletedDepartmentId(id);
   const list = getLocalDepartments();
   const target = list.find(d => d.id === id);
   if (!target) return;
@@ -1695,5 +1736,29 @@ export async function deleteDepartment(id: string): Promise<void> {
       recordCloudError(err);
     }
   }
+}
+
+export async function reassignDepartmentConsumables(
+  oldDeptName: string, 
+  targetDeptName: string
+): Promise<number> {
+  const list = getLocalConsumables();
+  let count = 0;
+  const oldLower = oldDeptName.toLowerCase();
+  
+  for (const item of list) {
+    if (item.department && item.department.toLowerCase() === oldLower) {
+      item.department = targetDeptName;
+      count++;
+      if (!isOfflineFallback) {
+        updateDoc(doc(db, "consumables", item.id), { department: targetDeptName }).catch(() => {});
+      }
+    }
+  }
+
+  if (count > 0) {
+    setLocal("local_consumables", list);
+  }
+  return count;
 }
 
