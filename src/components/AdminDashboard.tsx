@@ -27,6 +27,8 @@ import ImageUploadInput from "./ImageUploadInput";
 import ImagePreviewModal from "./ImagePreviewModal";
 import CabinetQRModal from "./CabinetQRModal";
 import ClearHistoryModal from "./ClearHistoryModal";
+import DepartmentConsumablesView from "./DepartmentConsumablesView";
+import PurchaseOrderView from "./PurchaseOrderView";
 import { 
   Plus, 
   Edit, 
@@ -61,7 +63,8 @@ import {
   PackageMinus,
   Download,
   Filter,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ShoppingCart
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -81,7 +84,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   
   // Loading & View States
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"cabinets" | "consumables" | "history" | "qc" | "users" | "settings">("cabinets");
+  const [activeTab, setActiveTab] = useState<"department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings">("department_consumables");
   const [searchTerm, setSearchTerm] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [previewModalImage, setPreviewModalImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
@@ -445,6 +448,39 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     return cab ? cab.name : "ไม่ระบุตู้";
   };
 
+  // Direct qty update from department table stepper or restock button
+  const handleUpdateQty = async (item: Consumable, newQty: number) => {
+    const safeQty = Math.max(0, newQty);
+    // Optimistic UI update
+    setConsumables(prev => prev.map(c => c.id === item.id ? { ...c, currentQty: safeQty } : c));
+    try {
+      await updateConsumable(item.id, {
+        currentQty: safeQty,
+        lastUpdatedBy: userEmail
+      });
+    } catch (err) {
+      console.error("Failed to update consumable quantity:", err);
+      // Rollback on error
+      setRefreshTrigger(prev => prev + 1);
+      setToastMessage("เกิดข้อผิดพลาดในการบันทึกจำนวน กรุณาลองใหม่อีกครั้ง");
+    }
+  };
+
+  const handleAddConsumableForDept = (deptName: string) => {
+    setEditingConsumable(null);
+    setConsumableForm({
+      name: "",
+      department: deptName || "Production",
+      currentQty: 10,
+      minThreshold: 5,
+      maxThreshold: 50,
+      unit: "ชิ้น",
+      imageUrl: CONSUMABLE_PRESETS["glove"]
+    });
+    if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
+    setShowConsumableModal(true);
+  };
+
   if (loading) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 bg-slate-50">
@@ -746,88 +782,71 @@ service cloud.firestore {
         </div>
       </div>
 
-      {/* CRITICAL ALERTS PANEL */}
-      {criticalItems.length > 0 && (
-        <div className="bg-rose-50 border-l-4 border-rose-500 rounded-r-2xl p-5 mb-8 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0" />
-            <h2 className="text-sm sm:text-base font-extrabold text-rose-950">
-              แจ้งเตือนสต็อกวิกฤต! มีวัสดุสิ้นเปลืองใกล้จะหมด ควรรีบสั่งใหม่ ({criticalItems.length} รายการ)
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {criticalItems.map(item => (
-              <div key={item.id} className="bg-white p-3 rounded-xl border border-rose-100 shadow-sm flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[8px] bg-slate-100 text-slate-600 font-bold px-1 rounded uppercase">
-                      {item.department}
-                    </span>
-                    <span className="text-[8px] bg-rose-50 text-rose-600 font-semibold px-1 rounded truncate max-w-[100px]">
-                      {getCabinetName(item.cabinetId)}
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-slate-900 text-xs truncate">{item.name}</h4>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    คงเหลือ <span className="text-rose-600 font-black">{item.currentQty}</span> / เกณฑ์ความปลอดภัย {item.minThreshold} {item.unit}
-                  </p>
-                </div>
-                
-                <button
-                  onClick={() => handleQuickRestock(item)}
-                  className="bg-rose-500 hover:bg-rose-600 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg shrink-0 cursor-pointer active:scale-95 transition-all"
-                  title="คลิกเพื่อสั่งพัสดุเข้ามาเติม +15 กล่อง/ชิ้น"
-                >
-                  เติมด่วน +15
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* TAB SYSTEM */}
-      <div className="border-b border-slate-200 mb-6">
-        <nav className="flex space-x-6">
+      <div className="border-b border-slate-200 mb-6 overflow-x-auto">
+        <nav className="flex space-x-6 min-w-max pb-1">
+          <button
+            onClick={() => setActiveTab("department_consumables")}
+            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "department_consumables"
+                ? "border-emerald-700 text-emerald-800 font-bold"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Building2 className="h-4 w-4 text-emerald-700" />
+            <span>พัสดุแยกตามแผนก (ตรวจนับพัสดุ)</span>
+            <span className="px-1.5 py-0.2 text-[9px] font-black bg-emerald-50 text-emerald-800 rounded-full border border-emerald-200">
+              {consumables.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("purchase_orders")}
+            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "purchase_orders"
+                ? "border-emerald-700 text-emerald-800 font-bold"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <ShoppingCart className="h-4 w-4 text-emerald-700" />
+            <span>ใบสั่งซื้อพัสดุ (Auto Refill)</span>
+            {criticalItems.length > 0 && (
+              <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-100 text-rose-800 rounded-full border border-rose-200 animate-pulse">
+                ขาด {criticalItems.length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => setActiveTab("cabinets")}
-            className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
               activeTab === "cabinets"
                 ? "border-indigo-600 text-indigo-600 font-bold"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             <QrCode className="h-4 w-4" />
-            ตู้เก็บพัสดุและการ์ด QR
-          </button>
-          
-          <button
-            onClick={() => setActiveTab("consumables")}
-            className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "consumables"
-                ? "border-indigo-600 text-indigo-600 font-bold"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <Package className="h-4 w-4" />
-            พัสดุวัสดุสิ้นเปลืองทั้งหมด
+            <span>ตู้เก็บพัสดุและการ์ด QR</span>
+            <span className="px-1.5 py-0.2 text-[9px] font-black bg-slate-100 text-slate-600 rounded-full">
+              {cabinets.length}
+            </span>
           </button>
 
           <button
             onClick={() => setActiveTab("history")}
-            className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
               activeTab === "history"
                 ? "border-indigo-600 text-indigo-600 font-bold"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             <History className="h-4 w-4" />
-            ประวัติการเช็กตรวจนับ
+            <span>ประวัติการเช็กตรวจนับ</span>
           </button>
 
           <button
             onClick={() => setActiveTab("qc")}
-            className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
               activeTab === "qc"
                 ? "border-indigo-600 text-indigo-600 font-bold"
                 : "border-transparent text-slate-500 hover:text-slate-800"
@@ -843,7 +862,7 @@ service cloud.firestore {
           {/* Department Settings Tab: Accessible by Admin & Super Admin */}
           <button
             onClick={() => setActiveTab("settings")}
-            className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
               activeTab === "settings"
                 ? "border-indigo-600 text-indigo-600 font-bold"
                 : "border-transparent text-slate-500 hover:text-slate-800"
@@ -859,7 +878,7 @@ service cloud.firestore {
           {isUserSuperAdmin && (
             <button
               onClick={() => setActiveTab("users")}
-              className={`pb-4 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+              className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
                 activeTab === "users"
                   ? "border-amber-500 text-amber-700 font-bold"
                   : "border-transparent text-slate-500 hover:text-slate-800"
@@ -875,16 +894,16 @@ service cloud.firestore {
         </nav>
       </div>
 
-      {/* SEARCH/SEARCH CONTROLS */}
-      {activeTab !== "history" && activeTab !== "qc" && activeTab !== "users" && activeTab !== "settings" && (
+      {/* SEARCH CONTROLS FOR CABINETS TAB */}
+      {activeTab === "cabinets" && (
         <div className="relative mb-6 max-w-sm">
           <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder={activeTab === "cabinets" ? "ค้นหาชื่อตู้, ตำแหน่ง..." : "ค้นหาวัสดุสิ้นเปลือง..."}
+            placeholder="ค้นหาชื่อตู้, ตำแหน่งที่ตั้ง..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs transition-all"
+            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs transition-all shadow-2xs"
           />
         </div>
       )}
@@ -1016,135 +1035,33 @@ service cloud.firestore {
         </div>
       )}
 
-      {/* 2. CONSUMABLES TAB */}
-      {activeTab === "consumables" && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                  <th className="py-4 px-6">รูปภาพ & ชื่อวัสดุสิ้นเปลือง</th>
-                  <th className="py-4 px-6">ตำแหน่งจัดเก็บ (ตู้เก็บของ)</th>
-                  <th className="py-4 px-6">แผนก / เจ้าของพัสดุ</th>
-                  <th className="py-4 px-6 text-center">คงเหลือปัจจุบัน</th>
-                  <th className="py-4 px-6 text-center">เกณฑ์ Min / Max</th>
-                  <th className="py-4 px-6 text-center">สถานะ</th>
-                  <th className="py-4 px-6 text-right">ดำเนินการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
-                {consumables.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      ยังไม่มีวัสดุสิ้นเปลืองในระบบ กรุณาเพิ่มที่ปุ่มด้านบน
-                    </td>
-                  </tr>
-                ) : (
-                  consumables
-                    .filter(item => 
-                      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      getCabinetName(item.cabinetId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      item.department.toLowerCase().includes(searchTerm.toLowerCase())
-                    )
-                    .map(item => {
-                      const isLow = item.currentQty <= item.minThreshold;
+      {/* 2. DEPARTMENT CONSUMABLES TAB (Matching Image 1) */}
+      {activeTab === "department_consumables" && (
+        <DepartmentConsumablesView
+          departments={departments}
+          cabinets={cabinets}
+          consumables={consumables}
+          onUpdateQty={handleUpdateQty}
+          onEditConsumable={handleEditConsumable}
+          onDeleteConsumable={handleDeleteConsumable}
+          onAddConsumableForDept={handleAddConsumableForDept}
+          onPreviewImage={(img) => setPreviewModalImage(img)}
+          getCabinetName={getCabinetName}
+          onToast={(msg) => setToastMessage(msg)}
+        />
+      )}
 
-                      return (
-                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 px-6 font-semibold">
-                            <div className="flex items-center gap-3">
-                              <div 
-                                className="relative h-10 w-10 rounded-lg overflow-hidden border border-slate-200 shrink-0 cursor-pointer group"
-                                onClick={() => setPreviewModalImage({ 
-                                  url: item.imageUrl, 
-                                  title: item.name, 
-                                  subtitle: `ตู้: ${getCabinetName(item.cabinetId)} | แผนก: ${item.department} | คงเหลือ: ${item.currentQty} ${item.unit}` 
-                                })}
-                                title="คลิกเพื่อดูรูปภาพขยาย"
-                              >
-                                <img 
-                                  src={item.imageUrl} 
-                                  alt={item.name} 
-                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                                  referrerPolicy="no-referrer"
-                                />
-                                <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                                  <Eye className="h-3 w-3" />
-                                </div>
-                              </div>
-                              <div>
-                                <span className="font-bold text-slate-900 block leading-tight">{item.name}</span>
-                                <span className="text-[10px] text-slate-400 font-medium block mt-0.5">ID: {item.id}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="font-semibold text-slate-700 block">{getCabinetName(item.cabinetId)}</span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="bg-slate-100 border border-slate-200/50 text-slate-600 font-bold text-[9px] px-2 py-0.5 rounded uppercase">
-                              {item.department}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <span className={`font-black text-sm ${isLow ? "text-rose-600" : "text-slate-800"}`}>
-                              {item.currentQty} {item.unit}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <div className="inline-flex flex-col items-center">
-                              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                                <span className="text-rose-600 font-semibold" title="เกณฑ์ขั้นต่ำ (Minimum)">Min: {item.minThreshold}</span>
-                                <span className="text-slate-300">/</span>
-                                <span className="text-indigo-600 font-semibold" title="เกณฑ์ขั้นสูง (Maximum)">Max: {item.maxThreshold ?? "-"}</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400">{item.unit}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            {isLow ? (
-                              <span className="bg-rose-50 border border-rose-100 text-rose-700 font-bold text-[10px] px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-                                <span className="h-1.5 w-1.5 bg-rose-600 rounded-full animate-pulse"></span>
-                                ของใกล้หมด
-                              </span>
-                            ) : item.maxThreshold && item.currentQty >= item.maxThreshold ? (
-                              <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold text-[10px] px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-                                <span className="h-1.5 w-1.5 bg-indigo-600 rounded-full"></span>
-                                สต็อกเต็ม
-                              </span>
-                            ) : (
-                              <span className="bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold text-[10px] px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-                                <span className="h-1.5 w-1.5 bg-emerald-600 rounded-full"></span>
-                                สต็อกปกติ
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="flex justify-end gap-1.5">
-                              <button
-                                onClick={() => handleEditConsumable(item)}
-                                className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-800 hover:border-slate-300 rounded-lg cursor-pointer transition-all"
-                                title="แก้ไขพัสดุ"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteConsumable(item.id)}
-                                className="p-1.5 bg-white border border-slate-200 text-rose-500 hover:text-rose-700 hover:border-rose-200 rounded-lg cursor-pointer transition-all"
-                                title="ลบวัสดุพัสดุ"
-                              >
-                                <Trash className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {/* 3. PURCHASE ORDERS (AUTO STOCK REFILL) TAB (Matching Image 3) */}
+      {activeTab === "purchase_orders" && (
+        <PurchaseOrderView
+          departments={departments}
+          cabinets={cabinets}
+          consumables={consumables}
+          onUpdateQty={handleUpdateQty}
+          getCabinetName={getCabinetName}
+          onToast={(msg) => setToastMessage(msg)}
+          currentUserEmail={userEmail}
+        />
       )}
 
       {/* 3. HISTORY TAB */}
