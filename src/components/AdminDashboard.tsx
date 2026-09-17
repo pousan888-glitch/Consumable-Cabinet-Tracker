@@ -522,36 +522,36 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 font-sans bg-slate-50 min-h-screen">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 font-sans bg-slate-50 min-h-screen">
       
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 sm:mb-8">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-2 mb-1">
             <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
               Admin Terminal
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight font-display">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-950 tracking-tight font-display">
             แดชบอร์ดตรวจสอบสต็อกส่วนกลาง
           </h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-1">
-            ยินดีต้อนรับแอดมิน ({userEmail}) จัดการโครงสร้างตู้เก็บของ, ออก QR Code, และตรวจสอบประวัติการเช็กสต็อกเปรียบเทียบรอบที่แล้ว
+          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
+            ยินดีต้อนรับแอดมิน ({userEmail}) จัดการโครงสร้างตู้เก็บของ, ออก QR Code, และตรวจนับสต็อก
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 shrink-0">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto shrink-0">
           <button
             onClick={handleSyncToCloud}
             disabled={isSyncingCloud}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-600/10 cursor-pointer transition-all"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
             title="ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Cloud Firestore เพื่อให้ทุกเครื่องเห็นตรงกัน"
           >
             {isSyncingCloud ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3.5 w-3.5" />
             )}
-            <span>{isSyncingCloud ? "กำลังซิงค์..." : "ซิงค์ขึ้น Cloud"}</span>
+            <span className="truncate">{isSyncingCloud ? "กำลังซิงค์..." : "ซิงค์ Cloud"}</span>
           </button>
           <button
             onClick={() => {
@@ -559,10 +559,10 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
               setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
               setShowCabinetModal(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md shadow-slate-900/10 cursor-pointer transition-all"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
           >
-            <Plus className="h-4 w-4 stroke-[2.5]" />
-            เพิ่มตู้เก็บพัสดุใหม่
+            <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+            <span className="truncate">เพิ่มตู้เก็บ</span>
           </button>
           <button
             onClick={() => {
@@ -583,21 +583,21 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
               if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
               setShowConsumableModal(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-500/10 cursor-pointer transition-all"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
           >
-            <Plus className="h-4 w-4 stroke-[2.5]" />
-            เพิ่มวัสดุสิ้นเปลือง
+            <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+            <span className="truncate">เพิ่มพัสดุ</span>
           </button>
           <button
             onClick={() => {
               setClearHistoryInitialType("ALL");
               setShowClearHistoryModal(true);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
             title="เปิดเมนูล้างและเคลียร์ประวัติการตรวจนับ หรือประวัติการเบิกของ"
           >
-            <Trash2 className="h-4 w-4 text-rose-600" />
-            <span>เคลียร์ประวัติ</span>
+            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+            <span className="truncate">เคลียร์ประวัติ</span>
           </button>
         </div>
       </div>
@@ -767,48 +767,48 @@ service cloud.firestore {
       )}
 
       {/* METRICS ROW */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-2 border-slate-100 hover:border-indigo-100 transition-colors flex items-center gap-4">
-          <div className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-            <QrCode className="h-5 w-5" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
+        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+            <QrCode className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">ตู้เก็บพัสดุรวม</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-950">{cabinets.length} ตู้</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-2 border-slate-100 hover:border-indigo-100 transition-colors flex items-center gap-4">
-          <div className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-            <Package className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">วัสดุสิ้นเปลืองรวม</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-950">{consumables.length} รายการ</span>
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">ตู้เก็บพัสดุ</span>
+            <span className="text-lg sm:text-2xl font-black text-slate-950 block">{cabinets.length} ตู้</span>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-2 border-slate-100 hover:border-indigo-100 transition-colors flex items-center gap-4">
-          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
+        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+            <Package className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">วัสดุสิ้นเปลือง</span>
+            <span className="text-lg sm:text-2xl font-black text-slate-950 block">{consumables.length} รายการ</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
+          <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${
             criticalItems.length > 0 ? "bg-rose-50 text-rose-600 animate-pulse" : "bg-emerald-50 text-emerald-600"
           }`}>
-            <AlertTriangle className="h-5 w-5" />
+            <AlertTriangle className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">ของเหลือน้อยวิกฤต</span>
-            <span className={`text-xl sm:text-2xl font-black ${
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">ขาด/วิกฤต</span>
+            <span className={`text-lg sm:text-2xl font-black block ${
               criticalItems.length > 0 ? "text-rose-600" : "text-emerald-700"
             }`}>{criticalItems.length} ชนิด</span>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-2 border-slate-100 hover:border-indigo-100 transition-colors flex items-center gap-4">
-          <div className="h-10 w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
-            <Clock className="h-5 w-5" />
+        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
+            <Clock className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">เช็กของล่าสุด</span>
-            <span className="text-sm sm:text-base font-bold text-slate-800 block truncate max-w-[150px]">
+          <div className="min-w-0">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">เช็กของล่าสุด</span>
+            <span className="text-xs sm:text-base font-bold text-slate-800 block truncate">
               {countLogs.length > 0 
                 ? new Date(countLogs[0].checkedAt?.toDate?.() || countLogs[0].checkedAt).toLocaleDateString("th-TH")
                 : "ยังไม่มีการเช็ก"
@@ -819,8 +819,8 @@ service cloud.firestore {
       </div>
 
       {/* TAB SYSTEM */}
-      <div className="border-b border-slate-200 mb-6 overflow-x-auto">
-        <nav className="flex space-x-6 min-w-max pb-1">
+      <div className="border-b border-slate-200 mb-6 overflow-x-auto no-scrollbar scroll-smooth">
+        <nav className="flex space-x-4 sm:space-x-6 min-w-max pb-1">
           <button
             onClick={() => setActiveTab("department_consumables")}
             className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
@@ -1077,6 +1077,7 @@ service cloud.firestore {
           departments={departments}
           cabinets={cabinets}
           consumables={consumables}
+          currentUserEmail={userEmail}
           onUpdateQty={handleUpdateQty}
           onEditConsumable={handleEditConsumable}
           onDeleteConsumable={handleDeleteConsumable}

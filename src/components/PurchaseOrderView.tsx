@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { DepartmentRecord, Cabinet, Consumable } from "../types";
+import { printElementById } from "../lib/printHelper";
 import { 
   ShoppingCart, 
   Building2, 
@@ -386,7 +387,7 @@ export default function PurchaseOrderView({
         </div>
 
         {/* Right: Print / Excel / Line Actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           {/* Orientation Toggle */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
             <button
@@ -410,35 +411,170 @@ export default function PurchaseOrderView({
           {/* Action 1: Print PO */}
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95 whitespace-nowrap"
           >
             <Printer className="h-3.5 w-3.5" />
-            <span>พิมพ์ใบสั่งซื้อ ({orientation === "portrait" ? "แนวตั้ง" : "แนวนอน"})</span>
+            <span>พิมพ์ ({orientation === "portrait" ? "แนวตั้ง" : "แนวนอน"})</span>
           </button>
 
           {/* Action 2: Export Excel */}
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95 whitespace-nowrap"
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>ส่งออกไฟล์ Excel</span>
+            <span>ส่งออก Excel</span>
           </button>
 
           {/* Action 3: Copy for LINE */}
           <button
             onClick={handleCopyForLine}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs cursor-pointer transition-all active:scale-95"
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 shadow-2xs cursor-pointer transition-all active:scale-95 whitespace-nowrap"
           >
             <Copy className="h-3.5 w-3.5 text-slate-600" />
-            <span>คัดลอกส่งต่อ (LINE)</span>
+            <span>คัดลอกส่ง LINE</span>
           </button>
         </div>
       </div>
 
-      {/* 4. PURCHASE ORDER TABLE (คล้ายรูปที่ 3) */}
+      {/* 4. PURCHASE ORDER: MOBILE CARDS & DESKTOP TABLE */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        
+        {/* MOBILE VIEW (md:hidden): Card Layout with zero horizontal overflow */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {poItems.length === 0 ? (
+            <div className="py-12 px-4 text-center text-slate-400">
+              <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-2 opacity-80" />
+              <p className="font-extrabold text-slate-800 text-sm">
+                สต็อกพัสดุครบตามเกณฑ์มาตรฐานแล้ว!
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                ไม่มีรายการพัสดุที่ต้องสั่งซื้อเพิ่มในแผนก {selectedDept === "ALL" ? "ทั้งหมด" : selectedDept}
+              </p>
+            </div>
+          ) : (
+            poItems.map((item, index) => {
+              const orderQty = getDefaultOrderQty(item);
+              const isOutOfStock = item.currentQty === 0;
+              const isBelowThreshold = item.currentQty <= item.minThreshold;
+
+              return (
+                <div 
+                  key={item.id}
+                  className={`p-3.5 space-y-3 transition-colors ${
+                    isOutOfStock ? "bg-rose-50/25" : isBelowThreshold ? "bg-amber-50/15" : ""
+                  }`}
+                >
+                  {/* Top: Thumbnail, Name, Department & Urgency */}
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="h-11 w-11 rounded-xl object-cover border border-slate-200 bg-slate-100 shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 font-mono">
+                            #{index + 1}
+                          </span>
+                          <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 font-bold text-[9px] rounded uppercase">
+                            {item.department}
+                          </span>
+                        </div>
+                        <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm leading-snug break-words mt-0.5">
+                          {item.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                          ตู้: {getCabinetName(item.cabinetId)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Urgency Badge */}
+                    <div className="shrink-0">
+                      {isOutOfStock ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full font-extrabold text-[10px] border border-rose-200 animate-pulse">
+                          วิกฤต (0 ชิ้น)
+                        </span>
+                      ) : isBelowThreshold ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full font-bold text-[10px] border border-amber-200">
+                          ต่ำกว่าเกณฑ์
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full font-bold text-[10px] border border-sky-200">
+                          สต็อกสำรอง
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Middle: Current vs Min Target */}
+                  <div className="flex items-center justify-between text-xs py-1.5 px-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-slate-500 font-medium">สต็อกจริง / เกณฑ์ขั้นต่ำ:</span>
+                    <span className="font-extrabold text-slate-800">
+                      <span className={isOutOfStock ? "text-rose-600" : isBelowThreshold ? "text-amber-600" : "text-slate-800"}>
+                        {item.currentQty}
+                      </span>
+                      {" / "}{item.minThreshold} {item.unit}
+                    </span>
+                  </div>
+
+                  {/* Bottom: Stepper Order Qty & Quick Restock Button */}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    {/* Stepper */}
+                    <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button
+                        onClick={() => handleAdjustOrderQty(item, -1)}
+                        disabled={orderQty <= 1}
+                        className="h-8 w-8 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-30 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                        title="ลดจำนวนที่สั่ง (-1)"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+
+                      <div className="px-1 text-center min-w-[50px]">
+                        <input
+                          type="number"
+                          min="1"
+                          value={orderQty}
+                          onChange={(e) => handleSetOrderQty(item, parseInt(e.target.value, 10))}
+                          className="w-full text-center text-xs sm:text-sm font-black text-slate-900 bg-transparent outline-none"
+                        />
+                        <span className="text-[9px] text-slate-400 font-bold block leading-none">
+                          {item.unit}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => handleAdjustOrderQty(item, 1)}
+                        className="h-8 w-8 rounded-lg bg-white hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                        title="เพิ่มจำนวนที่สั่ง (+1)"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Quick Restock Fill Button */}
+                    <button
+                      onClick={async () => {
+                        await onUpdateQty(item, item.currentQty + orderQty);
+                        onToast(`เติมสต็อก ${item.name} +${orderQty} ${item.unit} เรียบร้อย!`);
+                      }}
+                      className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 cursor-pointer transition-colors shadow-2xs"
+                    >
+                      รับของเข้าตู้
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* DESKTOP VIEW (hidden md:block): 8-Column Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -603,26 +739,43 @@ export default function PurchaseOrderView({
 
       {/* PRINT PREVIEW MODAL */}
       {showPrintModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-6 border border-slate-200 flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print-modal-overlay">
+          <style>{`
+            @media print {
+              @page {
+                size: ${orientation};
+                margin: 1cm;
+              }
+            }
+          `}</style>
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-6 border border-slate-200 flex flex-col max-h-[90vh] print-modal-container">
             {/* Modal Header */}
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between no-print">
               <div className="flex items-center gap-2">
                 <Printer className="h-5 w-5 text-emerald-400" />
                 <h3 className="font-bold text-sm sm:text-base">
                   พิมพ์ใบสั่งซื้อ / ใบขอซื้อพัสดุ (Purchase Order Sheet)
                 </h3>
               </div>
-              <button
-                onClick={() => setShowPrintModal(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => printElementById("printable-po-sheet", "ใบขอซื้อ-ใบสั่งเติมพัสดุ", orientation)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>สั่งพิมพ์ A4</span>
+                </button>
+                <button
+                  onClick={() => setShowPrintModal(false)}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg cursor-pointer transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Printable Sheet Body */}
-            <div className="p-6 sm:p-8 overflow-y-auto flex-1 bg-white text-slate-900 print-section">
+            <div id="printable-po-sheet" className="p-6 sm:p-8 overflow-y-auto flex-1 bg-white text-slate-900 print-section">
               {/* Document Header */}
               <div className="border-b-2 border-slate-900 pb-4 mb-6">
                 <div className="flex justify-between items-start">
@@ -720,7 +873,7 @@ export default function PurchaseOrderView({
             </div>
 
             {/* Modal Footer Controls */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between no-print">
               <button
                 onClick={() => setShowPrintModal(false)}
                 className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
@@ -728,11 +881,11 @@ export default function PurchaseOrderView({
                 ปิดหน้าต่าง
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => printElementById("printable-po-sheet", "ใบขอซื้อ-ใบสั่งเติมพัสดุ", orientation)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
               >
                 <Printer className="h-4 w-4" />
-                <span>สั่งพิมพ์เดี๋ยวนี้ (Print Now)</span>
+                <span>สั่งพิมพ์กระดาษ A4 เดี๋ยวนี้ (Print Clean A4)</span>
               </button>
             </div>
           </div>

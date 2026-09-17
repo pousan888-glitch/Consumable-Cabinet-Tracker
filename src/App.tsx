@@ -25,6 +25,7 @@ export default function App() {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [cabinetParam, setCabinetParam] = useState<string | null>(null);
   const [modeParam, setModeParam] = useState<"count" | "withdraw">("count");
+  const [isTestingBarOpen, setIsTestingBarOpen] = useState(false);
 
   // Auto-seed database and restore session on startup
   useEffect(() => {
@@ -173,7 +174,7 @@ export default function App() {
 
   // B. Default Role-based view routers
   return (
-    <div className="bg-slate-50 min-h-screen font-sans flex flex-col pb-16">
+    <div className="bg-slate-50 min-h-screen font-sans flex flex-col pb-8">
       <Header 
         user={user} 
         onChangeRole={handleChangeRole} 
@@ -204,49 +205,80 @@ export default function App() {
         )}
       </main>
 
-      {/* QUICK ACCESS TESTING BAR - RESERVED FOR SUPER ADMIN & SIMULATION */}
+      {/* QUICK ACCESS TESTING BAR - FLOATING AND COLLAPSIBLE */}
       {(user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com" || user.isSimulation) && (
-        <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2.5 px-4 z-40 shadow-lg">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-            <div className="flex items-center gap-1.5 font-medium">
-              <Sparkles className="h-4 w-4 text-amber-500 shrink-0" />
-              <span>โหมดทดสอบสิทธิ์ (เฉพาะผู้ดูแลระบบสูงสุด): สลับดูหน้าจอของแต่ละบทบาทได้ทันที</span>
-            </div>
+        <aside className="fixed bottom-3 right-3 z-40">
+          {!isTestingBarOpen ? (
+            <button
+              onClick={() => setIsTestingBarOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900/90 hover:bg-slate-900 text-white rounded-full shadow-lg backdrop-blur-xs text-xs font-bold transition-all cursor-pointer hover:scale-105 active:scale-95 border border-slate-700/50"
+              title="เปิดเมนูสลับสิทธิ์ทดสอบ"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <span>สลับสิทธิ์</span>
+              <span className="px-1.5 py-0.2 bg-indigo-500 text-[10px] rounded-full uppercase">
+                {user.role}
+              </span>
+            </button>
+          ) : (
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 p-3 shadow-2xl space-y-2 max-w-xs animate-scale-up">
+              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  <span>สลับดูหน้าจอ (Super Admin)</span>
+                </div>
+                <button
+                  onClick={() => setIsTestingBarOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer text-xs"
+                >
+                  ✕
+                </button>
+              </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => handleChangeRole("ADMIN")}
-                className={`px-3 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
-                  user.role === "ADMIN" 
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                หน้า Admin
-              </button>
-              <button
-                onClick={() => handleChangeRole("HELPER")}
-                className={`px-3 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
-                  user.role === "HELPER" 
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                ทีมนับของ (Helper)
-              </button>
-              <button
-                onClick={() => handleChangeRole("QC")}
-                className={`px-3 py-1 rounded-lg font-bold border transition-all cursor-pointer ${
-                  user.role === "QC" 
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" 
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                QC เบิกของใช้
-              </button>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  onClick={() => {
+                    handleChangeRole("ADMIN");
+                    setIsTestingBarOpen(false);
+                  }}
+                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                    user.role === "ADMIN" 
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs" 
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  Admin
+                </button>
+                <button
+                  onClick={() => {
+                    handleChangeRole("HELPER");
+                    setIsTestingBarOpen(false);
+                  }}
+                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                    user.role === "HELPER" 
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs" 
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  Helper
+                </button>
+                <button
+                  onClick={() => {
+                    handleChangeRole("QC");
+                    setIsTestingBarOpen(false);
+                  }}
+                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                    user.role === "QC" 
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs" 
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  QC
+                </button>
+              </div>
             </div>
-          </div>
-        </footer>
+          )}
+        </aside>
       )}
     </div>
   );
