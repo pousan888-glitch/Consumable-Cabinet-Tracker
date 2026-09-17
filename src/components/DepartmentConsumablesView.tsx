@@ -58,7 +58,6 @@ export default function DepartmentConsumablesView({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OUT" | "LOW" | "OK">("ALL");
   const [sortBy, setSortBy] = useState<"DEFAULT" | "QTY_ASC" | "NAME">("DEFAULT");
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Print Inventory Sheet Modal State
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -161,16 +160,6 @@ export default function DepartmentConsumablesView({
   const outInCurrentDept = currentDeptItems.filter(c => c.currentQty === 0).length;
   const lowInCurrentDept = currentDeptItems.filter(c => c.currentQty > 0 && c.currentQty <= c.minThreshold).length;
   const okInCurrentDept = currentDeptItems.filter(c => c.currentQty > c.minThreshold).length;
-
-  const handleStepQty = async (item: Consumable, delta: number) => {
-    const nextQty = Math.max(0, (item.currentQty || 0) + delta);
-    setUpdatingId(item.id);
-    try {
-      await onUpdateQty(item, nextQty);
-    } finally {
-      setTimeout(() => setUpdatingId(null), 300);
-    }
-  };
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -496,7 +485,6 @@ export default function DepartmentConsumablesView({
             filteredConsumables.map((item, index) => {
               const isOutOfStock = item.currentQty === 0;
               const isLow = item.currentQty > 0 && item.currentQty <= item.minThreshold;
-              const isUpdating = updatingId === item.id;
 
               return (
                 <div 
@@ -568,7 +556,7 @@ export default function DepartmentConsumablesView({
                     </div>
                   </div>
 
-                  {/* Middle & Bottom: Status, Target & Stepper Controls */}
+                  {/* Middle & Bottom: Status, Target & Quantity Display */}
                   <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100/80">
                     {/* Left: Status & Target */}
                     <div>
@@ -593,49 +581,23 @@ export default function DepartmentConsumablesView({
                       )}
                     </div>
 
-                    {/* Right: Touch-friendly Big Stepper */}
-                    <div className="inline-flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200">
-                      <button
-                        onClick={() => handleStepQty(item, -1)}
-                        disabled={item.currentQty <= 0 || isUpdating}
-                        className="h-9 w-9 rounded-lg bg-white hover:bg-slate-200 active:scale-95 disabled:opacity-30 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all shadow-2xs"
-                        title="ลดจำนวน (-1)"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      
-                      <div className="px-1 text-center min-w-[50px]">
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.currentQty}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            if (!isNaN(val)) {
-                              onUpdateQty(item, Math.max(0, val));
-                            }
-                          }}
-                          className={`w-full text-center text-sm font-black bg-transparent outline-none ${
-                            isOutOfStock 
-                              ? "text-rose-600" 
-                              : isLow 
-                              ? "text-amber-600" 
-                              : "text-slate-900"
-                          }`}
-                        />
-                        <span className="text-[9px] text-slate-400 font-bold block leading-none">
+                    {/* Right: Clean Quantity Display (ไม่มีปุ่ม +/-) */}
+                    <div className="text-right">
+                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">
+                        จำนวนที่มีจริง
+                      </div>
+                      <div className={`inline-flex items-center justify-center min-w-[54px] px-3 py-1.5 rounded-xl border font-black text-sm shadow-2xs ${
+                        isOutOfStock 
+                          ? "bg-rose-50 border-rose-200 text-rose-600" 
+                          : isLow 
+                          ? "bg-amber-50 border-amber-200 text-amber-600" 
+                          : "bg-slate-50 border-slate-200 text-slate-900"
+                      }`}>
+                        <span>{item.currentQty}</span>
+                        <span className="text-[11px] font-bold text-slate-500 ml-1">
                           {item.unit}
                         </span>
                       </div>
-
-                      <button
-                        onClick={() => handleStepQty(item, 1)}
-                        disabled={isUpdating}
-                        className="h-9 w-9 rounded-lg bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-black flex items-center justify-center cursor-pointer transition-all shadow-2xs"
-                        title="เพิ่มจำนวน (+1)"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -672,7 +634,6 @@ export default function DepartmentConsumablesView({
                 filteredConsumables.map((item, index) => {
                   const isOutOfStock = item.currentQty === 0;
                   const isLow = item.currentQty > 0 && item.currentQty <= item.minThreshold;
-                  const isUpdating = updatingId === item.id;
 
                   return (
                     <tr 
@@ -731,45 +692,18 @@ export default function DepartmentConsumablesView({
                         </div>
                       </td>
 
-                      {/* Current Real Quantity with Stepper [-] [number] [+] */}
+                      {/* Current Real Quantity (จำนวนที่มีจริง) - แสดงตัวเลขจริง ไม่ต้องมีปุ่มบวกและลบ */}
                       <td className="py-4 px-4 text-center">
-                        <div className="inline-flex items-center justify-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200">
-                          <button
-                            onClick={() => handleStepQty(item, -1)}
-                            disabled={item.currentQty <= 0 || isUpdating}
-                            className="h-7 w-7 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                            title="ลดจำนวน (-1)"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          
-                          <input
-                            type="number"
-                            min="0"
-                            value={item.currentQty}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10);
-                              if (!isNaN(val)) {
-                                onUpdateQty(item, Math.max(0, val));
-                              }
-                            }}
-                            className={`w-12 text-center text-xs sm:text-sm font-black bg-transparent outline-none ${
-                              isOutOfStock 
-                                ? "text-rose-600 font-black" 
-                                : isLow 
-                                ? "text-amber-600 font-black" 
-                                : "text-slate-900"
-                            }`}
-                          />
-
-                          <button
-                            onClick={() => handleStepQty(item, 1)}
-                            disabled={isUpdating}
-                            className="h-7 w-7 rounded-lg bg-white hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                            title="เพิ่มจำนวน (+1)"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
+                        <div
+                          className={`inline-flex items-center justify-center min-w-[52px] px-3 py-1 rounded-lg border font-black text-sm shadow-2xs ${
+                            isOutOfStock
+                              ? "bg-rose-50 border-rose-200 text-rose-600"
+                              : isLow
+                              ? "bg-amber-50 border-amber-200 text-amber-600"
+                              : "bg-slate-50 border-slate-200 text-slate-800"
+                          }`}
+                        >
+                          <span>{item.currentQty}</span>
                         </div>
                       </td>
 
