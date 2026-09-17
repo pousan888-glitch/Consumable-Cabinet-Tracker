@@ -1746,113 +1746,126 @@ service cloud.firestore {
       
       {/* A. CABINET ADD/EDIT MODAL */}
       {showCabinetModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md overflow-hidden animate-scale-up">
-            <div className="p-6 border-b border-slate-100 bg-slate-50">
-              <h3 className="text-base sm:text-lg font-black text-slate-950">
-                {editingCabinet ? "แก้ไขตู้เก็บของพัสดุ" : "เพิ่มตู้เก็บของใหม่เข้าคลัง"}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">กำหนดข้อมูล และระบุแผนกที่จะใช้งานตู้ใบนี้</p>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-md max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden animate-scale-up my-auto">
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-950">
+                  {editingCabinet ? "แก้ไขตู้เก็บของพัสดุ" : "เพิ่มตู้เก็บของใหม่เข้าคลัง"}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">กำหนดข้อมูล และระบุแผนกที่จะใช้งานตู้ใบนี้</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCabinetModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer shrink-0"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
             
-            <form onSubmit={handleCabinetSubmit} className="p-6 space-y-4 font-sans text-xs">
-              {cabinetError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
-                  <span>{cabinetError}</span>
-                </div>
-              )}
+            <form onSubmit={handleCabinetSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden font-sans text-xs">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+                {cabinetError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+                    <span>{cabinetError}</span>
+                  </div>
+                )}
 
-              <div>
-                <label htmlFor="cab-name-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  ชื่อตู้เก็บของ <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="cab-name-input"
-                  type="text"
-                  placeholder="ตัวอย่าง: ตู้เก็บแล็บเคมี 1"
-                  value={cabinetForm.name}
-                  onChange={(e) => setCabinetForm({ ...cabinetForm, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
+                <div>
+                  <label htmlFor="cab-name-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    ชื่อตู้เก็บของ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="cab-name-input"
+                    type="text"
+                    placeholder="ตัวอย่าง: ตู้เก็บแล็บเคมี 1"
+                    value={cabinetForm.name}
+                    onChange={(e) => setCabinetForm({ ...cabinetForm, name: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="cab-location-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    สถานที่ตั้งตู้เก็บของ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="cab-location-input"
+                    type="text"
+                    placeholder="ตัวอย่าง: ห้องแล็บเคมี ตึก A ชั้น 2"
+                    value={cabinetForm.location}
+                    onChange={(e) => setCabinetForm({ ...cabinetForm, location: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
+                  />
+                </div>
+
+                {/* Department Checkboxes */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      กำหนดแผนกที่ดูแล / เข้าตรวจเช็ก (เลือกได้มากกว่า 1)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCabinetModal(false);
+                        setActiveTab("settings");
+                      }}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      + จัดการแผนก
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableDepartmentNames.map(dept => {
+                      const checked = cabinetForm.departments.includes(dept);
+                      return (
+                        <label key={dept} className="flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              if (checked) {
+                                setCabinetForm({
+                                  ...cabinetForm,
+                                  departments: cabinetForm.departments.filter(d => d !== dept)
+                                });
+                              } else {
+                                setCabinetForm({
+                                  ...cabinetForm,
+                                  departments: [...cabinetForm.departments, dept]
+                                });
+                              }
+                            }}
+                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          {dept}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Cabinet Image with Upload / Camera / Presets */}
+                <ImageUploadInput
+                  label="รูปภาพตู้เก็บพัสดุ (ถ่ายรูปจริง หรือเลือกตัวอย่าง)"
+                  helperText="รูปถ่ายจริงช่วยให้เจ้าหน้าที่ค้นหาตู้ในโรงงานได้ง่ายและแม่นยำ"
+                  value={cabinetForm.photoUrl}
+                  onChange={(newUrl) => setCabinetForm({ ...cabinetForm, photoUrl: newUrl })}
+                  presets={CABINET_PRESETS.map((url, idx) => ({
+                    key: `cab-${idx}`,
+                    label: idx === 0 ? "ตู้ล็อกเกอร์เหล็ก" : idx === 1 ? "ชั้นวางอะไหล่" : idx === 2 ? "กล่องอุตสาหกรรม" : "ตู้ช็อปช่าง",
+                    url
+                  }))}
+                  onPreviewFullImage={(url) => setPreviewModalImage({ url, title: cabinetForm.name || "ตู้เก็บของ", subtitle: cabinetForm.location })}
                 />
               </div>
 
-              <div>
-                <label htmlFor="cab-location-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  สถานที่ตั้งตู้เก็บของ <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="cab-location-input"
-                  type="text"
-                  placeholder="ตัวอย่าง: ห้องแล็บเคมี ตึก A ชั้น 2"
-                  value={cabinetForm.location}
-                  onChange={(e) => setCabinetForm({ ...cabinetForm, location: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
-                />
-              </div>
-
-              {/* Department Checkboxes */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    กำหนดแผนกที่ดูแล / เข้าตรวจเช็ก (เลือกได้มากกว่า 1)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCabinetModal(false);
-                      setActiveTab("settings");
-                    }}
-                    className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    + จัดการแผนก
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {availableDepartmentNames.map(dept => {
-                    const checked = cabinetForm.departments.includes(dept);
-                    return (
-                      <label key={dept} className="flex items-center gap-2 px-3 py-2 border rounded-lg hover:bg-slate-50 cursor-pointer text-xs font-medium text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            if (checked) {
-                              setCabinetForm({
-                                ...cabinetForm,
-                                departments: cabinetForm.departments.filter(d => d !== dept)
-                              });
-                            } else {
-                              setCabinetForm({
-                                ...cabinetForm,
-                                departments: [...cabinetForm.departments, dept]
-                              });
-                            }
-                          }}
-                          className="rounded text-indigo-600 focus:ring-indigo-500"
-                        />
-                        {dept}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Cabinet Image with Upload / Camera / Presets */}
-              <ImageUploadInput
-                label="รูปภาพตู้เก็บพัสดุ (ถ่ายรูปจริง หรือเลือกตัวอย่าง)"
-                helperText="รูปถ่ายจริงช่วยให้เจ้าหน้าที่ค้นหาตู้ในโรงงานได้ง่ายและแม่นยำ"
-                value={cabinetForm.photoUrl}
-                onChange={(newUrl) => setCabinetForm({ ...cabinetForm, photoUrl: newUrl })}
-                presets={CABINET_PRESETS.map((url, idx) => ({
-                  key: `cab-${idx}`,
-                  label: idx === 0 ? "ตู้ล็อกเกอร์เหล็ก" : idx === 1 ? "ชั้นวางอะไหล่" : idx === 2 ? "กล่องอุตสาหกรรม" : "ตู้ช็อปช่าง",
-                  url
-                }))}
-                onPreviewFullImage={(url) => setPreviewModalImage({ url, title: cabinetForm.name || "ตู้เก็บของ", subtitle: cabinetForm.location })}
-              />
-
-              <div className="flex gap-2 pt-4 border-t border-slate-100">
+              {/* Pinned Action Buttons Footer */}
+              <div className="flex gap-2.5 p-4 sm:p-5 border-t border-slate-100 bg-white shrink-0">
                 <button
                   type="button"
                   disabled={isSavingCabinet}
@@ -1872,7 +1885,7 @@ service cloud.firestore {
                       <span>กำลังบันทึกข้อมูล...</span>
                     </>
                   ) : (
-                    <span>ตกลงและบันทึก</span>
+                    <span>{editingCabinet ? "บันทึกการแก้ไข" : "ตกลงและบันทึก"}</span>
                   )}
                 </button>
               </div>
@@ -1883,221 +1896,238 @@ service cloud.firestore {
 
       {/* B. CONSUMABLE ADD/EDIT MODAL */}
       {showConsumableModal && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md overflow-hidden animate-scale-up">
-            <div className="p-6 border-b border-slate-100 bg-slate-50">
-              <h3 className="text-base sm:text-lg font-black text-slate-950">
-                {editingConsumable ? "แก้ไขพัสดุวัสดุสิ้นเปลือง" : "จัดสรรวัสดุสิ้นเปลืองเข้าตู้เก็บของ"}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">กำหนดตู้เก็บ, ระบุสต็อกเริ่มต้น, และตั้งค่าการแจ้งเตือนความปลอดภัย</p>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-md max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden animate-scale-up my-auto">
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-950">
+                  {editingConsumable ? "แก้ไขพัสดุวัสดุสิ้นเปลือง" : "จัดสรรวัสดุสิ้นเปลืองเข้าตู้เก็บของ"}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {editingConsumable 
+                    ? "กำหนดตู้เก็บ, ระบุสต็อกเริ่มต้น, และตั้งค่าการแจ้งเตือนความปลอดภัย" 
+                    : "กำหนดตู้เก็บ, ระบุสต็อกเริ่มต้น, และตั้งค่าการแจ้งเตือนความปลอดภัย"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConsumableModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer shrink-0"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleConsumableSubmit} className="p-6 space-y-4 font-sans text-xs">
-              {consumableError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
-                  <span>{consumableError}</span>
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="con-cabinet-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  เลือกจัดสรรลงตู้เก็บของ <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  id="con-cabinet-select"
-                  value={selectedCabinetId}
-                  onChange={(e) => {
-                    const newCabId = e.target.value;
-                    setSelectedCabinetId(newCabId);
-                    const selCab = cabinets.find(c => c.id === newCabId);
-                    // Automatically sync department with the cabinet's primary department if not set
-                    if (selCab && selCab.departments && selCab.departments.length > 0) {
-                      if (!selCab.departments.includes(consumableForm.department)) {
-                        setConsumableForm(prev => ({
-                          ...prev,
-                          department: selCab.departments[0]
-                        }));
-                      }
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-700"
-                >
-                  <option value="" disabled>-- กรุณาเลือกตู้จัดเก็บ --</option>
-                  {cabinets.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.location})</option>
-                  ))}
-                </select>
-
-                {(() => {
-                  const selCab = cabinets.find(c => c.id === selectedCabinetId);
-                  if (selCab && selCab.departments && selCab.departments.length > 0) {
-                    return (
-                      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
-                        <span className="font-semibold">แผนกของตู้นี้:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {selCab.departments.map(d => (
-                            <button
-                              type="button"
-                              key={d}
-                              onClick={() => setConsumableForm(prev => ({ ...prev, department: d }))}
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${
-                                consumableForm.department?.toLowerCase() === d.toLowerCase()
-                                  ? "bg-emerald-600 text-white shadow-2xs"
-                                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-                              }`}
-                            >
-                              ✓ {d} {consumableForm.department?.toLowerCase() === d.toLowerCase() ? "(เลือกอยู่)" : ""}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-
-              <div>
-                <label htmlFor="con-name-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                  ชื่อวัสดุสิ้นเปลือง / พัสดุ <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="con-name-input"
-                  type="text"
-                  placeholder="ตัวอย่าง: ถุงมือยางไนไตร Size M"
-                  value={consumableForm.name}
-                  onChange={(e) => setConsumableForm({ ...consumableForm, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label htmlFor="con-dept-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      แผนกรับผิดชอบ
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowConsumableModal(false);
-                        setActiveTab("settings");
-                      }}
-                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
-                    >
-                      + จัดการแผนก
-                    </button>
+            <form onSubmit={handleConsumableSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden font-sans text-xs">
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+                {consumableError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" />
+                    <span>{consumableError}</span>
                   </div>
+                )}
+
+                <div>
+                  <label htmlFor="con-cabinet-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    เลือกจัดสรรลงตู้เก็บของ <span className="text-rose-500">*</span>
+                  </label>
                   <select
-                    id="con-dept-select"
-                    value={consumableForm.department}
-                    onChange={(e) => setConsumableForm({ ...consumableForm, department: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold text-slate-800"
+                    id="con-cabinet-select"
+                    value={selectedCabinetId}
+                    onChange={(e) => {
+                      const newCabId = e.target.value;
+                      setSelectedCabinetId(newCabId);
+                      const selCab = cabinets.find(c => c.id === newCabId);
+                      // Automatically sync department with the cabinet's primary department if not set
+                      if (selCab && selCab.departments && selCab.departments.length > 0) {
+                        if (!selCab.departments.includes(consumableForm.department)) {
+                          setConsumableForm(prev => ({
+                            ...prev,
+                            department: selCab.departments[0]
+                          }));
+                        }
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-700"
                   >
-                    {!availableDepartmentNames.includes(consumableForm.department) && consumableForm.department && (
-                      <option value={consumableForm.department}>{consumableForm.department}</option>
-                    )}
-                    {availableDepartmentNames.map(d => (
-                      <option key={d} value={d}>{d}</option>
+                    <option value="" disabled>-- กรุณาเลือกตู้จัดเก็บ --</option>
+                    {cabinets.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.location})</option>
                     ))}
                   </select>
+
+                  {(() => {
+                    const selCab = cabinets.find(c => c.id === selectedCabinetId);
+                    if (selCab && selCab.departments && selCab.departments.length > 0) {
+                      return (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+                          <span className="font-semibold">แผนกของตู้นี้:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {selCab.departments.map(d => (
+                              <button
+                                type="button"
+                                key={d}
+                                onClick={() => setConsumableForm(prev => ({ ...prev, department: d }))}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer transition-all ${
+                                  consumableForm.department?.toLowerCase() === d.toLowerCase()
+                                    ? "bg-emerald-600 text-white shadow-2xs"
+                                    : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+                                }`}
+                              >
+                                ✓ {d} {consumableForm.department?.toLowerCase() === d.toLowerCase() ? "(เลือกอยู่)" : ""}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 <div>
-                  <label htmlFor="con-unit-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    หน่วยนับ
+                  <label htmlFor="con-name-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    ชื่อวัสดุสิ้นเปลือง / พัสดุ <span className="text-rose-500">*</span>
                   </label>
                   <input
-                    id="con-unit-input"
+                    id="con-name-input"
                     type="text"
-                    placeholder="กล่อง, ชิ้น, ม้วน, แพ็ค"
-                    value={consumableForm.unit}
-                    onChange={(e) => setConsumableForm({ ...consumableForm, unit: e.target.value })}
+                    placeholder="ตัวอย่าง: ถุงมือยางไนไตร Size M"
+                    value={consumableForm.name}
+                    onChange={(e) => setConsumableForm({ ...consumableForm, name: e.target.value })}
                     className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label htmlFor="con-dept-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        แผนกรับผิดชอบ
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowConsumableModal(false);
+                          setActiveTab("settings");
+                        }}
+                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                      >
+                        + จัดการแผนก
+                      </button>
+                    </div>
+                    <select
+                      id="con-dept-select"
+                      value={consumableForm.department}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, department: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold text-slate-800"
+                    >
+                      {!availableDepartmentNames.includes(consumableForm.department) && consumableForm.department && (
+                        <option value={consumableForm.department}>{consumableForm.department}</option>
+                      )}
+                      {availableDepartmentNames.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="con-unit-input" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      หน่วยนับ
+                    </label>
+                    <input
+                      id="con-unit-input"
+                      type="text"
+                      placeholder="กล่อง, ชิ้น, ม้วน, แพ็ค"
+                      value={consumableForm.unit}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, unit: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="con-qty-input" className="block text-xs font-semibold text-slate-600 mb-1">
+                      สต็อกปัจจุบัน <span className="text-slate-400 font-normal">({consumableForm.unit || "หน่วย"})</span>
+                    </label>
+                    <input
+                      id="con-qty-input"
+                      type="number"
+                      min="0"
+                      value={consumableForm.currentQty}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, currentQty: parseInt(e.target.value) || 0 })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="con-threshold-input" className="block text-xs font-semibold text-rose-600 mb-1">
+                      Minimum (ขั้นต่ำ)
+                    </label>
+                    <input
+                      id="con-threshold-input"
+                      type="number"
+                      min="0"
+                      placeholder="เช่น 5"
+                      value={consumableForm.minThreshold}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, minThreshold: parseInt(e.target.value) || 0 })}
+                      className="w-full px-4 py-2.5 border border-rose-200 bg-rose-50/20 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-xs font-bold text-rose-600"
+                    />
+                    <span className="text-[10px] text-slate-400 block mt-0.5">เตือนเมื่อเหลือน้อยกว่านี้</span>
+                  </div>
+
+                  <div>
+                    <label htmlFor="con-max-threshold-input" className="block text-xs font-semibold text-indigo-600 mb-1">
+                      Maximum (ขั้นสูง)
+                    </label>
+                    <input
+                      id="con-max-threshold-input"
+                      type="number"
+                      min="0"
+                      placeholder="เช่น 50"
+                      value={consumableForm.maxThreshold}
+                      onChange={(e) => setConsumableForm({ ...consumableForm, maxThreshold: parseInt(e.target.value) || 0 })}
+                      className="w-full px-4 py-2.5 border border-indigo-200 bg-indigo-50/20 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold text-indigo-600"
+                    />
+                    <span className="text-[10px] text-slate-400 block mt-0.5">ความจุสต็อกสูงสุดของตู้</span>
+                  </div>
+                </div>
+
+                {/* Consumable Image with Upload / Camera / Presets */}
+                <ImageUploadInput
+                  label="รูปภาพพัสดุ / วัสดุสิ้นเปลือง (ถ่ายรูปจริง หรือเลือกตัวอย่าง)"
+                  helperText="รูปถ่ายจริงช่วยให้ Helper ตรวจนับสต็อกได้รวดเร็ว ชัดเจน ไม่สับสนรุ่น/ขนาด"
+                  value={consumableForm.imageUrl}
+                  onChange={(newUrl) => setConsumableForm({ ...consumableForm, imageUrl: newUrl })}
+                  presets={Object.entries(CONSUMABLE_PRESETS).map(([key, url]) => {
+                    const labels: Record<string, string> = {
+                      glove: "ถุงมือยาง",
+                      mask: "หน้ากากอนามัย",
+                      alcohol: "แอลกอฮอล์สเปรย์",
+                      tape: "เทปพันเกลียว",
+                      paper: "กระดาษทิชชู่",
+                      grease: "จาระบี/น้ำมัน",
+                      goggles: "แว่นตานิรภัย",
+                      tubes: "หลอดทดลอง/ขวด"
+                    };
+                    return {
+                      key,
+                      label: labels[key] || key,
+                      url
+                    };
+                  })}
+                  onPreviewFullImage={(url) => setPreviewModalImage({ 
+                    url, 
+                    title: consumableForm.name || "วัสดุสิ้นเปลือง", 
+                    subtitle: `หน่วย: ${consumableForm.unit || "ชิ้น"}` 
+                  })}
+                />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label htmlFor="con-qty-input" className="block text-xs font-semibold text-slate-600 mb-1">
-                    สต็อกปัจจุบัน <span className="text-slate-400 font-normal">({consumableForm.unit || "หน่วย"})</span>
-                  </label>
-                  <input
-                    id="con-qty-input"
-                    type="number"
-                    min="0"
-                    value={consumableForm.currentQty}
-                    onChange={(e) => setConsumableForm({ ...consumableForm, currentQty: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="con-threshold-input" className="block text-xs font-semibold text-rose-600 mb-1">
-                    Minimum (ขั้นต่ำ)
-                  </label>
-                  <input
-                    id="con-threshold-input"
-                    type="number"
-                    min="0"
-                    placeholder="เช่น 5"
-                    value={consumableForm.minThreshold}
-                    onChange={(e) => setConsumableForm({ ...consumableForm, minThreshold: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-rose-200 bg-rose-50/20 rounded-xl focus:ring-2 focus:ring-rose-500 outline-none text-xs font-bold text-rose-600"
-                  />
-                  <span className="text-[10px] text-slate-400 block mt-0.5">เตือนเมื่อเหลือน้อยกว่านี้</span>
-                </div>
-
-                <div>
-                  <label htmlFor="con-max-threshold-input" className="block text-xs font-semibold text-indigo-600 mb-1">
-                    Maximum (ขั้นสูง)
-                  </label>
-                  <input
-                    id="con-max-threshold-input"
-                    type="number"
-                    min="0"
-                    placeholder="เช่น 50"
-                    value={consumableForm.maxThreshold}
-                    onChange={(e) => setConsumableForm({ ...consumableForm, maxThreshold: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 border border-indigo-200 bg-indigo-50/20 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold text-indigo-600"
-                  />
-                  <span className="text-[10px] text-slate-400 block mt-0.5">ความจุสต็อกสูงสุดของตู้</span>
-                </div>
-              </div>
-
-              {/* Consumable Image with Upload / Camera / Presets */}
-              <ImageUploadInput
-                label="รูปภาพพัสดุ / วัสดุสิ้นเปลือง (ถ่ายรูปจริง หรือเลือกตัวอย่าง)"
-                helperText="รูปถ่ายจริงช่วยให้ Helper ตรวจนับสต็อกได้รวดเร็ว ชัดเจน ไม่สับสนรุ่น/ขนาด"
-                value={consumableForm.imageUrl}
-                onChange={(newUrl) => setConsumableForm({ ...consumableForm, imageUrl: newUrl })}
-                presets={Object.entries(CONSUMABLE_PRESETS).map(([key, url]) => {
-                  const labels: Record<string, string> = {
-                    glove: "ถุงมือยาง",
-                    mask: "หน้ากากอนามัย",
-                    alcohol: "แอลกอฮอล์สเปรย์",
-                    tape: "เทปพันเกลียว",
-                    paper: "กระดาษทิชชู่",
-                    grease: "จาระบี/น้ำมัน",
-                    goggles: "แว่นตานิรภัย",
-                    tubes: "หลอดทดลอง/ขวด"
-                  };
-                  return {
-                    key,
-                    label: labels[key] || key,
-                    url
-                  };
-                })}
-                onPreviewFullImage={(url) => setPreviewModalImage({ 
-                  url, 
-                  title: consumableForm.name || "วัสดุสิ้นเปลือง", 
-                  subtitle: `หน่วย: ${consumableForm.unit || "ชิ้น"}` 
-                })}
-              />
-
-              <div className="flex gap-2 pt-4 border-t border-slate-100">
+              {/* Pinned Action Buttons Footer - Always visible on any screen size */}
+              <div className="flex gap-2.5 p-4 sm:p-5 border-t border-slate-100 bg-white shrink-0 shadow-xs">
                 <button
                   type="button"
                   disabled={isSavingConsumable}
@@ -2114,10 +2144,10 @@ service cloud.firestore {
                   {isSavingConsumable ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>กำลังจัดเก็บ...</span>
+                      <span>{editingConsumable ? "กำลังบันทึก..." : "กำลังจัดเก็บ..."}</span>
                     </>
                   ) : (
-                    <span>จัดเก็บลงตู้</span>
+                    <span>{editingConsumable ? "จัดเก็บลงตู้" : "จัดเก็บลงตู้"}</span>
                   )}
                 </button>
               </div>
