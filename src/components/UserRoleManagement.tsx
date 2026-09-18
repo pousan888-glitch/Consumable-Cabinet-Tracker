@@ -194,6 +194,7 @@ export default function UserRoleManagement({
   const adminCount = users.filter(u => u.role === "ADMIN" && !u.isSuperAdmin && u.email.toLowerCase() !== SUPER_ADMIN_EMAIL).length;
   const qcCount = users.filter(u => u.role === "QC").length;
   const helperCount = users.filter(u => u.role === "HELPER").length;
+  const viewerCount = users.filter(u => u.role === "VIEWER").length;
 
   // Security Check
   if (!isSuperAdmin && currentUserEmail.toLowerCase() !== SUPER_ADMIN_EMAIL) {
@@ -225,7 +226,7 @@ export default function UserRoleManagement({
               จัดการสิทธิ์ผู้ใช้งานระบบ
             </h2>
             <p className="text-slate-300 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              กำหนดสิทธิ์การใช้งานของแต่ละบุคคลตามหน้าที่: แอดมิน (Admin), เจ้าหน้าที่ QC, และทีมนับสต็อก (Helper) 
+              กำหนดสิทธิ์การใช้งานของแต่ละบุคคลตามหน้าที่: แอดมิน (Admin), เจ้าหน้าที่ QC, ทีมนับสต็อก (Helper), และผู้เข้าชม/ตรวจสต็อก (Viewer) 
               โดยผู้ใช้ที่เป็นแอดมินทั่วไปจะไม่สามารถเข้าถึงหน้าต่างจัดการสิทธิ์นี้ได้
             </p>
           </div>
@@ -258,7 +259,7 @@ export default function UserRoleManagement({
         </div>
 
         {/* ROLE STATS METRIC PILLS */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-6 pt-6 border-t border-white/10">
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-3 border border-white/10">
             <div className="flex items-center gap-2 text-slate-300 text-xs mb-1">
               <Users className="h-3.5 w-3.5 text-indigo-400" />
@@ -290,6 +291,14 @@ export default function UserRoleManagement({
             </div>
             <div className="text-xl sm:text-2xl font-black text-emerald-400">{helperCount} คน</div>
           </div>
+
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-3 border border-white/10">
+            <div className="flex items-center gap-2 text-blue-300 text-xs mb-1">
+              <Eye className="h-3.5 w-3.5 text-blue-400" />
+              <span>ผู้เข้าชม (Viewer)</span>
+            </div>
+            <div className="text-xl sm:text-2xl font-black text-blue-400">{viewerCount} คน</div>
+          </div>
         </div>
       </div>
 
@@ -299,9 +308,9 @@ export default function UserRoleManagement({
           <div className="p-2 bg-indigo-50 text-indigo-700 rounded-xl shrink-0 mt-0.5">
             <Info className="h-5 w-5" />
           </div>
-          <div className="text-xs text-slate-600 space-y-1.5">
+          <div className="text-xs text-slate-600 space-y-1.5 flex-1">
             <h4 className="font-bold text-slate-900 text-sm">ข้อกำหนดและการทำงานของแต่ละสิทธิ์:</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                 <div className="font-bold text-slate-900 flex items-center gap-1.5 mb-1 text-xs">
                   <span className="h-2 w-2 rounded-full bg-red-500"></span>
@@ -329,6 +338,16 @@ export default function UserRoleManagement({
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
                   สแกนการ์ด QR ประจำตู้ผ่านมือถือหรือแท็บเล็ต เพื่อตรวจนับจำนวนคงเหลือจริงหน้างาน
+                </p>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <div className="font-bold text-slate-900 flex items-center gap-1.5 mb-1 text-xs">
+                  <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                  👁️ ผู้เข้าชม (Viewer)
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  ดูสต็อกตู้จัดเก็บ คอนซูมทั้งหมด ประวัติการเบิกใช้ และรอบตรวจนับล่าสุดแบบ Read-Only ปลอดภัย ไม่สามารถแก้ไขหรือลบข้อมูลได้
                 </p>
               </div>
             </div>

@@ -14,6 +14,7 @@ import {
   getMultiCabinetStockInfo,
   MultiCabinetStockInfo
 } from "../lib/stockUtils";
+import ImagePreviewModal from "./ImagePreviewModal";
 import { 
   Search, 
   RefreshCw, 
@@ -77,6 +78,7 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
   const [selectedMultiStock, setSelectedMultiStock] = useState<MultiCabinetStockInfo | null>(null);
   const [selectedCountLogModal, setSelectedCountLogModal] = useState<CountHistory | null>(null);
   const [selectedQcLogModal, setSelectedQcLogModal] = useState<QCConsumptionHistory | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   // Load all initial data from cloud/local
   const loadData = async (isManualRefresh = false) => {
@@ -934,7 +936,7 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                 const targetStock = getItemTargetStock(item);
                 const isOut = isItemOutOfStock(item);
                 const isLow = isItemLowStock(item);
-                const multiInfo = getMultiCabinetStockInfo(item, consumables, cabinets);
+                const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
                 return (
                   <div
@@ -943,12 +945,20 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                   >
                     <div>
                       {/* Consumable Photo */}
-                      <div className="relative h-36 bg-slate-100 overflow-hidden">
+                      <div 
+                        onClick={() => {
+                          if (item.imageUrl) {
+                            setPreviewImage({ url: item.imageUrl, title: item.name });
+                          }
+                        }}
+                        className={`relative h-36 bg-slate-100 overflow-hidden ${item.imageUrl ? "cursor-pointer group" : ""}`}
+                        title={item.imageUrl ? "คลิกเพื่อดูรูปภาพขนาดใหญ่" : undefined}
+                      >
                         <img
                           src={item.imageUrl || "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=400"}
                           alt={item.name}
                           referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                         />
                         {/* Status Badge */}
                         <div className="absolute top-2.5 right-2.5">
@@ -1057,7 +1067,7 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                       const targetStock = getItemTargetStock(item);
                       const isOut = isItemOutOfStock(item);
                       const isLow = isItemLowStock(item);
-                      const multiInfo = getMultiCabinetStockInfo(item, consumables, cabinets);
+                      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
                       return (
                         <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
@@ -1067,7 +1077,13 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                                 src={item.imageUrl || "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=400"}
                                 alt={item.name}
                                 referrerPolicy="no-referrer"
-                                className="h-10 w-10 rounded-lg object-cover bg-slate-100 shrink-0 border border-slate-200"
+                                onClick={() => {
+                                  if (item.imageUrl) {
+                                    setPreviewImage({ url: item.imageUrl, title: item.name });
+                                  }
+                                }}
+                                className={`h-10 w-10 rounded-lg object-cover bg-slate-100 shrink-0 border border-slate-200 ${item.imageUrl ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                                title={item.imageUrl ? "คลิกเพื่อดูรูปภาพขนาดใหญ่" : undefined}
                               />
                               <div className="font-bold text-slate-900 text-xs">
                                 {item.name}
@@ -1593,7 +1609,7 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                     {itemsInCab.map(item => {
                       const isOut = isItemOutOfStock(item);
                       const isLow = isItemLowStock(item);
-                      const multiInfo = getMultiCabinetStockInfo(item, consumables, cabinets);
+                      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
                       return (
                         <div
@@ -1604,7 +1620,13 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                             src={item.imageUrl || "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&q=80&w=400"}
                             alt={item.name}
                             referrerPolicy="no-referrer"
-                            className="h-14 w-14 rounded-xl object-cover bg-white border border-slate-200 shrink-0"
+                            onClick={() => {
+                              if (item.imageUrl) {
+                                setPreviewImage({ url: item.imageUrl, title: item.name });
+                              }
+                            }}
+                            className={`h-14 w-14 rounded-xl object-cover bg-white border border-slate-200 shrink-0 ${item.imageUrl ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                            title={item.imageUrl ? "คลิกเพื่อดูรูปภาพขนาดใหญ่" : undefined}
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1782,7 +1804,7 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                     สต็อกข้ามตู้ (เฉพาะแผนก {selectedMultiStock.department})
                   </span>
                   <h3 className="font-black text-white text-base truncate max-w-xs sm:max-w-sm">
-                    {selectedMultiStock.consumableName}
+                    {selectedMultiStock.displayName}
                   </h3>
                 </div>
               </div>
@@ -1831,7 +1853,7 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                       <div className="font-bold text-slate-900 text-xs">{loc.cabinetName}</div>
                       <div className="text-[10px] text-slate-400 flex items-center gap-1">
                         <MapPin className="h-3 w-3 text-slate-400" />
-                        <span>{loc.location || "ไม่ได้ระบุตำแหน่ง"}</span>
+                        <span>{getCabinetsLocationOnly(loc.cabinetId, cabinetMap) !== "-" ? getCabinetsLocationOnly(loc.cabinetId, cabinetMap) : "ไม่ได้ระบุตำแหน่ง"}</span>
                       </div>
                     </div>
                   </div>
@@ -1966,6 +1988,16 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
             </div>
           </div>
         </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage.url}
+          title={previewImage.title}
+          subtitle="พัสดุคอนซูม"
+          onClose={() => setPreviewImage(null)}
+        />
       )}
     </div>
   );
