@@ -6,6 +6,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import HelperCountView from "./components/HelperCountView";
 import QCConsumeView from "./components/QCConsumeView";
 import { seedDatabaseIfEmpty, getConsumables } from "./lib/dbService";
+import { isItemLowStock } from "./lib/stockUtils";
 import { auth, signOut } from "./lib/firebase";
 import { 
   Package, 
@@ -84,7 +85,7 @@ export default function App() {
     async function checkLowStock() {
       try {
         const items = await getConsumables();
-        const lowQty = items.filter(i => i.currentQty <= i.minThreshold).length;
+        const lowQty = items.filter(i => isItemLowStock(i)).length;
         setLowStockCount(lowQty);
       } catch (err) {
         console.error("Failed to check low stock items:", err);

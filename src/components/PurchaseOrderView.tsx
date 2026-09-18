@@ -2,6 +2,12 @@ import React, { useState, useMemo } from "react";
 import { DepartmentRecord, Cabinet, Consumable } from "../types";
 import { printElementById } from "../lib/printHelper";
 import { 
+  getItemTargetStock, 
+  getItemOrderDeficit, 
+  isItemLowStock, 
+  isItemOutOfStock 
+} from "../lib/stockUtils";
+import { 
   ShoppingCart, 
   Building2, 
   Printer, 
@@ -71,22 +77,17 @@ export default function PurchaseOrderView({
   }, [departments, consumables]);
 
   // Default calculation for refill quantity:
-  // If item has maxThreshold: maxThreshold - currentQty
-  // Otherwise: (minThreshold * 2) - currentQty, minimum 1
+  // target capacity - currentQty (0 if already at or above target)
   const getDefaultOrderQty = (item: Consumable): number => {
     if (customOrderQtys[item.id] !== undefined) {
       return customOrderQtys[item.id];
     }
-    const target = item.maxThreshold && item.maxThreshold > item.minThreshold 
-      ? item.maxThreshold 
-      : Math.max(item.minThreshold * 2, 10);
-    const deficit = target - item.currentQty;
-    return Math.max(1, deficit);
+    return getItemOrderDeficit(item);
   };
 
   const handleAdjustOrderQty = (item: Consumable, delta: number) => {
     const current = getDefaultOrderQty(item);
-    const next = Math.max(1, current + delta);
+    const next = Math.max(0, current + delta);
     setCustomOrderQtys(prev => ({
       ...prev,
       [item.id]: next
@@ -94,7 +95,7 @@ export default function PurchaseOrderView({
   };
 
   const handleSetOrderQty = (item: Consumable, val: number) => {
-    const next = Math.max(1, val || 1);
+    const next = Math.max(0, val || 0);
     setCustomOrderQtys(prev => ({
       ...prev,
       [item.id]: next
@@ -111,7 +112,7 @@ export default function PurchaseOrderView({
 
       // 2. Only items below safety threshold (or out of stock)
       if (onlyBelowThreshold) {
-        if (item.currentQty > item.minThreshold) {
+        if (!isItemLowStock(item)) {
           return false;
         }
       }
@@ -159,7 +160,7 @@ export default function PurchaseOrderView({
       poItems.forEach((item, index) => {
         const orderQty = getDefaultOrderQty(item);
         const cab = getCabinetName(item.cabinetId);
-        const status = item.currentQty === 0 ? "⚠️ หมดสต็อก" : "⚡ ต่ำกว่าเกณฑ์";
+        const status = isItemOutOfStock(item) ? "⚠️ หมดสต็อก" : isItemLowStock(item) ? "⚡ ต่ำกว่าเกณฑ์" : "📦 สั่งสำรอง";
         msg += `${index + 1}. ${item.name} (${item.department})\n`;
         msg += `   • สั่งซื้อ: ${orderQty} ${item.unit}\n`;
         msg += `   • สต็อกปัจจุบัน: ${item.currentQty} / เกณฑ์ ${item.minThreshold} ${item.unit} [${status}]\n`;
@@ -200,7 +201,7 @@ export default function PurchaseOrderView({
     const rows = poItems.map((item, index) => {
       const orderQty = getDefaultOrderQty(item);
       const cab = getCabinetName(item.cabinetId);
-      const status = item.currentQty === 0 ? "วิกฤต (หมดสต็อก)" : item.currentQty <= item.minThreshold ? "ต่ำกว่าเกณฑ์" : "สั่งซื้อสำรอง";
+      const status = isItemOutOfStock(item) ? "วิกฤต (หมดสต็อก)" : isItemLowStock(item) ? "ต่ำกว่าเกณฑ์" : "ปกติ/สต็อกเต็ม";
 
       return [
         index + 1,
@@ -210,7 +211,7 @@ export default function PurchaseOrderView({
         `"${cab.replace(/"/g, '""')}"`,
         item.currentQty,
         item.minThreshold,
-        item.maxThreshold || "-",
+        getItemTargetStock(item),
         orderQty,
         `"${item.unit}"`,
         `"${status}"`
@@ -455,8 +456,8 @@ export default function PurchaseOrderView({
           ) : (
             poItems.map((item, index) => {
               const orderQty = getDefaultOrderQty(item);
-              const isOutOfStock = item.currentQty === 0;
-              const isBelowThreshold = item.currentQty <= item.minThreshold;
+              const isOutOfStock = isItemOutOfStock(item);
+              const isBelowThreshold = isItemLowStock(item);
 
               return (
                 <div 
@@ -503,8 +504,8 @@ export default function PurchaseOrderView({
                           ต่ำกว่าเกณฑ์
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full font-bold text-[10px] border border-sky-200">
-                          สต็อกสำรอง
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px] border border-emerald-200">
+                          ปกติ (สต็อกเต็ม)
                         </span>
                       )}
                     </div>
@@ -514,7 +515,7 @@ export default function PurchaseOrderView({
                   <div className="flex items-center justify-between text-xs py-1.5 px-2.5 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="text-slate-500 font-medium">สต็อกจริง / เกณฑ์ขั้นต่ำ:</span>
                     <span className="font-extrabold text-slate-800">
-                      <span className={isOutOfStock ? "text-rose-600" : isBelowThreshold ? "text-amber-600" : "text-slate-800"}>
+                      <span className={isOutOfStock ? "text-rose-600" : isBelowThreshold ? "text-amber-600" : "text-emerald-700"}>
                         {item.currentQty}
                       </span>
                       {" / "}{item.minThreshold} {item.unit}
@@ -527,7 +528,7 @@ export default function PurchaseOrderView({
                     <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                       <button
                         onClick={() => handleAdjustOrderQty(item, -1)}
-                        disabled={orderQty <= 1}
+                        disabled={orderQty <= 0}
                         className="h-8 w-8 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-30 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                         title="ลดจำนวนที่สั่ง (-1)"
                       >
@@ -537,7 +538,7 @@ export default function PurchaseOrderView({
                       <div className="px-1 text-center min-w-[50px]">
                         <input
                           type="number"
-                          min="1"
+                          min="0"
                           value={orderQty}
                           onChange={(e) => handleSetOrderQty(item, parseInt(e.target.value, 10))}
                           className="w-full text-center text-xs sm:text-sm font-black text-slate-900 bg-transparent outline-none"
@@ -604,8 +605,8 @@ export default function PurchaseOrderView({
               ) : (
                 poItems.map((item, index) => {
                   const orderQty = getDefaultOrderQty(item);
-                  const isOutOfStock = item.currentQty === 0;
-                  const isBelowThreshold = item.currentQty <= item.minThreshold;
+                  const isOutOfStock = isItemOutOfStock(item);
+                  const isBelowThreshold = isItemLowStock(item);
 
                   return (
                     <tr 
@@ -653,12 +654,12 @@ export default function PurchaseOrderView({
                       <td className="py-4 px-4 text-center">
                         <div className="inline-flex flex-col items-center">
                           <span className={`font-black text-xs sm:text-sm ${
-                            isOutOfStock ? "text-rose-600 font-black" : isBelowThreshold ? "text-amber-600" : "text-slate-800"
+                            isOutOfStock ? "text-rose-600 font-black" : isBelowThreshold ? "text-amber-600" : "text-emerald-700"
                           }`}>
                             {item.currentQty} / {item.minThreshold}
                           </span>
                           <span className="text-[10px] text-slate-400">
-                            (เป้าหมาย Max: {item.maxThreshold || item.minThreshold * 2})
+                            (เป้าหมาย Max: {getItemTargetStock(item)})
                           </span>
                         </div>
                       </td>
@@ -673,7 +674,7 @@ export default function PurchaseOrderView({
                         <div className="inline-flex items-center justify-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200">
                           <button
                             onClick={() => handleAdjustOrderQty(item, -1)}
-                            disabled={orderQty <= 1}
+                            disabled={orderQty <= 0}
                             className="h-7 w-7 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                             title="ลดจำนวนที่สั่ง (-1)"
                           >
@@ -682,7 +683,7 @@ export default function PurchaseOrderView({
 
                           <input
                             type="number"
-                            min="1"
+                            min="0"
                             value={orderQty}
                             onChange={(e) => handleSetOrderQty(item, parseInt(e.target.value, 10))}
                             className="w-12 text-center text-xs sm:text-sm font-black text-slate-900 bg-transparent outline-none"
@@ -709,8 +710,8 @@ export default function PurchaseOrderView({
                             ต่ำกว่าเกณฑ์
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-sky-100 text-sky-800 rounded-full font-bold text-[10px] border border-sky-200">
-                            สั่งสต็อกสำรอง
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[10px] border border-emerald-200">
+                            ปกติ (สต็อกเต็ม)
                           </span>
                         )}
                       </td>

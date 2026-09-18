@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { DepartmentRecord, Cabinet, Consumable } from "../types";
 import { printElementById } from "../lib/printHelper";
+import { isItemLowStock, isItemOutOfStock } from "../lib/stockUtils";
 import { 
   Building2, 
   Package, 
@@ -93,8 +94,8 @@ export default function DepartmentConsumablesView({
     stats["ALL"] = {
       totalItems: consumables.length,
       totalQty: consumables.reduce((acc, cur) => acc + (cur.currentQty || 0), 0),
-      lowStockCount: consumables.filter(c => c.currentQty <= c.minThreshold && c.currentQty > 0).length,
-      outOfStockCount: consumables.filter(c => c.currentQty === 0).length
+      lowStockCount: consumables.filter(c => isItemLowStock(c) && !isItemOutOfStock(c)).length,
+      outOfStockCount: consumables.filter(c => isItemOutOfStock(c)).length
     };
 
     allDeptNames.forEach(dept => {
@@ -102,8 +103,8 @@ export default function DepartmentConsumablesView({
       stats[dept] = {
         totalItems: itemsInDept.length,
         totalQty: itemsInDept.reduce((acc, cur) => acc + (cur.currentQty || 0), 0),
-        lowStockCount: itemsInDept.filter(c => c.currentQty <= c.minThreshold && c.currentQty > 0).length,
-        outOfStockCount: itemsInDept.filter(c => c.currentQty === 0).length
+        lowStockCount: itemsInDept.filter(c => isItemLowStock(c) && !isItemOutOfStock(c)).length,
+        outOfStockCount: itemsInDept.filter(c => isItemOutOfStock(c)).length
       };
     });
 
@@ -129,13 +130,13 @@ export default function DepartmentConsumablesView({
 
       // 3. Status match
       if (statusFilter === "OUT") {
-        return item.currentQty === 0;
+        return isItemOutOfStock(item);
       }
       if (statusFilter === "LOW") {
-        return item.currentQty > 0 && item.currentQty <= item.minThreshold;
+        return isItemLowStock(item) && !isItemOutOfStock(item);
       }
       if (statusFilter === "OK") {
-        return item.currentQty > item.minThreshold;
+        return !isItemLowStock(item);
       }
 
       return true;
@@ -157,9 +158,9 @@ export default function DepartmentConsumablesView({
   }, [consumables, selectedDept]);
 
   const totalInCurrentDept = currentDeptItems.length;
-  const outInCurrentDept = currentDeptItems.filter(c => c.currentQty === 0).length;
-  const lowInCurrentDept = currentDeptItems.filter(c => c.currentQty > 0 && c.currentQty <= c.minThreshold).length;
-  const okInCurrentDept = currentDeptItems.filter(c => c.currentQty > c.minThreshold).length;
+  const outInCurrentDept = currentDeptItems.filter(c => isItemOutOfStock(c)).length;
+  const lowInCurrentDept = currentDeptItems.filter(c => isItemLowStock(c) && !isItemOutOfStock(c)).length;
+  const okInCurrentDept = currentDeptItems.filter(c => !isItemLowStock(c)).length;
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -177,13 +178,13 @@ export default function DepartmentConsumablesView({
       }
       // 2. Status match
       if (printStatusFilter === "NEED_REFILL") {
-        return item.currentQty <= item.minThreshold;
+        return isItemLowStock(item);
       }
       if (printStatusFilter === "OUT") {
-        return item.currentQty === 0;
+        return isItemOutOfStock(item);
       }
       if (printStatusFilter === "OK") {
-        return item.currentQty > item.minThreshold;
+        return !isItemLowStock(item);
       }
       return true;
     });
@@ -203,11 +204,11 @@ export default function DepartmentConsumablesView({
   }, [printItems]);
 
   const totalPrintNeedRefill = useMemo(() => {
-    return printItems.filter(it => it.currentQty <= it.minThreshold).length;
+    return printItems.filter(it => isItemLowStock(it)).length;
   }, [printItems]);
 
   const totalPrintOutOfStock = useMemo(() => {
-    return printItems.filter(it => it.currentQty === 0).length;
+    return printItems.filter(it => isItemOutOfStock(it)).length;
   }, [printItems]);
 
   const handlePrintList = () => {
@@ -483,8 +484,8 @@ export default function DepartmentConsumablesView({
             </div>
           ) : (
             filteredConsumables.map((item, index) => {
-              const isOutOfStock = item.currentQty === 0;
-              const isLow = item.currentQty > 0 && item.currentQty <= item.minThreshold;
+              const isOutOfStock = isItemOutOfStock(item);
+              const isLow = isItemLowStock(item) && !isOutOfStock;
 
               return (
                 <div 
@@ -632,8 +633,8 @@ export default function DepartmentConsumablesView({
                 </tr>
               ) : (
                 filteredConsumables.map((item, index) => {
-                  const isOutOfStock = item.currentQty === 0;
-                  const isLow = item.currentQty > 0 && item.currentQty <= item.minThreshold;
+                  const isOutOfStock = isItemOutOfStock(item);
+                  const isLow = isItemLowStock(item) && !isOutOfStock;
 
                   return (
                     <tr 
@@ -989,8 +990,8 @@ export default function DepartmentConsumablesView({
                     </tr>
                   ) : (
                     printItems.map((item, idx) => {
-                      const isOutOfStock = item.currentQty === 0;
-                      const isLow = item.currentQty > 0 && item.currentQty <= item.minThreshold;
+                      const isOutOfStock = isItemOutOfStock(item);
+                      const isLow = isItemLowStock(item) && !isOutOfStock;
 
                       return (
                         <tr key={item.id} className="border-b border-slate-200">

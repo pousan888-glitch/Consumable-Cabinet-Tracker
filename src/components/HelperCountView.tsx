@@ -6,6 +6,7 @@ import {
   saveCountHistory,
   getDepartments 
 } from "../lib/dbService";
+import { isItemLowStock } from "../lib/stockUtils";
 import ImagePreviewModal from "./ImagePreviewModal";
 import CabinetQRModal from "./CabinetQRModal";
 import CabinetWithdrawView from "./CabinetWithdrawView";
@@ -412,7 +413,7 @@ export default function HelperCountView({
               ) : (
                 consumables.map(item => {
                   const currentCount = counts[item.id] ?? item.currentQty;
-                  const isLow = currentCount <= item.minThreshold;
+                  const isLow = isItemLowStock({ ...item, currentQty: currentCount });
 
                   return (
                     <div 

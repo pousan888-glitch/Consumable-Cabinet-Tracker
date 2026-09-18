@@ -20,6 +20,7 @@ import {
   CABINET_PRESETS,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
+import { isItemLowStock } from "../lib/stockUtils";
 import { getActiveFirebaseConfig } from "../lib/firebase";
 import UserRoleManagement from "./UserRoleManagement";
 import DepartmentSettings from "./DepartmentSettings";
@@ -266,8 +267,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
   const triggerRefresh = () => setRefreshTrigger(p => p + 1);
 
-  // Critical items check
-  const criticalItems = consumables.filter(item => item.currentQty <= item.minThreshold);
+  // Critical items check (accurately accounting for max capacity)
+  const criticalItems = consumables.filter(item => isItemLowStock(item));
 
   // Cabinet submit
   const handleCabinetSubmit = async (e: React.FormEvent) => {
