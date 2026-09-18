@@ -30,7 +30,9 @@ import {
   Check,
   CheckSquare,
   Square,
-  Sparkles
+  Sparkles,
+  LayoutGrid,
+  List
 } from "lucide-react";
 
 interface DepartmentConsumablesViewProps {
@@ -66,6 +68,7 @@ export default function DepartmentConsumablesView({
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OUT" | "LOW" | "OK">("ALL");
   const [onlyMultiCabinet, setOnlyMultiCabinet] = useState(false);
   const [sortBy, setSortBy] = useState<"DEFAULT" | "QTY_ASC" | "NAME">("DEFAULT");
+  const [viewLayout, setViewLayout] = useState<"table" | "grid">("table");
 
   // Multi-Cabinet Stock Detail Modal State
   const [selectedMultiStock, setSelectedMultiStock] = useState<MultiCabinetStockInfo | null>(null);
@@ -398,6 +401,36 @@ export default function DepartmentConsumablesView({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* View Layout Toggle (Table vs Grid) */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setViewLayout("table")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewLayout === "table"
+                    ? "bg-white text-slate-950 shadow-2xs"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+                title="มุมมองตาราง (Compact Table)"
+              >
+                <List className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">ตาราง</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewLayout("grid")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewLayout === "grid"
+                    ? "bg-white text-slate-950 shadow-2xs"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+                title="มุมมองการ์ดรูปภาพ (Visual Grid)"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">การ์ดรูป</span>
+              </button>
+            </div>
+
             <button
               onClick={handleResetFilters}
               className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer transition-colors shadow-2xs"
@@ -504,11 +537,179 @@ export default function DepartmentConsumablesView({
         </div>
       </div>
 
-      {/* 3. CONSUMABLES VIEW: MOBILE CARDS (NO HORIZONTAL OVERFLOW) & DESKTOP TABLE */}
+      {/* 3. CONSUMABLES VIEW: GRID OR TABLE */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        
-        {/* MOBILE VIEW: Cards optimized for mobile phone touch (md:hidden) */}
-        <div className="block md:hidden divide-y divide-slate-100">
+        {viewLayout === "grid" ? (
+          /* GRID VIEW (VISUAL CARDS) */
+          <div className="p-3.5 sm:p-5 bg-slate-50/60 min-h-[300px]">
+            {filteredConsumables.length === 0 ? (
+              <div className="py-16 text-center text-slate-400">
+                <Package className="h-10 w-10 text-slate-300 mx-auto mb-2 opacity-60" />
+                <p className="font-semibold text-sm">ไม่พบรายการพัสดุตามเงื่อนไขที่เลือก</p>
+                <p className="text-xs text-slate-400 mt-1">ลองเปลี่ยนคำค้นหา หรือกดปุ่ม "เพิ่มพัสดุในแผนกนี้" เพื่อเริ่มต้น</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-4">
+                {filteredConsumables.map((item, index) => {
+                  const isOutOfStock = isItemOutOfStock(item);
+                  const isLow = isItemLowStock(item) && !isOutOfStock;
+                  const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden flex flex-col justify-between shadow-2xs hover:shadow-md ${
+                        isOutOfStock
+                          ? "border-rose-300 ring-1 ring-rose-300/30"
+                          : isLow
+                          ? "border-amber-300 ring-1 ring-amber-300/30"
+                          : "border-slate-200/90 hover:border-slate-300"
+                      }`}
+                    >
+                      <div>
+                        {/* Photo & Status Badge */}
+                        <div className="relative h-44 w-full bg-slate-100 overflow-hidden group">
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+                            onClick={() => onPreviewImage({
+                              url: item.imageUrl,
+                              title: item.name,
+                              subtitle: `แผนก: ${item.department} | ตู้: ${getCabinetName(item.cabinetId)} | คงเหลือ: ${item.currentQty} ${item.unit}`
+                            })}
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute top-2.5 left-2.5">
+                            <span className="px-2 py-0.5 bg-slate-950/75 backdrop-blur-xs text-white text-[10px] font-mono font-bold rounded-lg shadow-xs">
+                              #{index + 1}
+                            </span>
+                          </div>
+                          <div className="absolute top-2.5 right-2.5">
+                            {isOutOfStock ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-600/90 backdrop-blur-xs text-white font-black text-[10px] rounded-full shadow-xs">
+                                <span className="h-1.5 w-1.5 bg-white rounded-full animate-pulse" />
+                                หมดสต็อก (0)
+                              </span>
+                            ) : isLow ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/90 backdrop-blur-xs text-white font-black text-[10px] rounded-full shadow-xs">
+                                <span className="h-1.5 w-1.5 bg-white rounded-full animate-pulse" />
+                                ใกล้หมด ({item.currentQty})
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600/90 backdrop-blur-xs text-white font-bold text-[10px] rounded-full shadow-xs">
+                                <span className="h-1.5 w-1.5 bg-white rounded-full" />
+                                ปกติ ({item.currentQty})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-3.5 space-y-3">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md uppercase">
+                                {item.department}
+                              </span>
+                              {multiInfo.hasMultipleCabinets && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedMultiStock(multiInfo)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md border border-indigo-200 cursor-pointer transition-colors"
+                                  title="พัสดุนี้มีเก็บในหลายตู้ คลิกเพื่อดูรายละเอียด"
+                                >
+                                  <Layers className="h-3 w-3" />
+                                  <span>กระจาย {multiInfo.cabinetLocations.length} ตู้</span>
+                                </button>
+                              )}
+                            </div>
+                            <h4 className="font-extrabold text-slate-900 text-sm line-clamp-2 leading-snug" title={item.name}>
+                              {item.name}
+                            </h4>
+                            <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-1 truncate">
+                              <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                              <span className="truncate">{getCabinetName(item.cabinetId)}</span>
+                            </p>
+                          </div>
+
+                          {/* Stock Quantity Stats & Quick Adjust */}
+                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500 text-[11px] font-semibold">จำนวนคงเหลือ</span>
+                              <div className="flex items-baseline gap-1">
+                                <span className={`text-base font-black ${
+                                  isOutOfStock ? "text-rose-600" : isLow ? "text-amber-600" : "text-slate-900"
+                                }`}>
+                                  {item.currentQty}
+                                </span>
+                                <span className="text-slate-400 text-[11px]">/ เกณฑ์ {item.minThreshold} {item.unit}</span>
+                              </div>
+                            </div>
+
+                            {/* Quick +/- Adjusters */}
+                            <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/60">
+                              <span className="text-[10px] text-slate-400 font-bold">ปรับยอด:</span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => onUpdateQty(item, Math.max(0, item.currentQty - 1))}
+                                  className="h-6.5 w-6.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs cursor-pointer active:scale-95 transition-all shadow-2xs"
+                                  title="ลด 1"
+                                >
+                                  -1
+                                </button>
+                                <button
+                                  onClick={() => onUpdateQty(item, item.currentQty + 1)}
+                                  className="h-6.5 w-6.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 flex items-center justify-center font-bold text-xs cursor-pointer active:scale-95 transition-all shadow-2xs"
+                                  title="เพิ่ม 1"
+                                >
+                                  +1
+                                </button>
+                                <button
+                                  onClick={() => onUpdateQty(item, item.currentQty + 5)}
+                                  className="h-6.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center font-bold text-[10px] cursor-pointer active:scale-95 transition-all shadow-2xs"
+                                  title="เติม +5"
+                                >
+                                  +5
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Card Actions */}
+                      <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400 truncate">
+                          หน่วย: <b className="text-slate-700">{item.unit}</b>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => onEditConsumable(item)}
+                            className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                            title="แก้ไขข้อมูลพัสดุ"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onDeleteConsumable(item.id)}
+                            className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                            title="ลบพัสดุนี้"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* MOBILE VIEW: Cards optimized for mobile phone touch (md:hidden) */}
+            <div className="block md:hidden divide-y divide-slate-100">
           {filteredConsumables.length === 0 ? (
             <div className="py-12 px-4 text-center text-slate-400">
               <Package className="h-10 w-10 text-slate-300 mx-auto mb-2 opacity-60" />
@@ -889,7 +1090,9 @@ export default function DepartmentConsumablesView({
             </tbody>
           </table>
         </div>
-      </div>
+      </>
+    )}
+  </div>
 
       {/* 5. PRINTABLE INVENTORY SHEET MODAL (เอกสารสำหรับพิมพ์ตรวจนับพัสดุ) */}
       {showPrintModal && (

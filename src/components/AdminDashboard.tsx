@@ -65,7 +65,10 @@ import {
   Download,
   Filter,
   FileSpreadsheet,
-  ShoppingCart
+  ShoppingCart,
+  ChevronRight,
+  FileText,
+  MoreHorizontal
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -127,6 +130,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   // Notifications & UI Helpers
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [dismissCloudNotice, setDismissCloudNotice] = useState(false);
+  const [showCloudGuideModal, setShowCloudGuideModal] = useState(false);
+  const [showMoreActions, setShowMoreActions] = useState(false);
   const [copiedRule, setCopiedRule] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
@@ -540,11 +545,12 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             ยินดีต้อนรับแอดมิน ({userEmail}) จัดการโครงสร้างตู้เก็บของ, ออก QR Code, และตรวจนับสต็อก
           </p>
         </div>
-        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto shrink-0">
+        <div className="flex items-center gap-2 flex-wrap shrink-0 w-full sm:w-auto">
+          {/* Cloud Sync Button */}
           <button
             onClick={handleSyncToCloud}
             disabled={isSyncingCloud}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
             title="ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Cloud Firestore เพื่อให้ทุกเครื่องเห็นตรงกัน"
           >
             {isSyncingCloud ? (
@@ -554,17 +560,21 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             )}
             <span className="truncate">{isSyncingCloud ? "กำลังซิงค์..." : "ซิงค์ Cloud"}</span>
           </button>
+
+          {/* Add Cabinet (Secondary) */}
           <button
             onClick={() => {
               setEditingCabinet(null);
               setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
               setShowCabinetModal(true);
             }}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
           >
             <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
             <span className="truncate">เพิ่มตู้เก็บ</span>
           </button>
+
+          {/* Add Consumable (Primary) */}
           <button
             onClick={() => {
               setEditingConsumable(null);
@@ -584,37 +594,69 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
               if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
               setShowConsumableModal(true);
             }}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
           >
             <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
             <span className="truncate">เพิ่มพัสดุ</span>
           </button>
-          <button
-            onClick={() => {
-              setClearHistoryInitialType("ALL");
-              setShowClearHistoryModal(true);
-            }}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
-            title="เปิดเมนูล้างและเคลียร์ประวัติการตรวจนับ หรือประวัติการเบิกของ"
-          >
-            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
-            <span className="truncate">เคลียร์ประวัติ</span>
-          </button>
+
+          {/* More Options Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMoreActions(!showMoreActions)}
+              className="p-2 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              title="เมนูตัวเลือกเพิ่มเติม"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+
+            {showMoreActions && (
+              <>
+                <div 
+                  className="fixed inset-0 z-20"
+                  onClick={() => setShowMoreActions(false)}
+                />
+                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 text-xs animate-scale-up">
+                  <button
+                    onClick={() => {
+                      setShowMoreActions(false);
+                      setShowCloudGuideModal(true);
+                    }}
+                    className="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-medium"
+                  >
+                    <FileText className="h-4 w-4 text-amber-600" />
+                    <span>วิธีตั้งค่า Cloud / Rules</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowMoreActions(false);
+                      setClearHistoryInitialType("ALL");
+                      setShowClearHistoryModal(true);
+                    }}
+                    className="w-full px-3.5 py-2 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer font-medium"
+                  >
+                    <Trash2 className="h-4 w-4 text-rose-600" />
+                    <span>เคลียร์ประวัติเก่า...</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* CLOUD SYNC SUCCESS BANNER */}
       {syncSuccessMsg && (
-        <div className="mb-8 p-5 bg-emerald-50 border-2 border-emerald-200 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs animate-fade-in shadow-xs">
+        <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-4 text-xs animate-fade-in shadow-2xs">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-600 text-white rounded-xl shrink-0 shadow-xs">
-              <CheckCircle2 className="h-5 w-5" />
+            <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0 shadow-xs">
+              <CheckCircle2 className="h-4 w-4" />
             </div>
             <div>
-              <p className="font-bold text-emerald-950 text-sm mb-0.5">
+              <p className="font-bold text-emerald-950 text-xs sm:text-sm">
                 เชื่อมต่อ Cloud สำเร็จและซิงค์ข้อมูลขึ้นระบบคลาวด์เรียบร้อยแล้ว!
               </p>
-              <p className="text-emerald-800 leading-relaxed">
+              <p className="text-emerald-800 text-[11px] leading-relaxed">
                 {syncSuccessMsg}
               </p>
             </div>
@@ -629,149 +671,68 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         </div>
       )}
 
-      {/* CLOUD FIRESTORE RULES NOTICE BANNER & QUICK RESOLUTION GUIDE */}
+      {/* COMPACT CLOUD STATUS BAR (COLLAPSIBLE & CLEAN) */}
       {getCloudSyncNotice().hasError && !dismissCloudNotice && (
-        <div className="mb-8 p-6 bg-gradient-to-br from-amber-50 to-orange-50/40 border-2 border-amber-300 rounded-2xl text-xs animate-fade-in shadow-sm">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-amber-500 text-white rounded-xl shrink-0 shadow-sm mt-0.5">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm sm:text-base">
-                  วิธีแก้ปัญหา: ทำไมเปิดในเครื่องอื่นแล้วไม่เห็นข้อมูลที่เพิ่งเพิ่ม?
-                </h3>
-                <p className="text-slate-600 mt-1 leading-relaxed max-w-4xl">
-                  เพราะฐานข้อมูล Cloud Firestore ใน Firebase Console ปฏิเสธการเข้าถึง (Permission Denied) เนื่องจากยังไม่ได้เปิดสิทธิ์ Rules ทำให้ระบบต้องเซฟตู้และพัสดุไว้ในความจำเครื่องนี้ชั่วคราว (Local Storage) เครื่องอื่นจึงยังมองไม่เห็น 
-                  <b> ทำตาม 3 ขั้นตอนนี้เพียง 1 นาที เพื่อเปิดให้ทุกเครื่องและมือถือซิงค์ข้อมูลตรงกัน:</b>
-                </p>
-              </div>
+        <div className="mb-6 p-3 sm:p-4 bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-300/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs animate-fade-in">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 bg-amber-500 text-white rounded-lg shrink-0 shadow-2xs">
+              <AlertTriangle className="h-4 w-4" />
             </div>
+            <div className="min-w-0">
+              <p className="font-bold text-slate-900 text-xs truncate">
+                สถานะ Cloud: ทำงานในโหมด Local (รอเปิดสิทธิ์ Firestore Rules เพื่อให้ซิงค์ข้ามเครื่องได้)
+              </p>
+              <p className="text-slate-500 text-[11px] truncate hidden md:block">
+                เครื่องอื่นจะยังไม่เห็นข้อมูลที่เพิ่งเพิ่ม จนกว่าจะวางสิทธิ์ Rules ใน Firebase Console
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => setShowCloudGuideModal(true)}
+              className="px-3 py-1.5 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300 rounded-xl font-bold text-[11px] transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+            >
+              <FileText className="h-3.5 w-3.5 text-amber-700" />
+              <span>ดูวิธีตั้งค่า 3 ขั้นตอน</span>
+            </button>
+            <button
+              onClick={handleSyncToCloud}
+              disabled={isSyncingCloud}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-75 text-white rounded-xl font-bold text-[11px] transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+            >
+              {isSyncingCloud ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              <span>ซิงค์ Cloud</span>
+            </button>
             <button
               onClick={() => setDismissCloudNotice(true)}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-100/60 rounded-xl transition-colors cursor-pointer shrink-0"
-              title="ซ่อนคำแนะนำนี้ชั่วคราว"
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-200/50 rounded-lg transition-colors cursor-pointer"
+              title="ซ่อนชั่วคราว"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
-
-          {/* 3 ACTION STEPS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-            {/* STEP 1 */}
-            <div className="bg-white p-4 rounded-xl border border-amber-200/90 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">1</span>
-                  <span className="font-bold text-slate-900">คัดลอก Firestore Rules</span>
-                </div>
-                <p className="text-slate-500 text-[11px] mb-2.5 leading-relaxed">
-                  คลิกปุ่มด้านล่างเพื่อคัดลอกโค้ดสิทธิ์อนุญาต:
-                </p>
-                <pre className="bg-slate-900 text-amber-200 p-2.5 rounded-lg text-[10px] font-mono overflow-x-auto mb-3">
-{`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}`}
-                </pre>
-              </div>
-              <button
-                onClick={() => {
-                  const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
-                  navigator.clipboard.writeText(rules);
-                  setCopiedRule(true);
-                  setTimeout(() => setCopiedRule(false), 3500);
-                }}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-              >
-                {copiedRule ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    <span>คัดลอกโค้ด Rules สำเร็จแล้ว!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    <span>คลิกเพื่อคัดลอกโค้ด Rules</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* STEP 2 */}
-            <div className="bg-white p-4 rounded-xl border border-amber-200/90 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">2</span>
-                  <span className="font-bold text-slate-900">ไปที่ Firebase &gt; Firestore Rules</span>
-                </div>
-                <p className="text-slate-500 text-[11px] mb-2 leading-relaxed">
-                  คลิกปุ่มด้านล่างเพื่อเปิดหน้าโปรเจกต์ <b>{activeProjectId}</b>:
-                </p>
-                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-[10.5px] mb-3 space-y-1.5 leading-relaxed">
-                  <div className="font-semibold text-rose-600">⚠️ ต้องเป็น &quot;Firestore Database&quot; เท่านั้น (ไม่ใช่ Realtime Database):</div>
-                  <div>• <b>ถ้าเห็นปุ่ม &quot;Create database&quot; (สร้างฐานข้อมูล):</b> ให้กดปุ่มนี้ &gt; เลือก <b>&quot;Start in test mode&quot;</b> &gt; กด Next &gt; กด Enable ได้เลย (ระบบจะเปิดสิทธิ์ให้อัตโนมัติทันที!)</div>
-                  <div>• <b>ถ้ามีฐานข้อมูลแล้ว:</b> ดูที่แถบเมนูด้านบนจอ จะมีแท็บ <b>[ Data ]  [ Rules / กฎ ]</b> ให้คลิกที่ <b>Rules</b> นำโค้ดที่คัดลอกไปวาง แล้วกดปุ่มสีฟ้า <b>Publish</b></div>
-                </div>
-              </div>
-              <a
-                href={firebaseRulesUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs text-center"
-              >
-                <span>เปิดหน้า Firebase Firestore ทันที</span>
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </div>
-
-            {/* STEP 3 */}
-            <div className="bg-white p-4 rounded-xl border border-amber-200/90 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="h-6 w-6 rounded-full bg-emerald-100 text-emerald-900 font-black text-xs flex items-center justify-center">3</span>
-                  <span className="font-bold text-slate-900">ส่งข้อมูลขึ้น Cloud</span>
-                </div>
-                <p className="text-slate-500 text-[11px] mb-2 leading-relaxed">
-                  เมื่อกด Publish ใน Firebase แล้ว ให้กดปุ่มนี้เพื่อส่งตู้และพัสดุจากเครื่องนี้ขึ้น Cloud:
-                </p>
-                {syncErrorMsg && (
-                  <div className="p-2 mb-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-[11px] leading-relaxed font-semibold">
-                    {syncErrorMsg}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={handleSyncToCloud}
-                disabled={isSyncingCloud}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-75 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-              >
-                {isSyncingCloud ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>กำลังทดสอบและซิงค์...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4" />
-                    <span>ทดสอบและซิงค์ข้อมูลขึ้น Cloud เดี๋ยวนี้</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* METRICS ROW */}
+      {/* METRICS ROW (INTERACTIVE CARDS) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
-        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
-          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-            <QrCode className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+        {/* Metric 1: Cabinets */}
+        <div 
+          onClick={() => setActiveTab("cabinets")}
+          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
+            activeTab === "cabinets" 
+              ? "border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs" 
+              : "border-slate-200/80 hover:border-indigo-300 hover:shadow-xs"
+          }`}
+          title="คลิกเพื่อเปิดดูตู้เก็บพัสดุทั้งหมด"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <QrCode className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            </div>
+            <span className="text-[10px] text-indigo-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+              ดูตู้ <ChevronRight className="h-3 w-3" />
+            </span>
           </div>
           <div className="min-w-0">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">ตู้เก็บพัสดุ</span>
@@ -779,9 +740,23 @@ service cloud.firestore {
           </div>
         </div>
 
-        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
-          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-            <Package className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+        {/* Metric 2: Consumables */}
+        <div 
+          onClick={() => setActiveTab("department_consumables")}
+          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
+            activeTab === "department_consumables" 
+              ? "border-emerald-600 ring-2 ring-emerald-500/20 shadow-xs" 
+              : "border-slate-200/80 hover:border-emerald-300 hover:shadow-xs"
+          }`}
+          title="คลิกเพื่อดูรายการพัสดุแยกตามแผนก"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-emerald-50 text-emerald-700 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Package className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            </div>
+            <span className="text-[10px] text-emerald-700 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+              ดูพัสดุ <ChevronRight className="h-3 w-3" />
+            </span>
           </div>
           <div className="min-w-0">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">วัสดุสิ้นเปลือง</span>
@@ -789,11 +764,27 @@ service cloud.firestore {
           </div>
         </div>
 
-        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
-          <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${
-            criticalItems.length > 0 ? "bg-rose-50 text-rose-600 animate-pulse" : "bg-emerald-50 text-emerald-600"
-          }`}>
-            <AlertTriangle className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+        {/* Metric 3: Critical / Out of Stock -> PO */}
+        <div 
+          onClick={() => setActiveTab("purchase_orders")}
+          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
+            activeTab === "purchase_orders"
+              ? "border-rose-500 ring-2 ring-rose-500/20 shadow-xs"
+              : criticalItems.length > 0 
+                ? "border-rose-200 hover:border-rose-400 hover:shadow-xs" 
+                : "border-slate-200/80 hover:border-slate-300"
+          }`}
+          title="คลิกเพื่อไปที่หน้าใบสั่งซื้อพัสดุ Auto Refill"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
+              criticalItems.length > 0 ? "bg-rose-50 text-rose-600 animate-pulse" : "bg-emerald-50 text-emerald-600"
+            }`}>
+              <AlertTriangle className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            </div>
+            <span className="text-[10px] text-rose-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+              เปิด PO <ChevronRight className="h-3 w-3" />
+            </span>
           </div>
           <div className="min-w-0">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">ขาด/วิกฤต</span>
@@ -803,9 +794,23 @@ service cloud.firestore {
           </div>
         </div>
 
-        <div className="bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border border-slate-200/80 hover:border-indigo-100 transition-colors flex items-center gap-2.5 sm:gap-4">
-          <div className="h-9 w-9 sm:h-10 sm:w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
-            <Clock className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+        {/* Metric 4: Latest Check */}
+        <div 
+          onClick={() => setActiveTab("history")}
+          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
+            activeTab === "history"
+              ? "border-amber-500 ring-2 ring-amber-500/20 shadow-xs"
+              : "border-slate-200/80 hover:border-amber-300 hover:shadow-xs"
+          }`}
+          title="คลิกเพื่อดูรายงานการตรวจนับสต็อกแต่ละรอบ"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Clock className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+            </div>
+            <span className="text-[10px] text-amber-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+              ดูประวัติ <ChevronRight className="h-3 w-3" />
+            </span>
           </div>
           <div className="min-w-0">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">เช็กของล่าสุด</span>
@@ -819,117 +824,195 @@ service cloud.firestore {
         </div>
       </div>
 
-      {/* TAB SYSTEM */}
-      <div className="border-b border-slate-200 mb-6 overflow-x-auto no-scrollbar scroll-smooth">
-        <nav className="flex space-x-4 sm:space-x-6 min-w-max pb-1">
+      {/* TAB NAVIGATION (CLEAN 4-CATEGORY SYSTEM) */}
+      <div className="border-b border-slate-200 mb-5">
+        <div className="flex space-x-2 sm:space-x-4 overflow-x-auto no-scrollbar scroll-smooth pb-px">
+          {/* Category 1: Stock & Orders */}
           <button
-            onClick={() => setActiveTab("department_consumables")}
-            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "department_consumables"
-                ? "border-emerald-700 text-emerald-800 font-bold"
+            onClick={() => {
+              if (activeTab !== "department_consumables" && activeTab !== "purchase_orders") {
+                setActiveTab("department_consumables");
+              }
+            }}
+            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+              activeTab === "department_consumables" || activeTab === "purchase_orders"
+                ? "border-emerald-700 text-emerald-800"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
-            <Building2 className="h-4 w-4 text-emerald-700" />
-            <span>พัสดุแยกตามแผนก (ตรวจนับพัสดุ)</span>
-            <span className="px-1.5 py-0.2 text-[9px] font-black bg-emerald-50 text-emerald-800 rounded-full border border-emerald-200">
-              {consumables.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("purchase_orders")}
-            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "purchase_orders"
-                ? "border-emerald-700 text-emerald-800 font-bold"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <ShoppingCart className="h-4 w-4 text-emerald-700" />
-            <span>ใบสั่งซื้อพัสดุ (Auto Refill)</span>
-            {criticalItems.length > 0 && (
-              <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-100 text-rose-800 rounded-full border border-rose-200 animate-pulse">
+            <Package className="h-4 w-4 text-emerald-700" />
+            <span>พัสดุ & จัดซื้อ</span>
+            {criticalItems.length > 0 ? (
+              <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full animate-pulse">
                 ขาด {criticalItems.length}
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.2 text-[9px] font-black bg-emerald-50 text-emerald-800 rounded-full border border-emerald-200">
+                {consumables.length}
               </span>
             )}
           </button>
 
+          {/* Category 2: Cabinets & QR */}
           <button
             onClick={() => setActiveTab("cabinets")}
-            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
               activeTab === "cabinets"
-                ? "border-indigo-600 text-indigo-600 font-bold"
+                ? "border-indigo-600 text-indigo-600"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             <QrCode className="h-4 w-4" />
-            <span>ตู้เก็บพัสดุและการ์ด QR</span>
+            <span>ตู้เก็บพัสดุ & QR</span>
             <span className="px-1.5 py-0.2 text-[9px] font-black bg-slate-100 text-slate-600 rounded-full">
               {cabinets.length}
             </span>
           </button>
 
+          {/* Category 3: Activity Reports */}
           <button
-            onClick={() => setActiveTab("history")}
-            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "history"
-                ? "border-indigo-600 text-indigo-600 font-bold"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <History className="h-4 w-4" />
-            <span>ประวัติการเช็กตรวจนับ</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("qc")}
-            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "qc"
-                ? "border-indigo-600 text-indigo-600 font-bold"
+            onClick={() => {
+              if (activeTab !== "qc" && activeTab !== "history") {
+                setActiveTab("qc");
+              }
+            }}
+            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+              activeTab === "qc" || activeTab === "history"
+                ? "border-indigo-600 text-indigo-600"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             <Activity className="h-4 w-4" />
-            <span>ประวัติเบิกและหยิบใช้ของ</span>
-            <span className="px-1.5 py-0.5 text-[9px] font-black bg-purple-100 text-purple-800 rounded-full">
-              {qcLogs.length}
+            <span>รายงาน & ประวัติ</span>
+            <span className="px-1.5 py-0.2 text-[9px] font-black bg-purple-100 text-purple-800 rounded-full">
+              {qcLogs.length + countLogs.length}
             </span>
           </button>
 
-          {/* Department Settings Tab: Accessible by Admin & Super Admin */}
+          {/* Category 4: System Settings */}
           <button
-            onClick={() => setActiveTab("settings")}
-            className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === "settings"
-                ? "border-indigo-600 text-indigo-600 font-bold"
+            onClick={() => {
+              if (activeTab !== "settings" && activeTab !== "users") {
+                setActiveTab("settings");
+              }
+            }}
+            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+              activeTab === "settings" || activeTab === "users"
+                ? "border-slate-800 text-slate-900"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             <Building2 className="h-4 w-4" />
+            <span>ตั้งค่าระบบ</span>
+            {isUserSuperAdmin && (
+              <span className="px-1.5 py-0.2 text-[9px] font-bold bg-amber-100 text-amber-900 rounded-full">
+                Admin
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* SUB-CATEGORY SELECTOR PILLS */}
+      {(activeTab === "department_consumables" || activeTab === "purchase_orders") && (
+        <div className="flex items-center gap-2 mb-6 bg-slate-100/80 p-1 rounded-xl w-fit border border-slate-200/80">
+          <button
+            onClick={() => setActiveTab("department_consumables")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === "department_consumables"
+                ? "bg-white text-emerald-800 shadow-2xs border border-slate-200/60"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Package className="h-3.5 w-3.5 text-emerald-700" />
+            <span>พัสดุแยกตามแผนก (ตรวจนับสต็อก)</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-bold">
+              {consumables.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("purchase_orders")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === "purchase_orders"
+                ? "bg-white text-emerald-800 shadow-2xs border border-slate-200/60"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <ShoppingCart className="h-3.5 w-3.5 text-emerald-700" />
+            <span>ใบสั่งซื้อพัสดุ (Auto Refill)</span>
+            {criticalItems.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-black animate-pulse">
+                ขาด {criticalItems.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {(activeTab === "qc" || activeTab === "history") && (
+        <div className="flex items-center gap-2 mb-6 bg-slate-100/80 p-1 rounded-xl w-fit border border-slate-200/80">
+          <button
+            onClick={() => setActiveTab("qc")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === "qc"
+                ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/60"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Activity className="h-3.5 w-3.5 text-indigo-600" />
+            <span>ประวัติเบิกและหยิบใช้ของ (QC & QR ตู้)</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-bold">
+              {qcLogs.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === "history"
+                ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/60"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Clock className="h-3.5 w-3.5 text-indigo-600" />
+            <span>ประวัติการตรวจนับสต็อก (Helper Check)</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-bold">
+              {countLogs.length}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {(activeTab === "settings" || activeTab === "users") && (
+        <div className="flex items-center gap-2 mb-6 bg-slate-100/80 p-1 rounded-xl w-fit border border-slate-200/80">
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === "settings"
+                ? "bg-white text-slate-900 shadow-2xs border border-slate-200/60"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Building2 className="h-3.5 w-3.5 text-indigo-600" />
             <span>จัดการแผนกโรงงาน</span>
-            <span className="px-1.5 py-0.5 text-[9px] font-black bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-700 font-bold">
               {departments.length}
             </span>
           </button>
-
           {isUserSuperAdmin && (
             <button
               onClick={() => setActiveTab("users")}
-              className={`pb-3 text-xs sm:text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 activeTab === "users"
-                  ? "border-amber-500 text-amber-700 font-bold"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
+                  ? "bg-white text-amber-900 shadow-2xs border border-slate-200/60"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <Users className="h-4 w-4 text-amber-600" />
-              <span>จัดการสิทธิ์ผู้ใช้งาน</span>
-              <span className="px-1.5 py-0.5 text-[9px] font-black bg-amber-100 text-amber-900 rounded-full border border-amber-300">
-                Super Admin
-              </span>
+              <Users className="h-3.5 w-3.5 text-amber-600" />
+              <span>จัดการสิทธิ์ผู้ใช้งาน (Super Admin)</span>
             </button>
           )}
-        </nav>
-      </div>
+        </div>
+      )}
 
       {/* SEARCH CONTROLS FOR CABINETS TAB */}
       {activeTab === "cabinets" && (
@@ -2196,6 +2279,157 @@ service cloud.firestore {
           subtitle={previewModalImage.subtitle}
           onClose={() => setPreviewModalImage(null)}
         />
+      )}
+
+      {/* CLOUD FIRESTORE RULES GUIDE MODAL */}
+      {showCloudGuideModal && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-up my-auto">
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-amber-50/70 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-950">
+                    วิธีตั้งค่า Cloud Firestore & ซิงค์ข้อมูลข้ามเครื่อง
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    โปรเจกต์: <b className="text-slate-700">{activeProjectId}</b> (ทำตาม 3 ขั้นตอนเพียง 1 นาที)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCloudGuideModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              <p className="text-slate-600 leading-relaxed">
+                หากเปิดใช้งานในเครื่องอื่นหรือมือถือแล้วยังไม่เห็นตู้หรือพัสดุที่เพิ่งเพิ่ม เป็นเพราะฐานข้อมูล Cloud Firestore ใน Firebase Console ปฏิเสธการเข้าถึง (Permission Denied) เนื่องจากยังไม่ได้เปิดสิทธิ์ Rules ทำให้ระบบต้องจัดเก็บในเครื่องชั่วคราว ทำตาม 3 ขั้นตอนนี้เพื่อให้ทุกเครื่องซิงค์ตรงกัน:
+              </p>
+
+              {/* Step 1 */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">1</span>
+                    <span className="font-bold text-slate-900 text-sm">คัดลอกโค้ด Firestore Rules</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
+                      navigator.clipboard.writeText(rules);
+                      setCopiedRule(true);
+                      setTimeout(() => setCopiedRule(false), 3500);
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs text-xs"
+                  >
+                    {copiedRule ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        <span>คัดลอกสำเร็จแล้ว!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>คัดลอกโค้ด Rules</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="bg-slate-900 text-amber-200 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}
+                </pre>
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">2</span>
+                    <span className="font-bold text-slate-900 text-sm">ไปที่ Firebase &gt; Firestore Rules</span>
+                  </div>
+                  <a
+                    href={firebaseRulesUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs text-xs"
+                  >
+                    <span>เปิดหน้า Firebase</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+                <div className="p-3 bg-white border border-slate-200 rounded-lg text-slate-700 text-[11px] space-y-1.5 leading-relaxed">
+                  <div className="font-semibold text-rose-600">⚠️ ต้องเป็น &quot;Firestore Database&quot; เท่านั้น:</div>
+                  <div>• <b>ถ้าเห็นปุ่ม &quot;Create database&quot;:</b> ให้กดปุ่มนี้ &gt; เลือก <b>&quot;Start in test mode&quot;</b> &gt; กด Next &gt; กด Enable ได้เลย (ระบบจะเปิดสิทธิ์ให้อัตโนมัติทันที)</div>
+                  <div>• <b>ถ้ามีฐานข้อมูลแล้ว:</b> คลิกที่แท็บ <b>Rules (กฎ)</b> ด้านบนจอ นำโค้ดที่คัดลอกไปวางทับ แล้วกดปุ่มสีฟ้า <b>Publish (เผยแพร่)</b></div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="h-6 w-6 rounded-full bg-emerald-100 text-emerald-900 font-black text-xs flex items-center justify-center">3</span>
+                    <span className="font-bold text-slate-900 text-sm">ทดสอบและส่งข้อมูลขึ้น Cloud</span>
+                  </div>
+                  <button
+                    onClick={handleSyncToCloud}
+                    disabled={isSyncingCloud}
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-75 text-white font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs text-xs"
+                  >
+                    {isSyncingCloud ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>กำลังทดสอบ...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>ทดสอบและซิงค์ทันที</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-slate-500 text-[11px] leading-relaxed">
+                  เมื่อกด Publish ใน Firebase เรียบร้อยแล้ว ให้กดปุ่มนี้เพื่อส่งตู้และรายการพัสดุจากเครื่องนี้ขึ้น Cloud ให้ทุกเครื่องเห็นพร้อมกัน
+                </p>
+                {syncErrorMsg && (
+                  <div className="p-2.5 mt-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-[11px] font-semibold">
+                    {syncErrorMsg}
+                  </div>
+                )}
+                {syncSuccessMsg && (
+                  <div className="p-2.5 mt-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-[11px] font-semibold">
+                    {syncSuccessMsg}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCloudGuideModal(false)}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* FLOATING TOAST NOTIFICATION */}
