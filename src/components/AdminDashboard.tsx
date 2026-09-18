@@ -68,7 +68,12 @@ import {
   ShoppingCart,
   ChevronRight,
   FileText,
-  MoreHorizontal
+  MoreHorizontal,
+  Lightbulb,
+  ArrowRight,
+  BookOpen,
+  HelpCircle,
+  Layers
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -129,6 +134,23 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
   // Notifications & UI Helpers
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showOnboardingGuide, setShowOnboardingGuide] = useState(() => {
+    try {
+      return localStorage.getItem("hide_admin_onboarding") !== "true";
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleOnboarding = () => {
+    setShowOnboardingGuide(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem("hide_admin_onboarding", next ? "false" : "true");
+      } catch {}
+      return next;
+    });
+  };
   const [dismissCloudNotice, setDismissCloudNotice] = useState(false);
   const [showCloudGuideModal, setShowCloudGuideModal] = useState(false);
   const [showMoreActions, setShowMoreActions] = useState(false);
@@ -530,120 +552,382 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 font-sans bg-slate-50 min-h-screen">
       
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 sm:mb-8">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              Admin Terminal
-            </span>
+      {/* 1. TOP HERO BANNER & INTEGRATED STATS (VIEWER-STYLE ELEGANCE) */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 rounded-3xl p-5 sm:p-7 text-white shadow-xl relative overflow-hidden mb-6">
+        {/* Soft background glow accents */}
+        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute right-1/3 -top-10 w-44 h-44 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          {/* Title & Info */}
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-500/25 text-indigo-200 border border-indigo-400/30 backdrop-blur-xs">
+                <ShieldCheck className="h-3.5 w-3.5 text-indigo-300" />
+                โหมดผู้ดูแลระบบ (ADMIN TERMINAL)
+              </span>
+              {isUserSuperAdmin && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/30">
+                  <Crown className="h-3 w-3 text-amber-300" />
+                  Super Admin
+                </span>
+              )}
+              {getCloudSyncNotice().hasError ? (
+                <button
+                  onClick={() => setShowCloudGuideModal(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/30 cursor-pointer transition-colors shadow-2xs"
+                  title="คลิกเพื่อดูวิธีเปิดสิทธิ์ Cloud Firestore (3 ขั้นตอน)"
+                >
+                  <AlertTriangle className="h-3 w-3 text-amber-300 animate-pulse" />
+                  <span>โหมด Local (คลิกเปิดสิทธิ์ Cloud)</span>
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                  Cloud ซิงค์พร้อม
+                </span>
+              )}
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-display">
+              แดชบอร์ดบริหารตู้พัสดุและคลังสต็อกส่วนกลาง
+            </h1>
+            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+              ยินดีต้อนรับคุณ <b className="text-white">{userEmail}</b> • ตรวจสอบสต็อก, สั่งซื้ออัตโนมัติ, จัดการตู้ และออกป้าย QR Code ติดหน้าตู้
+            </p>
           </div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-950 tracking-tight font-display">
-            แดชบอร์ดตรวจสอบสต็อกส่วนกลาง
-          </h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
-            ยินดีต้อนรับแอดมิน ({userEmail}) จัดการโครงสร้างตู้เก็บของ, ออก QR Code, และตรวจนับสต็อก
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap shrink-0 w-full sm:w-auto">
-          {/* Cloud Sync Button */}
-          <button
-            onClick={handleSyncToCloud}
-            disabled={isSyncingCloud}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
-            title="ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Cloud Firestore เพื่อให้ทุกเครื่องเห็นตรงกัน"
-          >
-            {isSyncingCloud ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            <span className="truncate">{isSyncingCloud ? "กำลังซิงค์..." : "ซิงค์ Cloud"}</span>
-          </button>
 
-          {/* Add Cabinet (Secondary) */}
-          <button
-            onClick={() => {
-              setEditingCabinet(null);
-              setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
-              setShowCabinetModal(true);
-            }}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-all"
-          >
-            <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-            <span className="truncate">เพิ่มตู้เก็บ</span>
-          </button>
-
-          {/* Add Consumable (Primary) */}
-          <button
-            onClick={() => {
-              setEditingConsumable(null);
-              const firstCab = cabinets[0];
-              const targetDept = firstCab?.departments?.[0]
-                || departments.find(d => d.name.toLowerCase() === "cmt")?.name
-                || departments[0]?.name
-                || "CMT";
-              setConsumableForm({
-                name: "",
-                department: targetDept,
-                currentQty: 10,
-                minThreshold: 5,
-                unit: "ชิ้น",
-                imageUrl: CONSUMABLE_PRESETS["glove"]
-              });
-              if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
-              setShowConsumableModal(true);
-            }}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all"
-          >
-            <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-            <span className="truncate">เพิ่มพัสดุ</span>
-          </button>
-
-          {/* More Options Menu */}
-          <div className="relative">
+          {/* Quick Action Controls */}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* Guide Toggle */}
             <button
-              onClick={() => setShowMoreActions(!showMoreActions)}
-              className="p-2 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
-              title="เมนูตัวเลือกเพิ่มเติม"
+              onClick={handleToggleOnboarding}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                showOnboardingGuide
+                  ? "bg-amber-400 text-slate-950 border-amber-300 shadow-xs"
+                  : "bg-white/10 hover:bg-white/15 text-slate-200 border-white/15"
+              }`}
+              title="เปิด/ปิดคำแนะนำการใช้งานเริ่มต้น"
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <Lightbulb className={`h-4 w-4 ${showOnboardingGuide ? "text-slate-950" : "text-amber-400"}`} />
+              <span>{showOnboardingGuide ? "ซ่อนคำแนะนำ" : "แนะนำเริ่มต้น"}</span>
             </button>
 
-            {showMoreActions && (
-              <>
-                <div 
-                  className="fixed inset-0 z-20"
-                  onClick={() => setShowMoreActions(false)}
-                />
-                <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 text-xs animate-scale-up">
-                  <button
-                    onClick={() => {
-                      setShowMoreActions(false);
-                      setShowCloudGuideModal(true);
-                    }}
-                    className="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-medium"
-                  >
-                    <FileText className="h-4 w-4 text-amber-600" />
-                    <span>วิธีตั้งค่า Cloud / Rules</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowMoreActions(false);
-                      setClearHistoryInitialType("ALL");
-                      setShowClearHistoryModal(true);
-                    }}
-                    className="w-full px-3.5 py-2 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer font-medium"
-                  >
-                    <Trash2 className="h-4 w-4 text-rose-600" />
-                    <span>เคลียร์ประวัติเก่า...</span>
-                  </button>
-                </div>
-              </>
-            )}
+            {/* Cloud Sync Button */}
+            <button
+              onClick={handleSyncToCloud}
+              disabled={isSyncingCloud}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-75 text-white rounded-xl text-xs font-bold transition-all border border-emerald-400/30 cursor-pointer shadow-xs"
+              title="ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Cloud Firestore"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isSyncingCloud ? "animate-spin" : ""}`} />
+              <span>{isSyncingCloud ? "กำลังซิงค์..." : "ซิงค์ Cloud"}</span>
+            </button>
+
+            {/* Add Cabinet (Secondary) */}
+            <button
+              onClick={() => {
+                setEditingCabinet(null);
+                setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
+                setShowCabinetModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-white/15 hover:bg-white/25 active:bg-white/30 text-white rounded-xl text-xs font-bold transition-all border border-white/20 cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+              <span>เพิ่มตู้</span>
+            </button>
+
+            {/* Add Consumable (Primary High-Visibility) */}
+            <button
+              onClick={() => {
+                setEditingConsumable(null);
+                const firstCab = cabinets[0];
+                const targetDept = firstCab?.departments?.[0]
+                  || departments.find(d => d.name.toLowerCase() === "cmt")?.name
+                  || departments[0]?.name
+                  || "CMT";
+                setConsumableForm({
+                  name: "",
+                  department: targetDept,
+                  currentQty: 10,
+                  minThreshold: 5,
+                  unit: "ชิ้น",
+                  imageUrl: CONSUMABLE_PRESETS["glove"]
+                });
+                if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
+                setShowConsumableModal(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md cursor-pointer active:scale-98"
+            >
+              <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+              <span>เพิ่มพัสดุ</span>
+            </button>
+
+            {/* More Options Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMoreActions(!showMoreActions)}
+                className="p-2 bg-white/10 hover:bg-white/20 text-white border border-white/15 rounded-xl transition-colors cursor-pointer"
+                title="ตัวเลือกเพิ่มเติม"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+
+              {showMoreActions && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-20"
+                    onClick={() => setShowMoreActions(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-30 text-xs animate-scale-up text-slate-900">
+                    <button
+                      onClick={() => {
+                        setShowMoreActions(false);
+                        setShowCloudGuideModal(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-medium"
+                    >
+                      <FileText className="h-4 w-4 text-amber-600" />
+                      <span>วิธีตั้งค่า Cloud / Rules</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMoreActions(false);
+                        setClearHistoryInitialType("ALL");
+                        setShowClearHistoryModal(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer font-medium"
+                    >
+                      <Trash2 className="h-4 w-4 text-rose-600" />
+                      <span>เคลียร์ประวัติเก่า...</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* QUICK STATS ROW INSIDE BANNER (VIEWER DASHBOARD STYLE) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 mt-6 pt-5 border-t border-white/10">
+          {/* Card 1: Consumables */}
+          <div 
+            onClick={() => setActiveTab("department_consumables")}
+            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+              activeTab === "department_consumables"
+                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
+                : "bg-white/10 hover:bg-white/15 border-white/10"
+            }`}
+          >
+            <div className="flex items-center justify-between text-slate-300 text-[11px] font-bold">
+              <span>พัสดุในคลัง</span>
+              <Package className="h-4 w-4 text-emerald-300" />
+            </div>
+            <div className="text-xl sm:text-2xl font-black text-white mt-1">
+              {consumables.length}
+              <span className="text-xs font-normal text-slate-300 ml-1">รายการ</span>
+            </div>
+          </div>
+
+          {/* Card 2: Cabinets */}
+          <div 
+            onClick={() => setActiveTab("cabinets")}
+            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+              activeTab === "cabinets"
+                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
+                : "bg-white/10 hover:bg-white/15 border-white/10"
+            }`}
+          >
+            <div className="flex items-center justify-between text-slate-300 text-[11px] font-bold">
+              <span>ตู้จัดเก็บ & QR</span>
+              <Building2 className="h-4 w-4 text-blue-300" />
+            </div>
+            <div className="text-xl sm:text-2xl font-black text-white mt-1">
+              {cabinets.length}
+              <span className="text-xs font-normal text-slate-300 ml-1">ตู้</span>
+            </div>
+          </div>
+
+          {/* Card 3: Critical / Out of Stock -> PO */}
+          <div 
+            onClick={() => setActiveTab("purchase_orders")}
+            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+              activeTab === "purchase_orders"
+                ? "bg-rose-500/30 border-rose-400/60 ring-2 ring-rose-400/40 shadow-md"
+                : criticalItems.length > 0
+                ? "bg-rose-500/20 hover:bg-rose-500/30 border-rose-400/30"
+                : "bg-white/10 hover:bg-white/15 border-white/10"
+            }`}
+          >
+            <div className="flex items-center justify-between text-rose-200 text-[11px] font-bold">
+              <span>ขาด/ต้องสั่งเพิ่ม</span>
+              <AlertTriangle className={`h-4 w-4 ${criticalItems.length > 0 ? "text-rose-400 animate-pulse" : "text-slate-300"}`} />
+            </div>
+            <div className={`text-xl sm:text-2xl font-black mt-1 ${criticalItems.length > 0 ? "text-rose-300" : "text-white"}`}>
+              {criticalItems.length}
+              <span className="text-xs font-normal text-rose-200/80 ml-1">ชนิด</span>
+            </div>
+          </div>
+
+          {/* Card 4: QC Withdrawals */}
+          <div 
+            onClick={() => setActiveTab("qc")}
+            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+              activeTab === "qc"
+                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
+                : "bg-white/10 hover:bg-white/15 border-white/10"
+            }`}
+          >
+            <div className="flex items-center justify-between text-purple-200 text-[11px] font-bold">
+              <span>ประวัติเบิกใช้</span>
+              <Activity className="h-4 w-4 text-purple-300" />
+            </div>
+            <div className="text-xl sm:text-2xl font-black text-purple-200 mt-1">
+              {qcLogs.length}
+              <span className="text-xs font-normal text-purple-300/80 ml-1">ครั้ง</span>
+            </div>
+          </div>
+
+          {/* Card 5: Audit History */}
+          <div 
+            onClick={() => setActiveTab("history")}
+            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border col-span-2 sm:col-span-1 ${
+              activeTab === "history"
+                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
+                : "bg-white/10 hover:bg-white/15 border-white/10"
+            }`}
+          >
+            <div className="flex items-center justify-between text-amber-200 text-[11px] font-bold">
+              <span>ประวัติตรวจนับ</span>
+              <Clock className="h-4 w-4 text-amber-300" />
+            </div>
+            <div className="text-xl sm:text-2xl font-black text-amber-200 mt-1">
+              {countLogs.length}
+              <span className="text-xs font-normal text-amber-200/80 ml-1">รอบ</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* 2. ONBOARDING QUICK START GUIDE (3 EASY STEPS FOR FIRST-TIME ADMINS) */}
+      {showOnboardingGuide && (
+        <div className="mb-6 bg-gradient-to-br from-indigo-50/90 via-slate-50 to-emerald-50/70 rounded-3xl p-5 sm:p-6 border border-indigo-100 shadow-xs relative animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs">
+                <Lightbulb className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
+                  คำแนะนำการเริ่มต้นใช้งานระบบคลังพัสดุ (3 สเต็ปง่ายๆ ใน 1 นาที)
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  ทำตาม 3 ขั้นตอนนี้เพื่อให้ระบบพร้อมให้เจ้าหน้าที่และพนักงานเริ่มสแกนเบิกของได้ทันที
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleToggleOnboarding}
+              className="self-start sm:self-auto px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+            >
+              เข้าใจแล้ว (ซ่อนคำแนะนำ)
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            {/* Step 1 */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center">1</span>
+                  <span className="font-extrabold text-slate-900 text-xs sm:text-sm">สร้างตู้ & พิมพ์ QR ติดหน้าตู้</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  สร้างตู้เก็บของตามจุดติดตั้งในโรงงาน แล้วกดปุ่ม <b>"พิมพ์ป้าย QR Code"</b> เพื่อนำไปติดหน้าตู้ให้ทุกคนสแกน
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setEditingCabinet(null);
+                    setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
+                    setShowCabinetModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>เพิ่มตู้ใหม่</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab("cabinets")}
+                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                >
+                  ดูตู้ทั้งหมด
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-full bg-emerald-100 text-emerald-800 font-black text-xs flex items-center justify-center">2</span>
+                  <span className="font-extrabold text-slate-900 text-xs sm:text-sm">ลงทะเบียนพัสดุ & จุดเตือน (Min)</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  ใส่รูปภาพ จำนวนคงเหลือ และเกณฑ์ขั้นต่ำ (Min Threshold) ระบบจะคำนวณและแจ้งเตือนสินค้าใกล้หมดให้อัตโนมัติ
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setEditingConsumable(null);
+                    setShowConsumableModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>เพิ่มพัสดุ</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab("department_consumables")}
+                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                >
+                  ดูรายการสต็อก
+                </button>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col justify-between space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-full bg-purple-100 text-purple-800 font-black text-xs flex items-center justify-center">3</span>
+                  <span className="font-extrabold text-slate-900 text-xs sm:text-sm">สแกนเบิก & สั่งซื้ออัตโนมัติ (Auto PO)</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  ผู้ใช้สแกน QR เพื่อเบิกของได้เลย ระบบจะตัดยอดทันที หากมีของขาด ระบบจะสรุปใน <b>"ใบสั่งซื้อพัสดุ"</b> ให้อัตโนมัติ
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => setActiveTab("purchase_orders")}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  <span>เปิดใบสั่งซื้อพัสดุ</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab("qc")}
+                  className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                >
+                  ใครเบิกอะไรบ้าง
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CLOUD SYNC SUCCESS BANNER */}
       {syncSuccessMsg && (
@@ -671,348 +955,144 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         </div>
       )}
 
-      {/* COMPACT CLOUD STATUS BAR (COLLAPSIBLE & CLEAN) */}
-      {getCloudSyncNotice().hasError && !dismissCloudNotice && (
-        <div className="mb-6 p-3 sm:p-4 bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-300/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs animate-fade-in">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-1.5 bg-amber-500 text-white rounded-lg shrink-0 shadow-2xs">
-              <AlertTriangle className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="font-bold text-slate-900 text-xs truncate">
-                สถานะ Cloud: ทำงานในโหมด Local (รอเปิดสิทธิ์ Firestore Rules เพื่อให้ซิงค์ข้ามเครื่องได้)
-              </p>
-              <p className="text-slate-500 text-[11px] truncate hidden md:block">
-                เครื่องอื่นจะยังไม่เห็นข้อมูลที่เพิ่งเพิ่ม จนกว่าจะวางสิทธิ์ Rules ใน Firebase Console
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-            <button
-              onClick={() => setShowCloudGuideModal(true)}
-              className="px-3 py-1.5 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300 rounded-xl font-bold text-[11px] transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
-            >
-              <FileText className="h-3.5 w-3.5 text-amber-700" />
-              <span>ดูวิธีตั้งค่า 3 ขั้นตอน</span>
-            </button>
-            <button
-              onClick={handleSyncToCloud}
-              disabled={isSyncingCloud}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-75 text-white rounded-xl font-bold text-[11px] transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
-            >
-              {isSyncingCloud ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              <span>ซิงค์ Cloud</span>
-            </button>
-            <button
-              onClick={() => setDismissCloudNotice(true)}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-amber-200/50 rounded-lg transition-colors cursor-pointer"
-              title="ซ่อนชั่วคราว"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* METRICS ROW (INTERACTIVE CARDS) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-6 sm:mb-8">
-        {/* Metric 1: Cabinets */}
-        <div 
-          onClick={() => setActiveTab("cabinets")}
-          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
-            activeTab === "cabinets" 
-              ? "border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs" 
-              : "border-slate-200/80 hover:border-indigo-300 hover:shadow-xs"
-          }`}
-          title="คลิกเพื่อเปิดดูตู้เก็บพัสดุทั้งหมด"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <QrCode className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-            </div>
-            <span className="text-[10px] text-indigo-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-              ดูตู้ <ChevronRight className="h-3 w-3" />
-            </span>
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">ตู้เก็บพัสดุ</span>
-            <span className="text-lg sm:text-2xl font-black text-slate-950 block">{cabinets.length} ตู้</span>
-          </div>
-        </div>
-
-        {/* Metric 2: Consumables */}
-        <div 
-          onClick={() => setActiveTab("department_consumables")}
-          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
-            activeTab === "department_consumables" 
-              ? "border-emerald-600 ring-2 ring-emerald-500/20 shadow-xs" 
-              : "border-slate-200/80 hover:border-emerald-300 hover:shadow-xs"
-          }`}
-          title="คลิกเพื่อดูรายการพัสดุแยกตามแผนก"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-emerald-50 text-emerald-700 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <Package className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-            </div>
-            <span className="text-[10px] text-emerald-700 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-              ดูพัสดุ <ChevronRight className="h-3 w-3" />
-            </span>
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">วัสดุสิ้นเปลือง</span>
-            <span className="text-lg sm:text-2xl font-black text-slate-950 block">{consumables.length} รายการ</span>
-          </div>
-        </div>
-
-        {/* Metric 3: Critical / Out of Stock -> PO */}
-        <div 
-          onClick={() => setActiveTab("purchase_orders")}
-          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
-            activeTab === "purchase_orders"
-              ? "border-rose-500 ring-2 ring-rose-500/20 shadow-xs"
-              : criticalItems.length > 0 
-                ? "border-rose-200 hover:border-rose-400 hover:shadow-xs" 
-                : "border-slate-200/80 hover:border-slate-300"
-          }`}
-          title="คลิกเพื่อไปที่หน้าใบสั่งซื้อพัสดุ Auto Refill"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
-              criticalItems.length > 0 ? "bg-rose-50 text-rose-600 animate-pulse" : "bg-emerald-50 text-emerald-600"
-            }`}>
-              <AlertTriangle className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-            </div>
-            <span className="text-[10px] text-rose-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-              เปิด PO <ChevronRight className="h-3 w-3" />
-            </span>
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">ขาด/วิกฤต</span>
-            <span className={`text-lg sm:text-2xl font-black block ${
-              criticalItems.length > 0 ? "text-rose-600" : "text-emerald-700"
-            }`}>{criticalItems.length} ชนิด</span>
-          </div>
-        </div>
-
-        {/* Metric 4: Latest Check */}
-        <div 
-          onClick={() => setActiveTab("history")}
-          className={`bg-white p-3.5 sm:p-5 rounded-xl sm:rounded-2xl shadow-2xs border transition-all cursor-pointer group ${
-            activeTab === "history"
-              ? "border-amber-500 ring-2 ring-amber-500/20 shadow-xs"
-              : "border-slate-200/80 hover:border-amber-300 hover:shadow-xs"
-          }`}
-          title="คลิกเพื่อดูรายงานการตรวจนับสต็อกแต่ละรอบ"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-              <Clock className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-            </div>
-            <span className="text-[10px] text-amber-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-              ดูประวัติ <ChevronRight className="h-3 w-3" />
-            </span>
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate">เช็กของล่าสุด</span>
-            <span className="text-xs sm:text-base font-bold text-slate-800 block truncate">
-              {countLogs.length > 0 
-                ? new Date(countLogs[0].checkedAt?.toDate?.() || countLogs[0].checkedAt).toLocaleDateString("th-TH")
-                : "ยังไม่มีการเช็ก"
-              }
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* TAB NAVIGATION (CLEAN 4-CATEGORY SYSTEM) */}
-      <div className="border-b border-slate-200 mb-5">
-        <div className="flex space-x-2 sm:space-x-4 overflow-x-auto no-scrollbar scroll-smooth pb-px">
-          {/* Category 1: Stock & Orders */}
+      {/* 3. DIRECT, SINGLE-LEVEL TAB NAVIGATION (EXACT VIEWER DASHBOARD UX) */}
+      <div className="bg-white rounded-2xl p-2 sm:p-2.5 border border-slate-200 shadow-xs mb-6">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          {/* Tab 1: Consumables & Stock */}
           <button
-            onClick={() => {
-              if (activeTab !== "department_consumables" && activeTab !== "purchase_orders") {
-                setActiveTab("department_consumables");
-              }
-            }}
-            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
-              activeTab === "department_consumables" || activeTab === "purchase_orders"
-                ? "border-emerald-700 text-emerald-800"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+            onClick={() => setActiveTab("department_consumables")}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "department_consumables"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Package className="h-4 w-4 text-emerald-700" />
-            <span>พัสดุ & จัดซื้อ</span>
+            <Package className="h-4 w-4 text-emerald-400" />
+            <span>พัสดุ & สต็อกแผนก</span>
             {criticalItems.length > 0 ? (
               <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full animate-pulse">
                 ขาด {criticalItems.length}
               </span>
             ) : (
-              <span className="px-1.5 py-0.2 text-[9px] font-black bg-emerald-50 text-emerald-800 rounded-full border border-emerald-200">
+              <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
+                activeTab === "department_consumables" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+              }`}>
                 {consumables.length}
               </span>
             )}
           </button>
 
-          {/* Category 2: Cabinets & QR */}
+          {/* Tab 2: Cabinets & QR */}
           <button
             onClick={() => setActiveTab("cabinets")}
-            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "cabinets"
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <QrCode className="h-4 w-4" />
-            <span>ตู้เก็บพัสดุ & QR</span>
-            <span className="px-1.5 py-0.2 text-[9px] font-black bg-slate-100 text-slate-600 rounded-full">
+            <Building2 className="h-4 w-4 text-blue-400" />
+            <span>ตู้จัดเก็บ & QR</span>
+            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
+              activeTab === "cabinets" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            }`}>
               {cabinets.length}
             </span>
           </button>
 
-          {/* Category 3: Activity Reports */}
-          <button
-            onClick={() => {
-              if (activeTab !== "qc" && activeTab !== "history") {
-                setActiveTab("qc");
-              }
-            }}
-            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
-              activeTab === "qc" || activeTab === "history"
-                ? "border-indigo-600 text-indigo-600"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <Activity className="h-4 w-4" />
-            <span>รายงาน & ประวัติ</span>
-            <span className="px-1.5 py-0.2 text-[9px] font-black bg-purple-100 text-purple-800 rounded-full">
-              {qcLogs.length + countLogs.length}
-            </span>
-          </button>
-
-          {/* Category 4: System Settings */}
-          <button
-            onClick={() => {
-              if (activeTab !== "settings" && activeTab !== "users") {
-                setActiveTab("settings");
-              }
-            }}
-            className={`pb-3 px-2 sm:px-3 text-xs sm:text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
-              activeTab === "settings" || activeTab === "users"
-                ? "border-slate-800 text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <Building2 className="h-4 w-4" />
-            <span>ตั้งค่าระบบ</span>
-            {isUserSuperAdmin && (
-              <span className="px-1.5 py-0.2 text-[9px] font-bold bg-amber-100 text-amber-900 rounded-full">
-                Admin
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* SUB-CATEGORY SELECTOR PILLS */}
-      {(activeTab === "department_consumables" || activeTab === "purchase_orders") && (
-        <div className="flex items-center gap-2 mb-6 bg-slate-100/80 p-1 rounded-xl w-fit border border-slate-200/80">
-          <button
-            onClick={() => setActiveTab("department_consumables")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === "department_consumables"
-                ? "bg-white text-emerald-800 shadow-2xs border border-slate-200/60"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Package className="h-3.5 w-3.5 text-emerald-700" />
-            <span>พัสดุแยกตามแผนก (ตรวจนับสต็อก)</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-bold">
-              {consumables.length}
-            </span>
-          </button>
+          {/* Tab 3: Purchase Orders */}
           <button
             onClick={() => setActiveTab("purchase_orders")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "purchase_orders"
-                ? "bg-white text-emerald-800 shadow-2xs border border-slate-200/60"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <ShoppingCart className="h-3.5 w-3.5 text-emerald-700" />
-            <span>ใบสั่งซื้อพัสดุ (Auto Refill)</span>
+            <ShoppingCart className="h-4 w-4 text-amber-400" />
+            <span>ใบสั่งซื้อพัสดุ (Auto PO)</span>
             {criticalItems.length > 0 && (
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-black animate-pulse">
+              <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full animate-pulse">
                 ขาด {criticalItems.length}
               </span>
             )}
           </button>
-        </div>
-      )}
 
-      {(activeTab === "qc" || activeTab === "history") && (
-        <div className="flex items-center gap-2 mb-6 bg-slate-100/80 p-1 rounded-xl w-fit border border-slate-200/80">
+          {/* Tab 4: QC Withdrawals (ใครเบิกอะไรบ้าง) */}
           <button
             onClick={() => setActiveTab("qc")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "qc"
-                ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/60"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Activity className="h-3.5 w-3.5 text-indigo-600" />
-            <span>ประวัติเบิกและหยิบใช้ของ (QC & QR ตู้)</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-bold">
+            <Activity className="h-4 w-4 text-purple-400" />
+            <span>ใครเบิกอะไรบ้าง</span>
+            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
+              activeTab === "qc" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            }`}>
               {qcLogs.length}
             </span>
           </button>
+
+          {/* Tab 5: Count History */}
           <button
             onClick={() => setActiveTab("history")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "history"
-                ? "bg-white text-indigo-700 shadow-2xs border border-slate-200/60"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Clock className="h-3.5 w-3.5 text-indigo-600" />
-            <span>ประวัติการตรวจนับสต็อก (Helper Check)</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-bold">
+            <Clock className="h-4 w-4 text-amber-400" />
+            <span>ประวัติตรวจนับ</span>
+            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
+              activeTab === "history" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            }`}>
               {countLogs.length}
             </span>
           </button>
-        </div>
-      )}
 
-      {(activeTab === "settings" || activeTab === "users") && (
-        <div className="flex items-center gap-2 mb-6 bg-slate-100/80 p-1 rounded-xl w-fit border border-slate-200/80">
+          {/* Tab 6: Department Settings */}
           <button
             onClick={() => setActiveTab("settings")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "settings"
-                ? "bg-white text-slate-900 shadow-2xs border border-slate-200/60"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             }`}
           >
-            <Building2 className="h-3.5 w-3.5 text-indigo-600" />
-            <span>จัดการแผนกโรงงาน</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-700 font-bold">
+            <Settings className="h-4 w-4 text-slate-400" />
+            <span>จัดการแผนก</span>
+            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
+              activeTab === "settings" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            }`}>
               {departments.length}
             </span>
           </button>
+
+          {/* Tab 7: User Management (Super Admin only) */}
           {isUserSuperAdmin && (
             <button
               onClick={() => setActiveTab("users")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === "users"
-                  ? "bg-white text-amber-900 shadow-2xs border border-slate-200/60"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "bg-amber-500 text-white shadow-xs"
+                  : "text-amber-900 hover:bg-amber-50"
               }`}
             >
-              <Users className="h-3.5 w-3.5 text-amber-600" />
-              <span>จัดการสิทธิ์ผู้ใช้งาน (Super Admin)</span>
+              <Users className="h-4 w-4" />
+              <span>จัดการสิทธิ์ผู้ใช้</span>
+              <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
+                activeTab === "users" ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-900"
+              }`}>
+                Admin
+              </span>
             </button>
           )}
         </div>
-      )}
+      </div>
 
       {/* SEARCH CONTROLS FOR CABINETS TAB */}
       {activeTab === "cabinets" && (
