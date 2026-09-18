@@ -46,6 +46,7 @@ export default function CabinetWithdrawView({
   );
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [cabinetDeptFilter, setCabinetDeptFilter] = useState<string>("ALL");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successDone, setSuccessDone] = useState(false);
@@ -267,135 +268,213 @@ export default function CabinetWithdrawView({
 
       {/* Consumables List in Cabinet */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-3 px-1">
-          <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-            <Inbox className="h-4 w-4 text-orange-600" />
-            <span>รายการพัสดุในตู้นี้ ({consumables.length} รายการ)</span>
-          </h2>
-          <span className="text-xs text-slate-500 font-semibold">
-            แตะที่รูปพัสดุเพื่อดูภาพจริง
-          </span>
-        </div>
+        {/* Multi-department selection tabs for cabinet items */}
+        {(() => {
+          const deptsInCabinet = Array.from(new Set(consumables.map(item => item.department).filter(Boolean)));
+          if (deptsInCabinet.length <= 1) return null;
 
-        {consumables.length === 0 ? (
-          <div className="bg-white rounded-2xl p-10 text-center text-slate-400 border border-slate-100">
-            ไม่มีรายการพัสดุในตู้นี้
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {consumables.map(item => {
-              const qtyToTake = quantities[item.id] || 0;
-              const isOutOfStock = item.currentQty <= 0;
+          return (
+            <div className="bg-white p-3.5 sm:p-4 rounded-2xl shadow-xs border border-slate-200/80 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2.5">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-orange-600" />
+                  <span>ตู้รวมหลายแผนก: เลือกกรองดูพัสดุตามแผนกได้</span>
+                </span>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  มีของ {deptsInCabinet.length} แผนกในตู้นี้
+                </span>
+              </div>
 
-              return (
-                <div 
-                  key={item.id}
-                  className={`bg-white rounded-2xl p-4 sm:p-5 border transition-all duration-150 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm ${
-                    qtyToTake > 0 
-                      ? "border-orange-400 bg-orange-50/10 shadow-md shadow-orange-500/5 ring-1 ring-orange-400" 
-                      : "border-slate-100 hover:border-slate-200"
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setCabinetDeptFilter("ALL")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    cabinetDeptFilter === "ALL"
+                      ? "bg-orange-600 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
                   }`}
                 >
-                  {/* Left info */}
-                  <div className="flex items-center gap-3.5 sm:gap-4">
+                  <span>แสดงทั้งหมด</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    cabinetDeptFilter === "ALL" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+                  }`}>
+                    {consumables.length}
+                  </span>
+                </button>
+
+                {deptsInCabinet.map(dept => {
+                  const deptItemCount = consumables.filter(i => i.department === dept).length;
+                  const isSelected = cabinetDeptFilter === dept;
+                  return (
                     <button
+                      key={dept}
                       type="button"
-                      onClick={() => onPreviewImage({
-                        url: item.imageUrl,
-                        title: item.name,
-                        subtitle: `แผนก: ${item.department} | หน่วย: ${item.unit} | คงเหลือ: ${item.currentQty}`
-                      })}
-                      className="relative h-16 w-16 rounded-2xl bg-slate-100 overflow-hidden border-2 border-slate-200 shrink-0 cursor-pointer group shadow-xs active:scale-95 transition-all text-left"
-                      title="แตะดูรูปภาพจริง"
+                      onClick={() => setCabinetDeptFilter(dept)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                        isSelected
+                          ? "bg-orange-600 text-white shadow-xs"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                      }`}
                     >
-                      <img 
-                        src={item.imageUrl} 
-                        alt={item.name} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                        <Eye className="h-4 w-4 drop-shadow" />
-                      </div>
-                      <span className="absolute bottom-0 inset-x-0 bg-slate-950/70 text-white text-[8px] font-bold text-center py-0.5">
-                        แตะดูรูป
+                      <span>แผนก {dept}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        isSelected ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+                      }`}>
+                        {deptItemCount}
                       </span>
                     </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[9px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full uppercase">
-                          {item.department}
-                        </span>
-                        {item.currentQty <= item.minThreshold && !isOutOfStock && (
-                          <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.5 rounded">
-                            สต็อกต่ำ
-                          </span>
-                        )}
-                        {isOutOfStock && (
-                          <span className="text-[9px] bg-rose-600 text-white font-bold px-2 py-0.5 rounded">
-                            ของหมดตู้
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
-                        {item.name}
-                      </h3>
-                      <p className="text-xs text-slate-500 font-medium mt-0.5">
-                        คงเหลือในตู้: <span className="font-black text-slate-800">{item.currentQty}</span> {item.unit}
-                      </p>
-                    </div>
-                  </div>
+        {(() => {
+          const displayedConsumables = cabinetDeptFilter === "ALL"
+            ? consumables
+            : consumables.filter(item => item.department === cabinetDeptFilter);
 
-                  {/* Right stepper */}
-                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                    <div className="text-xs sm:hidden font-bold text-slate-500">
-                      จำนวนที่ต้องการเบิก:
-                    </div>
+          return (
+            <>
+              <div className="flex items-center justify-between mb-3 px-1">
+                <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Inbox className="h-4 w-4 text-orange-600" />
+                  <span>
+                    รายการพัสดุในตู้นี้ ({displayedConsumables.length}
+                    {cabinetDeptFilter !== "ALL" ? ` จาก ${consumables.length}` : ""} รายการ)
+                  </span>
+                </h2>
+                <span className="text-xs text-slate-500 font-semibold">
+                  แตะที่รูปพัสดุเพื่อดูภาพจริง
+                </span>
+              </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={qtyToTake <= 0 || isOutOfStock}
-                        onClick={() => handleDecrement(item.id)}
-                        className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-30 flex items-center justify-center text-slate-700 font-bold cursor-pointer transition-colors active:scale-95"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-
-                      <input
-                        type="number"
-                        min="0"
-                        max={item.currentQty}
-                        disabled={isOutOfStock}
-                        value={qtyToTake === 0 ? "" : qtyToTake}
-                        placeholder="0"
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          handleQtyChange(item.id, item.currentQty, isNaN(val) ? 0 : val);
-                        }}
-                        className="w-16 h-10 text-center font-black text-base bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      />
-
-                      <button
-                        type="button"
-                        disabled={qtyToTake >= item.currentQty || isOutOfStock}
-                        onClick={() => handleIncrement(item.id, item.currentQty)}
-                        className="h-10 w-10 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-30 flex items-center justify-center text-white font-bold cursor-pointer transition-colors active:scale-95 shadow-xs shadow-orange-500/20"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-
-                      <span className="text-xs font-bold text-slate-600 w-10 text-left">
-                        {item.unit}
-                      </span>
-                    </div>
-                  </div>
+              {displayedConsumables.length === 0 ? (
+                <div className="bg-white rounded-2xl p-10 text-center text-slate-400 border border-slate-100">
+                  {cabinetDeptFilter !== "ALL"
+                    ? `ไม่พบรายการพัสดุของแผนก ${cabinetDeptFilter} ในตู้นี้`
+                    : "ไม่มีรายการพัสดุในตู้นี้"}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ) : (
+                <div className="space-y-3">
+                  {displayedConsumables.map(item => {
+                    const qtyToTake = quantities[item.id] || 0;
+                    const isOutOfStock = item.currentQty <= 0;
+
+                    return (
+                      <div 
+                        key={item.id}
+                        className={`bg-white rounded-2xl p-4 sm:p-5 border transition-all duration-150 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-sm ${
+                          qtyToTake > 0 
+                            ? "border-orange-400 bg-orange-50/10 shadow-md shadow-orange-500/5 ring-1 ring-orange-400" 
+                            : "border-slate-100 hover:border-slate-200"
+                        }`}
+                      >
+                        {/* Left info */}
+                        <div className="flex items-center gap-3.5 sm:gap-4">
+                          <button
+                            type="button"
+                            onClick={() => onPreviewImage({
+                              url: item.imageUrl,
+                              title: item.name,
+                              subtitle: `แผนก: ${item.department} | หน่วย: ${item.unit} | คงเหลือ: ${item.currentQty}`
+                            })}
+                            className="relative h-16 w-16 rounded-2xl bg-slate-100 overflow-hidden border-2 border-slate-200 shrink-0 cursor-pointer group shadow-xs active:scale-95 transition-all text-left"
+                            title="แตะดูรูปภาพจริง"
+                          >
+                            <img 
+                              src={item.imageUrl} 
+                              alt={item.name} 
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                              <Eye className="h-4 w-4 drop-shadow" />
+                            </div>
+                            <span className="absolute bottom-0 inset-x-0 bg-slate-950/70 text-white text-[8px] font-bold text-center py-0.5">
+                              แตะดูรูป
+                            </span>
+                          </button>
+
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[9px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full uppercase">
+                                {item.department}
+                              </span>
+                              {item.currentQty <= item.minThreshold && !isOutOfStock && (
+                                <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.5 rounded">
+                                  สต็อกต่ำ
+                                </span>
+                              )}
+                              {isOutOfStock && (
+                                <span className="text-[9px] bg-rose-600 text-white font-bold px-2 py-0.5 rounded">
+                                  ของหมดตู้
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
+                              {item.name}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                              คงเหลือในตู้: <span className="font-black text-slate-800">{item.currentQty}</span> {item.unit}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Right stepper */}
+                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                          <div className="text-xs sm:hidden font-bold text-slate-500">
+                            จำนวนที่ต้องการเบิก:
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={qtyToTake <= 0 || isOutOfStock}
+                              onClick={() => handleDecrement(item.id)}
+                              className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-30 flex items-center justify-center text-slate-700 font-bold cursor-pointer transition-colors active:scale-95"
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.currentQty}
+                              disabled={isOutOfStock}
+                              value={qtyToTake === 0 ? "" : qtyToTake}
+                              placeholder="0"
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                handleQtyChange(item.id, item.currentQty, isNaN(val) ? 0 : val);
+                              }}
+                              className="w-16 h-10 text-center font-black text-base bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            />
+
+                            <button
+                              type="button"
+                              disabled={qtyToTake >= item.currentQty || isOutOfStock}
+                              onClick={() => handleIncrement(item.id, item.currentQty)}
+                              className="h-10 w-10 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-30 flex items-center justify-center text-white font-bold cursor-pointer transition-colors active:scale-95 shadow-xs shadow-orange-500/20"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+
+                            <span className="text-xs font-bold text-slate-600 w-10 text-left">
+                              {item.unit}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Floating Bottom Bar for Confirmation */}
