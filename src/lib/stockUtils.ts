@@ -69,3 +69,80 @@ export function getItemOrderDeficit(item: Consumable): number {
   const deficit = target - qty;
   return Math.max(0, deficit);
 }
+
+/**
+ * Normalizes consumable name for reliable cross-cabinet matching
+ */
+export function normalizeConsumableName(name: string): string {
+  if (!name) return "";
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export interface CabinetStockItem {
+  consumableId: string;
+  cabinetId: string;
+  cabinetName: string;
+  department: string;
+  currentQty: number;
+  minThreshold: number;
+  maxThreshold?: number;
+  unit: string;
+  isOutOfStock: boolean;
+  isLowStock: boolean;
+}
+
+export interface MultiCabinetStockInfo {
+  normalizedName: string;
+  displayName: string;
+  unit: string;
+  totalQtyAcrossCabinets: number;
+  cabinetLocations: CabinetStockItem[];
+  hasMultipleCabinets: boolean;
+  otherCabinets: CabinetStockItem[];
+  breakdownText: string;
+}
+
+/**
+ * Calculates cross-cabinet stock information for a consumable
+ * (e.g. checks if the same item exists in CMT cabinet and QA/QC cabinet)
+ */
+export function getMultiCabinetStockInfo(
+  targetItem: Consumable,
+  allConsumables: Consumable[],
+  getCabinetName: (id: string) => string
+): MultiCabinetStockInfo {
+  const norm = normalizeConsumableName(targetItem.name);
+  const matching = allConsumables.filter(c => normalizeConsumableName(c.name) === norm);
+
+  const cabinetLocations: CabinetStockItem[] = matching.map(c => ({
+    consumableId: c.id,
+    cabinetId: c.cabinetId,
+    cabinetName: getCabinetName(c.cabinetId) || "ตู้ไม่ระบุ",
+    department: c.department || "-",
+    currentQty: c.currentQty ?? 0,
+    minThreshold: c.minThreshold ?? 0,
+    maxThreshold: c.maxThreshold,
+    unit: c.unit || targetItem.unit || "ชิ้น",
+    isOutOfStock: isItemOutOfStock(c),
+    isLowStock: isItemLowStock(c)
+  }));
+
+  const totalQtyAcrossCabinets = matching.reduce((sum, c) => sum + (c.currentQty ?? 0), 0);
+  const hasMultipleCabinets = cabinetLocations.length > 1;
+  const otherCabinets = cabinetLocations.filter(loc => loc.consumableId !== targetItem.id);
+
+  const breakdownText = cabinetLocations
+    .map(loc => `${loc.cabinetName}: ${loc.currentQty} ${loc.unit}`)
+    .join(" • ");
+
+  return {
+    normalizedName: norm,
+    displayName: targetItem.name,
+    unit: targetItem.unit || "ชิ้น",
+    totalQtyAcrossCabinets,
+    cabinetLocations,
+    hasMultipleCabinets,
+    otherCabinets,
+    breakdownText
+  };
+}

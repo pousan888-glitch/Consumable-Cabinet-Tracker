@@ -1,7 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { DepartmentRecord, Cabinet, Consumable } from "../types";
 import { printElementById } from "../lib/printHelper";
-import { isItemLowStock, isItemOutOfStock } from "../lib/stockUtils";
+import { 
+  isItemLowStock, 
+  isItemOutOfStock, 
+  getMultiCabinetStockInfo, 
+  MultiCabinetStockInfo 
+} from "../lib/stockUtils";
 import { 
   Building2, 
   Package, 
@@ -24,7 +29,8 @@ import {
   FileText,
   Check,
   CheckSquare,
-  Square
+  Square,
+  Sparkles
 } from "lucide-react";
 
 interface DepartmentConsumablesViewProps {
@@ -58,7 +64,11 @@ export default function DepartmentConsumablesView({
   const [selectedDept, setSelectedDept] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OUT" | "LOW" | "OK">("ALL");
+  const [onlyMultiCabinet, setOnlyMultiCabinet] = useState(false);
   const [sortBy, setSortBy] = useState<"DEFAULT" | "QTY_ASC" | "NAME">("DEFAULT");
+
+  // Multi-Cabinet Stock Detail Modal State
+  const [selectedMultiStock, setSelectedMultiStock] = useState<MultiCabinetStockInfo | null>(null);
 
   // Print Inventory Sheet Modal State
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -139,6 +149,12 @@ export default function DepartmentConsumablesView({
         return !isItemLowStock(item);
       }
 
+      // 4. Multi-cabinet filter
+      if (onlyMultiCabinet) {
+        const info = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+        if (!info.hasMultipleCabinets) return false;
+      }
+
       return true;
     }).sort((a, b) => {
       if (sortBy === "QTY_ASC") {
@@ -149,7 +165,7 @@ export default function DepartmentConsumablesView({
       }
       return 0; // Default order
     });
-  }, [consumables, selectedDept, searchTerm, statusFilter, sortBy, getCabinetName]);
+  }, [consumables, selectedDept, searchTerm, statusFilter, onlyMultiCabinet, sortBy, getCabinetName]);
 
   // Counts for status chips
   const currentDeptItems = useMemo(() => {
@@ -161,10 +177,14 @@ export default function DepartmentConsumablesView({
   const outInCurrentDept = currentDeptItems.filter(c => isItemOutOfStock(c)).length;
   const lowInCurrentDept = currentDeptItems.filter(c => isItemLowStock(c) && !isItemOutOfStock(c)).length;
   const okInCurrentDept = currentDeptItems.filter(c => !isItemLowStock(c)).length;
+  const multiCabinetInCurrentDept = useMemo(() => {
+    return currentDeptItems.filter(c => getMultiCabinetStockInfo(c, consumables, getCabinetName).hasMultipleCabinets).length;
+  }, [currentDeptItems, consumables, getCabinetName]);
 
   const handleResetFilters = () => {
     setSearchTerm("");
     setStatusFilter("ALL");
+    setOnlyMultiCabinet(false);
     setSortBy("DEFAULT");
     onToast("รีเซ็ตตัวกรองการค้นหาเรียบร้อย");
   };
@@ -453,6 +473,19 @@ export default function DepartmentConsumablesView({
               >
                 สต็อกปกติ ({okInCurrentDept})
               </button>
+
+              <button
+                onClick={() => setOnlyMultiCabinet(!onlyMultiCabinet)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  onlyMultiCabinet
+                    ? "bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300"
+                    : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+                }`}
+                title="กรองเฉพาะพัสดุที่มีสต็อกกระจายในหลายตู้ (เช่น เก็บทั้งในตู้ CMT และตู้ QA/QC)"
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>มีในหลายตู้ ({multiCabinetInCurrentDept})</span>
+              </button>
             </div>
 
             {/* Sorter */}
@@ -486,6 +519,7 @@ export default function DepartmentConsumablesView({
             filteredConsumables.map((item, index) => {
               const isOutOfStock = isItemOutOfStock(item);
               const isLow = isItemLowStock(item) && !isOutOfStock;
+              const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
               return (
                 <div 
@@ -582,10 +616,10 @@ export default function DepartmentConsumablesView({
                       )}
                     </div>
 
-                    {/* Right: Clean Quantity Display (ไม่มีปุ่ม +/-) */}
+                    {/* Right: Clean Quantity Display */}
                     <div className="text-right">
                       <div className="text-[10px] text-slate-400 font-bold mb-0.5">
-                        จำนวนที่มีจริง
+                        จำนวนในตู้นี้
                       </div>
                       <div className={`inline-flex items-center justify-center min-w-[54px] px-3 py-1.5 rounded-xl border font-black text-sm shadow-2xs ${
                         isOutOfStock 
@@ -601,6 +635,49 @@ export default function DepartmentConsumablesView({
                       </div>
                     </div>
                   </div>
+
+                  {/* Multi-Cabinet Breakdown Box (เมื่อพบในหลายตู้ เช่น ตู้ CMT และ ตู้ QA/QC) */}
+                  {multiInfo.hasMultipleCabinets && (
+                    <div className="p-2.5 bg-indigo-50/90 border border-indigo-200 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-extrabold text-indigo-950">
+                        <span className="flex items-center gap-1.5">
+                          <Layers className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                          <span>กระจายใน {multiInfo.cabinetLocations.length} ตู้จัดเก็บ:</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedMultiStock(multiInfo)}
+                          className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg font-black text-[10px] cursor-pointer transition-all shadow-2xs"
+                        >
+                          รวมทุกตู้ {multiInfo.totalQtyAcrossCabinets} {item.unit}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-1">
+                        {multiInfo.cabinetLocations.map(loc => {
+                          const isThisCabinet = loc.consumableId === item.id;
+                          return (
+                            <div 
+                              key={loc.consumableId} 
+                              className={`flex items-center justify-between text-[11px] px-2.5 py-1 rounded-lg transition-colors ${
+                                isThisCabinet 
+                                  ? "bg-white font-bold text-indigo-950 shadow-2xs border border-indigo-200" 
+                                  : "bg-indigo-100/60 text-slate-700"
+                              }`}
+                            >
+                              <span className="truncate pr-1 flex items-center gap-1">
+                                <span className={`h-1.5 w-1.5 rounded-full ${isThisCabinet ? "bg-indigo-600" : "bg-slate-400"}`} />
+                                <span>{loc.cabinetName} ({loc.department})</span>
+                                {isThisCabinet && <span className="text-[10px] text-indigo-600 font-black">[ตู้นี้]</span>}
+                              </span>
+                              <span className={`font-black shrink-0 ${loc.isOutOfStock ? "text-rose-600" : loc.isLowStock ? "text-amber-600" : "text-emerald-700"}`}>
+                                {loc.currentQty} {loc.unit}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -635,6 +712,7 @@ export default function DepartmentConsumablesView({
                 filteredConsumables.map((item, index) => {
                   const isOutOfStock = isItemOutOfStock(item);
                   const isLow = isItemLowStock(item) && !isOutOfStock;
+                  const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
                   return (
                     <tr 
@@ -681,30 +759,53 @@ export default function DepartmentConsumablesView({
                               <span className="text-[9px] font-bold px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded uppercase">
                                 {item.department}
                               </span>
+                              {multiInfo.hasMultipleCabinets && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedMultiStock(multiInfo)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[9px] font-black cursor-pointer"
+                                  title="คลิกดูสต็อกกระจายทุกตู้"
+                                >
+                                  <Layers className="h-2.5 w-2.5 text-indigo-600" />
+                                  <span>{multiInfo.cabinetLocations.length} ตู้</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Safety Standard Target (คล้ายรูปแรก) */}
+                      {/* Safety Standard Target */}
                       <td className="py-4 px-4 text-center">
                         <div className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs">
                           {item.minThreshold} {item.unit}
                         </div>
                       </td>
 
-                      {/* Current Real Quantity (จำนวนที่มีจริง) - แสดงตัวเลขจริง ไม่ต้องมีปุ่มบวกและลบ */}
+                      {/* Current Real Quantity (จำนวนที่มีจริง) */}
                       <td className="py-4 px-4 text-center">
-                        <div
-                          className={`inline-flex items-center justify-center min-w-[52px] px-3 py-1 rounded-lg border font-black text-sm shadow-2xs ${
-                            isOutOfStock
-                              ? "bg-rose-50 border-rose-200 text-rose-600"
-                              : isLow
-                              ? "bg-amber-50 border-amber-200 text-amber-600"
-                              : "bg-slate-50 border-slate-200 text-slate-800"
-                          }`}
-                        >
-                          <span>{item.currentQty}</span>
+                        <div className="inline-flex flex-col items-center">
+                          <div
+                            className={`inline-flex items-center justify-center min-w-[52px] px-3 py-1 rounded-lg border font-black text-sm shadow-2xs ${
+                              isOutOfStock
+                                ? "bg-rose-50 border-rose-200 text-rose-600"
+                                : isLow
+                                ? "bg-amber-50 border-amber-200 text-amber-600"
+                                : "bg-slate-50 border-slate-200 text-slate-800"
+                            }`}
+                          >
+                            <span>{item.currentQty}</span>
+                          </div>
+                          {multiInfo.hasMultipleCabinets && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMultiStock(multiInfo)}
+                              className="mt-1 text-[10px] font-extrabold text-indigo-700 hover:text-indigo-900 cursor-pointer underline decoration-dotted decoration-indigo-300"
+                              title="คลิกดูสต็อกกระจายทุกตู้"
+                            >
+                              (รวม: {multiInfo.totalQtyAcrossCabinets})
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -713,11 +814,33 @@ export default function DepartmentConsumablesView({
                         {item.unit}
                       </td>
 
-                      {/* Cabinet Name */}
+                      {/* Cabinet Name & Multi-Cabinet Information */}
                       <td className="py-4 px-4">
-                        <span className="font-semibold text-slate-700 block truncate max-w-[150px]" title={getCabinetName(item.cabinetId)}>
+                        <span className="font-semibold text-slate-800 block truncate max-w-[160px]" title={getCabinetName(item.cabinetId)}>
                           {getCabinetName(item.cabinetId)}
                         </span>
+                        {multiInfo.hasMultipleCabinets ? (
+                          <div className="mt-1 flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMultiStock(multiInfo)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-md font-bold text-[10px] cursor-pointer transition-colors w-fit"
+                              title="คลิกดูสต็อกในตู้ทั้งหมด"
+                            >
+                              <Layers className="h-2.5 w-2.5 text-indigo-600" />
+                              <span>พบใน {multiInfo.cabinetLocations.length} ตู้</span>
+                            </button>
+                            <span className="text-[10px] text-slate-500 truncate max-w-[180px]" title={multiInfo.breakdownText}>
+                              {multiInfo.breakdownText}
+                            </span>
+                          </div>
+                        ) : (
+                          item.department?.toLowerCase() !== getCabinetName(item.cabinetId).toLowerCase() && (
+                            <span className="text-[10px] text-slate-400 block truncate">
+                              สังกัด: {item.department}
+                            </span>
+                          )
+                        )}
                       </td>
 
                       {/* Status Indicator (คล้ายรูปแรก เช่น ยังไม่มีพัสดุในตู้ / สต็อกปกติ) */}
@@ -992,6 +1115,7 @@ export default function DepartmentConsumablesView({
                     printItems.map((item, idx) => {
                       const isOutOfStock = isItemOutOfStock(item);
                       const isLow = isItemLowStock(item) && !isOutOfStock;
+                      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
                       return (
                         <tr key={item.id} className="border-b border-slate-200">
@@ -1013,9 +1137,16 @@ export default function DepartmentConsumablesView({
                             <span className="font-bold text-slate-900 block leading-tight">
                               {item.name}
                             </span>
-                            <span className="text-[9px] text-slate-400 font-mono">
-                              ID: {item.id.slice(-6)}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span className="text-[9px] text-slate-400 font-mono">
+                                ID: {item.id.slice(-6)}
+                              </span>
+                              {multiInfo.hasMultipleCabinets && (
+                                <span className="text-[9px] font-bold text-indigo-800 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                                  มีใน {multiInfo.cabinetLocations.length} ตู้: {multiInfo.breakdownText}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           <td className="p-2 border border-slate-200 text-center font-bold uppercase text-slate-700 text-[11px]">
@@ -1034,6 +1165,11 @@ export default function DepartmentConsumablesView({
                             <span className={isOutOfStock ? "text-rose-700 font-black" : isLow ? "text-amber-700 font-black" : "text-slate-900"}>
                               {item.currentQty}
                             </span>
+                            {multiInfo.hasMultipleCabinets && (
+                              <span className="text-[9px] text-indigo-700 block font-bold mt-0.5">
+                                (รวมทุกตู้ {multiInfo.totalQtyAcrossCabinets})
+                              </span>
+                            )}
                           </td>
 
                           <td className="p-2 border border-slate-200 text-center font-medium text-slate-600">
@@ -1120,6 +1256,147 @@ export default function DepartmentConsumablesView({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 5. MULTI-CABINET STOCK RESULT MODAL (ดูผลลัพธ์สต็อกข้ามตู้ เช่น CMT และ QA/QC) */}
+      {selectedMultiStock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-900 to-indigo-800 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-white/10 flex items-center justify-center text-indigo-200 shrink-0">
+                  <Layers className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">
+                    ตรวจสอบสต็อกข้ามตู้ (Cross-Cabinet Stock Result)
+                  </span>
+                  <h3 className="font-black text-sm sm:text-base leading-tight truncate">
+                    {selectedMultiStock.displayName}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedMultiStock(null)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors shrink-0 ml-2"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Total Stock Banner */}
+            <div className="p-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-indigo-900 block">ยอดรวมสต็อกที่มีทั้งหมดในโรงงาน</span>
+                <span className="text-[11px] text-indigo-600">
+                  พบใน {selectedMultiStock.cabinetLocations.length} ตู้จัดเก็บ ({selectedMultiStock.breakdownText})
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-indigo-950 font-mono">
+                  {selectedMultiStock.totalQtyAcrossCabinets}
+                </span>
+                <span className="text-xs font-bold text-indigo-700 ml-1">
+                  {selectedMultiStock.unit}
+                </span>
+              </div>
+            </div>
+
+            {/* Cabinet Breakdown List */}
+            <div className="p-4 sm:p-5 space-y-3 overflow-y-auto max-h-[50vh]">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                รายละเอียดสต็อกแยกตามตู้จัดเก็บ:
+              </div>
+              {selectedMultiStock.cabinetLocations.map((loc, idx) => (
+                <div 
+                  key={loc.consumableId} 
+                  className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 transition-all shadow-2xs space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-7 w-7 rounded-lg bg-slate-100 font-mono text-xs font-bold text-slate-600 flex items-center justify-center shrink-0">
+                        #{idx + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm truncate">
+                            {loc.cabinetName}
+                          </h4>
+                          <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded text-[9px] font-bold uppercase">
+                            {loc.department}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span>ตู้ ID: {loc.cabinetId.slice(-6)}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status Pill */}
+                    <div className="shrink-0">
+                      {loc.isOutOfStock ? (
+                        <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full font-bold text-[10px]">
+                          หมดสต็อก (0)
+                        </span>
+                      ) : loc.isLowStock ? (
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold text-[10px]">
+                          ใกล้หมด
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-bold text-[10px]">
+                          สต็อกปกติ
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center text-xs">
+                    <div className="bg-slate-50 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400 block font-medium">มีในตู้นี้</span>
+                      <span className="font-black text-slate-900 text-sm">{loc.currentQty} {loc.unit}</span>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400 block font-medium">เกณฑ์ Min</span>
+                      <span className="font-bold text-slate-700 text-sm">{loc.minThreshold} {loc.unit}</span>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400 block font-medium">เกณฑ์ Max</span>
+                      <span className="font-bold text-slate-700 text-sm">
+                        {loc.maxThreshold ? `${loc.maxThreshold} ${loc.unit}` : "-"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Tip / Guidance Note */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/70 text-amber-900 text-xs flex items-start gap-2 leading-relaxed">
+                <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block mb-0.5">คำแนะนำการเก็บพัสดุข้ามตู้:</span>
+                  <span>
+                    เมื่อพัสดุชื่อเดียวกันถูกจัดเก็บแยกไว้ในหลายตู้ (เช่น ตู้ CMT และ ตู้ QA/QC) ระบบจะรวบรวมยอดสต็อกคงเหลือจริงของทุกตู้มาแสดงคู่กันเสมอ เพื่อให้ตรวจสอบจำนวนทั้งสองตู้ได้ในที่เดียว และป้องกันการสั่งซื้อซ้ำซ้อน
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedMultiStock(null)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors shadow-xs"
+              >
+                เข้าใจแล้ว / ปิดหน้าต่าง
+              </button>
+            </div>
           </div>
         </div>
       )}

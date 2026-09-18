@@ -5,7 +5,9 @@ import {
   getItemTargetStock, 
   getItemOrderDeficit, 
   isItemLowStock, 
-  isItemOutOfStock 
+  isItemOutOfStock,
+  getMultiCabinetStockInfo,
+  MultiCabinetStockInfo
 } from "../lib/stockUtils";
 import { 
   ShoppingCart, 
@@ -53,6 +55,7 @@ export default function PurchaseOrderView({
   const [onlyBelowThreshold, setOnlyBelowThreshold] = useState<boolean>(true);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [selectedMultiStock, setSelectedMultiStock] = useState<MultiCabinetStockInfo | null>(null);
 
   // Custom order quantities overrides per item ID: { [consumableId]: number }
   const [customOrderQtys, setCustomOrderQtys] = useState<Record<string, number>>({});
@@ -160,11 +163,16 @@ export default function PurchaseOrderView({
       poItems.forEach((item, index) => {
         const orderQty = getDefaultOrderQty(item);
         const cab = getCabinetName(item.cabinetId);
+        const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
         const status = isItemOutOfStock(item) ? "⚠️ หมดสต็อก" : isItemLowStock(item) ? "⚡ ต่ำกว่าเกณฑ์" : "📦 สั่งสำรอง";
         msg += `${index + 1}. ${item.name} (${item.department})\n`;
         msg += `   • สั่งซื้อ: ${orderQty} ${item.unit}\n`;
-        msg += `   • สต็อกปัจจุบัน: ${item.currentQty} / เกณฑ์ ${item.minThreshold} ${item.unit} [${status}]\n`;
-        msg += `   • ตำแหน่งจัดเก็บ: ${cab}\n\n`;
+        msg += `   • สต็อกตู้นี้: ${item.currentQty} / เกณฑ์ ${item.minThreshold} ${item.unit} [${status}]\n`;
+        msg += `   • ตำแหน่งจัดเก็บ: ${cab}\n`;
+        if (multiInfo.hasMultipleCabinets) {
+          msg += `   • 📍 สต็อกข้ามตู้: มีในตู้ ${multiInfo.breakdownText} (รวมสต็อกทุกตู้ ${multiInfo.totalQtyAcrossCabinets} ${item.unit})\n`;
+        }
+        msg += `\n`;
       });
       msg += `--------------------------------------\n`;
       msg += `📊 รวมรายการสั่งซื้อทั้งหมด: ${totalItemsToOrder} รายการ\n`;
@@ -190,17 +198,20 @@ export default function PurchaseOrderView({
       "ชื่อรายการวัสดุสิ้นเปลือง",
       "แผนก",
       "ตู้จัดเก็บ",
-      "สต็อกคงเหลือจริง",
+      "สต็อกคงเหลือในตู้นี้",
       "เกณฑ์ขั้นต่ำ (Min)",
       "เกณฑ์เป้าหมาย (Max)",
       "จำนวนที่ต้องสั่งซื้อ",
       "หน่วยนับ",
-      "สถานะความเร่งด่วน"
+      "สถานะความเร่งด่วน",
+      "สต็อกรวมทุกตู้ (กรณีมีหลายตู้)",
+      "รายละเอียดตู้จัดเก็บทั้งหมด"
     ];
 
     const rows = poItems.map((item, index) => {
       const orderQty = getDefaultOrderQty(item);
       const cab = getCabinetName(item.cabinetId);
+      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
       const status = isItemOutOfStock(item) ? "วิกฤต (หมดสต็อก)" : isItemLowStock(item) ? "ต่ำกว่าเกณฑ์" : "ปกติ/สต็อกเต็ม";
 
       return [
@@ -214,7 +225,9 @@ export default function PurchaseOrderView({
         getItemTargetStock(item),
         orderQty,
         `"${item.unit}"`,
-        `"${status}"`
+        `"${status}"`,
+        multiInfo.hasMultipleCabinets ? multiInfo.totalQtyAcrossCabinets : item.currentQty,
+        `"${(multiInfo.hasMultipleCabinets ? multiInfo.breakdownText : cab).replace(/"/g, '""')}"`
       ].join(",");
     });
 
@@ -458,6 +471,7 @@ export default function PurchaseOrderView({
               const orderQty = getDefaultOrderQty(item);
               const isOutOfStock = isItemOutOfStock(item);
               const isBelowThreshold = isItemLowStock(item);
+              const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
               return (
                 <div 
@@ -521,6 +535,25 @@ export default function PurchaseOrderView({
                       {" / "}{item.minThreshold} {item.unit}
                     </span>
                   </div>
+
+                  {/* Multi-Cabinet Cross-Check Banner on Mobile */}
+                  {multiInfo.hasMultipleCabinets && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMultiStock(multiInfo)}
+                      className="w-full text-left p-2.5 bg-indigo-50 hover:bg-indigo-100/80 rounded-xl border border-indigo-200 flex items-center justify-between text-xs transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5 text-indigo-900 min-w-0">
+                        <Layers className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                        <span className="truncate font-semibold text-[11px]">
+                          มีในตู้: {multiInfo.breakdownText}
+                        </span>
+                      </div>
+                      <span className="font-bold text-indigo-700 text-[11px] shrink-0 ml-1.5">
+                        รวมทุกตู้ {multiInfo.totalQtyAcrossCabinets} {item.unit} &rarr;
+                      </span>
+                    </button>
+                  )}
 
                   {/* Bottom: Stepper Order Qty & Quick Restock Button */}
                   <div className="flex items-center justify-between gap-2 pt-1">
@@ -607,6 +640,7 @@ export default function PurchaseOrderView({
                   const orderQty = getDefaultOrderQty(item);
                   const isOutOfStock = isItemOutOfStock(item);
                   const isBelowThreshold = isItemLowStock(item);
+                  const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
 
                   return (
                     <tr 
@@ -645,9 +679,20 @@ export default function PurchaseOrderView({
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded uppercase">
                           {item.department}
                         </span>
-                        <span className="text-slate-500 font-medium text-[11px] block mt-1 truncate max-w-[140px]">
+                        <span className="text-slate-600 font-medium text-[11px] block mt-1 truncate max-w-[150px]">
                           {getCabinetName(item.cabinetId)}
                         </span>
+                        {multiInfo.hasMultipleCabinets && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMultiStock(multiInfo)}
+                            className="mt-1 px-1.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 font-bold text-[9px] flex items-center gap-1 transition-colors cursor-pointer"
+                            title="คลิกเพื่อดูสต็อกแยกตามตู้ทั้งหมด"
+                          >
+                            <Layers className="h-2.5 w-2.5" />
+                            <span>มีใน {multiInfo.cabinetLocations.length} ตู้</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* Stock vs Min/Max */}
@@ -658,9 +703,19 @@ export default function PurchaseOrderView({
                           }`}>
                             {item.currentQty} / {item.minThreshold}
                           </span>
-                          <span className="text-[10px] text-slate-400">
-                            (เป้าหมาย Max: {getItemTargetStock(item)})
-                          </span>
+                          {multiInfo.hasMultipleCabinets ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMultiStock(multiInfo)}
+                              className="text-[9px] text-indigo-700 font-bold hover:underline cursor-pointer mt-0.5"
+                            >
+                              (รวมทุกตู้ {multiInfo.totalQtyAcrossCabinets})
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">
+                              (เป้าหมาย Max: {getItemTargetStock(item)})
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -827,20 +882,37 @@ export default function PurchaseOrderView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {poItems.map((item, idx) => (
-                    <tr key={item.id} className="border-b border-slate-200">
-                      <td className="p-2 border-r border-slate-200 text-center font-bold">{idx + 1}</td>
-                      <td className="p-2 border-r border-slate-200 font-bold text-slate-900">{item.name}</td>
-                      <td className="p-2 border-r border-slate-200 uppercase">{item.department}</td>
-                      <td className="p-2 border-r border-slate-200">{getCabinetName(item.cabinetId)}</td>
-                      <td className="p-2 border-r border-slate-200 text-center font-semibold">{item.currentQty}</td>
-                      <td className="p-2 border-r border-slate-200 text-center">{item.minThreshold}</td>
-                      <td className="p-2 border-r border-slate-200 text-center font-black text-slate-900 bg-slate-50">
-                        {getDefaultOrderQty(item)}
-                      </td>
-                      <td className="p-2 text-center font-semibold">{item.unit}</td>
-                    </tr>
-                  ))}
+                  {poItems.map((item, idx) => {
+                    const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+                    return (
+                      <tr key={item.id} className="border-b border-slate-200">
+                        <td className="p-2 border-r border-slate-200 text-center font-bold">{idx + 1}</td>
+                        <td className="p-2 border-r border-slate-200 font-bold text-slate-900">
+                          <div>{item.name}</div>
+                          {multiInfo.hasMultipleCabinets && (
+                            <div className="text-[9px] font-normal text-indigo-700 mt-0.5">
+                              * มีใน {multiInfo.cabinetLocations.length} ตู้: {multiInfo.breakdownText} (รวมสต็อกทุกตู้: {multiInfo.totalQtyAcrossCabinets} {item.unit})
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2 border-r border-slate-200 uppercase">{item.department}</td>
+                        <td className="p-2 border-r border-slate-200">{getCabinetName(item.cabinetId)}</td>
+                        <td className="p-2 border-r border-slate-200 text-center font-semibold">
+                          {item.currentQty}
+                          {multiInfo.hasMultipleCabinets && (
+                            <span className="block text-[9px] text-indigo-700 font-bold">
+                              (รวม {multiInfo.totalQtyAcrossCabinets})
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 border-r border-slate-200 text-center">{item.minThreshold}</td>
+                        <td className="p-2 border-r border-slate-200 text-center font-black text-slate-900 bg-slate-50">
+                          {getDefaultOrderQty(item)}
+                        </td>
+                        <td className="p-2 text-center font-semibold">{item.unit}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-100 font-black border-t-2 border-slate-300">
@@ -887,6 +959,146 @@ export default function PurchaseOrderView({
               >
                 <Printer className="h-4 w-4" />
                 <span>สั่งพิมพ์กระดาษ A4 เดี๋ยวนี้ (Print Clean A4)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cross-Cabinet Stock Breakdown Modal */}
+      {selectedMultiStock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-900 to-indigo-800 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-white/10 flex items-center justify-center text-indigo-200 shrink-0">
+                  <Layers className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">
+                    ตรวจสอบสต็อกข้ามตู้ (Cross-Cabinet Stock Check)
+                  </span>
+                  <h3 className="font-black text-sm sm:text-base leading-tight truncate">
+                    {selectedMultiStock.displayName}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedMultiStock(null)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors shrink-0 ml-2"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Total Stock Banner */}
+            <div className="p-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-indigo-900 block">ยอดรวมสต็อกคงเหลือจริงในโรงงาน</span>
+                <span className="text-[11px] text-indigo-600">
+                  พบใน {selectedMultiStock.cabinetLocations.length} ตู้จัดเก็บ ({selectedMultiStock.breakdownText})
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-indigo-950 font-mono">
+                  {selectedMultiStock.totalQtyAcrossCabinets}
+                </span>
+                <span className="text-xs font-bold text-indigo-700 ml-1">
+                  {selectedMultiStock.unit}
+                </span>
+              </div>
+            </div>
+
+            {/* Cabinet Breakdown List */}
+            <div className="p-4 sm:p-5 space-y-3 overflow-y-auto max-h-[50vh]">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                รายละเอียดสต็อกแยกตามตู้จัดเก็บ:
+              </div>
+              {selectedMultiStock.cabinetLocations.map((loc, idx) => (
+                <div 
+                  key={loc.consumableId} 
+                  className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 transition-all shadow-2xs space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-7 w-7 rounded-lg bg-slate-100 font-mono text-xs font-bold text-slate-600 flex items-center justify-center shrink-0">
+                        #{idx + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm truncate">
+                            {loc.cabinetName}
+                          </h4>
+                          <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded text-[9px] font-bold uppercase">
+                            {loc.department}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          ตู้ ID: {loc.cabinetId.slice(-6)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Status Pill */}
+                    <div className="shrink-0">
+                      {loc.isOutOfStock ? (
+                        <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-full font-bold text-[10px]">
+                          หมดสต็อก (0)
+                        </span>
+                      ) : loc.isLowStock ? (
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold text-[10px]">
+                          ต่ำกว่าเกณฑ์
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-bold text-[10px]">
+                          สต็อกปกติ
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center text-xs">
+                    <div className="bg-slate-50 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400 block font-medium">มีในตู้นี้</span>
+                      <span className="font-black text-slate-900 text-sm">{loc.currentQty} {loc.unit}</span>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400 block font-medium">เกณฑ์ Min</span>
+                      <span className="font-bold text-slate-700 text-sm">{loc.minThreshold} {loc.unit}</span>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded-lg">
+                      <span className="text-[10px] text-slate-400 block font-medium">เกณฑ์ Max</span>
+                      <span className="font-bold text-slate-700 text-sm">
+                        {loc.maxThreshold ? `${loc.maxThreshold} ${loc.unit}` : "-"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Note */}
+              <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200/70 text-indigo-950 text-xs flex items-start gap-2 leading-relaxed">
+                <Sparkles className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block mb-0.5">การตรวจสอบก่อนสั่งซื้อ:</span>
+                  <span>
+                    หากพบว่ามีสต็อกเหลืออยู่ในตู้ของแผนกอื่น (เช่น ในตู้ QA/QC มีอยู่เพียงพอ) สามารถเบิกย้ายข้ามแผนกมาใช้งานชั่วคราวได้ก่อน โดยไม่ต้องเสียค่าใช้จ่ายสั่งซื้อใหม่ซ้ำซ้อน
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedMultiStock(null)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors shadow-xs"
+              >
+                ปิดหน้าต่าง
               </button>
             </div>
           </div>
