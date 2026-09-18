@@ -94,6 +94,7 @@ export interface CabinetStockItem {
 export interface MultiCabinetStockInfo {
   normalizedName: string;
   displayName: string;
+  department: string;
   unit: string;
   totalQtyAcrossCabinets: number;
   cabinetLocations: CabinetStockItem[];
@@ -103,8 +104,12 @@ export interface MultiCabinetStockInfo {
 }
 
 /**
- * Calculates cross-cabinet stock information for a consumable
- * (e.g. checks if the same item exists in CMT cabinet and QA/QC cabinet)
+ * Calculates cross-cabinet stock information for a consumable.
+ * Strictly scoped by department as requested:
+ * An item is only considered "same consumable across multiple cabinets"
+ * if it belongs to the SAME DEPARTMENT (e.g. CMT items stored in multiple cabinets).
+ * If two cabinets have items of the same name but DIFFERENT departments (e.g. CMT vs WL),
+ * they are treated as distinct department stocks and NOT grouped together.
  */
 export function getMultiCabinetStockInfo(
   targetItem: Consumable,
@@ -112,13 +117,26 @@ export function getMultiCabinetStockInfo(
   getCabinetName: (id: string) => string
 ): MultiCabinetStockInfo {
   const norm = normalizeConsumableName(targetItem.name);
-  const matching = allConsumables.filter(c => normalizeConsumableName(c.name) === norm);
+  const targetDept = (targetItem.department || "").trim().toLowerCase();
+
+  // Filter items matching BOTH name AND department
+  const matching = allConsumables.filter(c => {
+    const isSameName = normalizeConsumableName(c.name) === norm;
+    if (!isSameName) return false;
+    
+    // Strict department matching: Must belong to the same department
+    if (targetDept) {
+      const cDept = (c.department || "").trim().toLowerCase();
+      return cDept === targetDept;
+    }
+    return true;
+  });
 
   const cabinetLocations: CabinetStockItem[] = matching.map(c => ({
     consumableId: c.id,
     cabinetId: c.cabinetId,
     cabinetName: getCabinetName(c.cabinetId) || "ตู้ไม่ระบุ",
-    department: c.department || "-",
+    department: c.department || targetItem.department || "-",
     currentQty: c.currentQty ?? 0,
     minThreshold: c.minThreshold ?? 0,
     maxThreshold: c.maxThreshold,
@@ -138,6 +156,7 @@ export function getMultiCabinetStockInfo(
   return {
     normalizedName: norm,
     displayName: targetItem.name,
+    department: targetItem.department || "-",
     unit: targetItem.unit || "ชิ้น",
     totalQtyAcrossCabinets,
     cabinetLocations,

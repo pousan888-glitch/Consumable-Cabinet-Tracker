@@ -1271,10 +1271,15 @@ export default function DepartmentConsumablesView({
                   <Layers className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">
-                    ตรวจสอบสต็อกข้ามตู้ (Cross-Cabinet Stock Result)
-                  </span>
-                  <h3 className="font-black text-sm sm:text-base leading-tight truncate">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">
+                      ตรวจสอบสต็อกข้ามตู้ (Cross-Cabinet Stock)
+                    </span>
+                    <span className="px-1.5 py-0.2 bg-white/20 text-white rounded text-[9px] font-bold uppercase">
+                      แผนก {selectedMultiStock.department}
+                    </span>
+                  </div>
+                  <h3 className="font-black text-sm sm:text-base leading-tight truncate mt-0.5">
                     {selectedMultiStock.displayName}
                   </h3>
                 </div>
@@ -1292,9 +1297,11 @@ export default function DepartmentConsumablesView({
             {/* Total Stock Banner */}
             <div className="p-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-bold text-indigo-900 block">ยอดรวมสต็อกที่มีทั้งหมดในโรงงาน</span>
+                <span className="text-[11px] font-bold text-indigo-900 block">
+                  ยอดรวมสต็อกของแผนก {selectedMultiStock.department}
+                </span>
                 <span className="text-[11px] text-indigo-600">
-                  พบใน {selectedMultiStock.cabinetLocations.length} ตู้จัดเก็บ ({selectedMultiStock.breakdownText})
+                  พบใน {selectedMultiStock.cabinetLocations.length} ตู้จัดเก็บของแผนกนี้ ({selectedMultiStock.breakdownText})
                 </span>
               </div>
               <div className="text-right">
@@ -1310,7 +1317,7 @@ export default function DepartmentConsumablesView({
             {/* Cabinet Breakdown List */}
             <div className="p-4 sm:p-5 space-y-3 overflow-y-auto max-h-[50vh]">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                รายละเอียดสต็อกแยกตามตู้จัดเก็บ:
+                รายละเอียดสต็อกแยกตามตู้จัดเก็บในแผนก {selectedMultiStock.department}:
               </div>
               {selectedMultiStock.cabinetLocations.map((loc, idx) => (
                 <div 
@@ -1379,9 +1386,9 @@ export default function DepartmentConsumablesView({
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/70 text-amber-900 text-xs flex items-start gap-2 leading-relaxed">
                 <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold block mb-0.5">คำแนะนำการเก็บพัสดุข้ามตู้:</span>
+                  <span className="font-bold block mb-0.5">การรวมสต็อกอิงตามแผนก:</span>
                   <span>
-                    เมื่อพัสดุชื่อเดียวกันถูกจัดเก็บแยกไว้ในหลายตู้ (เช่น ตู้ CMT และ ตู้ QA/QC) ระบบจะรวบรวมยอดสต็อกคงเหลือจริงของทุกตู้มาแสดงคู่กันเสมอ เพื่อให้ตรวจสอบจำนวนทั้งสองตู้ได้ในที่เดียว และป้องกันการสั่งซื้อซ้ำซ้อน
+                    ระบบจะรวบรวมสต็อกของพัสดุชื่อเดียวกันที่อยู่<b>เฉพาะภายในแผนก {selectedMultiStock.department}</b> เท่านั้น (เช่น มีในหลายตู้ของแผนก) โดยไม่นำพัสดุชื่อเดียวกันของแผนกอื่นมารวม เพื่อให้การนับสต็อกและการบริหารจัดการของแต่ละแผนกแยกออกจากกันอย่างถูกต้อง
                   </span>
                 </div>
               </div>

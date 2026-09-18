@@ -170,7 +170,7 @@ export default function PurchaseOrderView({
         msg += `   • สต็อกตู้นี้: ${item.currentQty} / เกณฑ์ ${item.minThreshold} ${item.unit} [${status}]\n`;
         msg += `   • ตำแหน่งจัดเก็บ: ${cab}\n`;
         if (multiInfo.hasMultipleCabinets) {
-          msg += `   • 📍 สต็อกข้ามตู้: มีในตู้ ${multiInfo.breakdownText} (รวมสต็อกทุกตู้ ${multiInfo.totalQtyAcrossCabinets} ${item.unit})\n`;
+          msg += `   • 📍 สต็อกข้ามตู้ (แผนก ${item.department}): มีในตู้ ${multiInfo.breakdownText} (รวมสต็อกทุกตู้ของแผนก ${multiInfo.totalQtyAcrossCabinets} ${item.unit})\n`;
         }
         msg += `\n`;
       });
@@ -204,8 +204,8 @@ export default function PurchaseOrderView({
       "จำนวนที่ต้องสั่งซื้อ",
       "หน่วยนับ",
       "สถานะความเร่งด่วน",
-      "สต็อกรวมทุกตู้ (กรณีมีหลายตู้)",
-      "รายละเอียดตู้จัดเก็บทั้งหมด"
+      "สต็อกรวมทุกตู้ของแผนก (กรณีมีหลายตู้)",
+      "รายละเอียดตู้จัดเก็บในแผนก"
     ];
 
     const rows = poItems.map((item, index) => {
@@ -976,10 +976,15 @@ export default function PurchaseOrderView({
                   <Layers className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">
-                    ตรวจสอบสต็อกข้ามตู้ (Cross-Cabinet Stock Check)
-                  </span>
-                  <h3 className="font-black text-sm sm:text-base leading-tight truncate">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-wider block">
+                      ตรวจสอบสต็อกข้ามตู้ (Cross-Cabinet Stock Check)
+                    </span>
+                    <span className="px-1.5 py-0.2 bg-white/20 text-white rounded text-[9px] font-bold uppercase">
+                      แผนก {selectedMultiStock.department}
+                    </span>
+                  </div>
+                  <h3 className="font-black text-sm sm:text-base leading-tight truncate mt-0.5">
                     {selectedMultiStock.displayName}
                   </h3>
                 </div>
@@ -997,9 +1002,11 @@ export default function PurchaseOrderView({
             {/* Total Stock Banner */}
             <div className="p-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-bold text-indigo-900 block">ยอดรวมสต็อกคงเหลือจริงในโรงงาน</span>
+                <span className="text-[11px] font-bold text-indigo-900 block">
+                  ยอดรวมสต็อกของแผนก {selectedMultiStock.department}
+                </span>
                 <span className="text-[11px] text-indigo-600">
-                  พบใน {selectedMultiStock.cabinetLocations.length} ตู้จัดเก็บ ({selectedMultiStock.breakdownText})
+                  พบใน {selectedMultiStock.cabinetLocations.length} ตู้จัดเก็บของแผนกนี้ ({selectedMultiStock.breakdownText})
                 </span>
               </div>
               <div className="text-right">
@@ -1015,7 +1022,7 @@ export default function PurchaseOrderView({
             {/* Cabinet Breakdown List */}
             <div className="p-4 sm:p-5 space-y-3 overflow-y-auto max-h-[50vh]">
               <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                รายละเอียดสต็อกแยกตามตู้จัดเก็บ:
+                รายละเอียดสต็อกแยกตามตู้จัดเก็บในแผนก {selectedMultiStock.department}:
               </div>
               {selectedMultiStock.cabinetLocations.map((loc, idx) => (
                 <div 
@@ -1085,7 +1092,7 @@ export default function PurchaseOrderView({
                 <div>
                   <span className="font-bold block mb-0.5">การตรวจสอบก่อนสั่งซื้อ:</span>
                   <span>
-                    หากพบว่ามีสต็อกเหลืออยู่ในตู้ของแผนกอื่น (เช่น ในตู้ QA/QC มีอยู่เพียงพอ) สามารถเบิกย้ายข้ามแผนกมาใช้งานชั่วคราวได้ก่อน โดยไม่ต้องเสียค่าใช้จ่ายสั่งซื้อใหม่ซ้ำซ้อน
+                    ระบบรวบรวมสต็อกของพัสดุชื่อเดียวกันที่อยู่<b>เฉพาะภายในแผนก {selectedMultiStock.department}</b> เท่านั้น (เช่น ตู้หลักและตู้สำรองของแผนก) หากพบว่ายังมีสต็อกเพียงพอในตู้อื่นของแผนกเดียวกัน สามารถเบิกมาใช้งานก่อนได้โดยไม่ต้องสั่งซื้อเพิ่ม
                   </span>
                 </div>
               </div>
