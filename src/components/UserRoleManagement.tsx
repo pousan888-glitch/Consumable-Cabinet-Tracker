@@ -21,7 +21,8 @@ import {
   Mail,
   UserCheck,
   Calendar,
-  X
+  X,
+  Eye
 } from "lucide-react";
 
 interface UserRoleManagementProps {
@@ -176,6 +177,8 @@ export default function UserRoleManagement({
         return "เจ้าหน้าที่ QC";
       case "HELPER":
         return "ทีมนับสต็อก (Helper)";
+      case "VIEWER":
+        return "ผู้เข้าชม/ตรวจสต็อก (Viewer)";
     }
   };
 
@@ -396,6 +399,8 @@ export default function UserRoleManagement({
                               ? "bg-red-100 text-red-700"
                               : user.role === "QC"
                               ? "bg-purple-100 text-purple-700"
+                              : user.role === "VIEWER"
+                              ? "bg-blue-100 text-blue-700"
                               : "bg-indigo-100 text-indigo-700"
                           }`}>
                             {isThisSuperAdmin ? (
@@ -441,6 +446,11 @@ export default function UserRoleManagement({
                             <UserCheck className="h-3.5 w-3.5" />
                             เจ้าหน้าที่ QC
                           </span>
+                        ) : user.role === "VIEWER" ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                            <Eye className="h-3.5 w-3.5" />
+                            ผู้เข้าชม (Viewer)
+                          </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold text-xs bg-indigo-50 text-indigo-700 border border-indigo-200">
                             <ShieldCheck className="h-3.5 w-3.5" />
@@ -466,6 +476,7 @@ export default function UserRoleManagement({
                               <option value="ADMIN">🛡️ แอดมิน (ADMIN)</option>
                               <option value="QC">🔬 เจ้าหน้าที่ QC (QC)</option>
                               <option value="HELPER">📋 นับสต็อก (HELPER)</option>
+                              <option value="VIEWER">👁️ ผู้เข้าชม/ดูสต็อก (VIEWER)</option>
                             </select>
                           </div>
                         )}
@@ -634,6 +645,25 @@ export default function UserRoleManagement({
                       <div>
                         <div className="font-bold text-xs text-slate-900">📋 เจ้าหน้าที่นับสต็อก (HELPER)</div>
                         <div className="text-[10px] text-slate-500">สแกน QR ประจำตู้และนับตรวจเช็กสต็อก</div>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                    formRole === "VIEWER" ? "border-blue-500 bg-blue-50/50 ring-1 ring-blue-500" : "border-slate-200 hover:bg-slate-50"
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="role"
+                        value="VIEWER"
+                        checked={formRole === "VIEWER"}
+                        onChange={() => setFormRole("VIEWER")}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">👁️ ผู้เข้าชม / ตรวจสต็อก (VIEWER)</div>
+                        <div className="text-[10px] text-slate-500">ดูข้อมูลตู้จัดเก็บและคอนซูมอย่างเดียว (Read-Only) ปลอดภัย ไม่สามารถแก้ไขหรือลบข้อมูลได้</div>
                       </div>
                     </div>
                   </label>

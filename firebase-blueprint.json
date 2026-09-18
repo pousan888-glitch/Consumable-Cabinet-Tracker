@@ -38,7 +38,7 @@
       "properties": {
         "email": { "type": "string" },
         "name": { "type": "string" },
-        "role": { "type": "string", "enum": ["ADMIN", "QC", "HELPER"] },
+        "role": { "type": "string", "enum": ["ADMIN", "QC", "HELPER", "VIEWER"] },
         "isSuperAdmin": { "type": "boolean" },
         "assignedBy": { "type": "string" },
         "updatedAt": { "type": "string" }

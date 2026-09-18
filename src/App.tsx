@@ -5,6 +5,7 @@ import LoginScreen from "./components/LoginScreen";
 import AdminDashboard from "./components/AdminDashboard";
 import HelperCountView from "./components/HelperCountView";
 import QCConsumeView from "./components/QCConsumeView";
+import ViewerDashboard from "./components/ViewerDashboard";
 import { seedDatabaseIfEmpty, getConsumables } from "./lib/dbService";
 import { isItemLowStock } from "./lib/stockUtils";
 import { auth, signOut } from "./lib/firebase";
@@ -204,6 +205,12 @@ export default function App() {
             onBackToMainMenu={handleBackToMenu}
           />
         )}
+        {user.role === "VIEWER" && (
+          <ViewerDashboard 
+            userEmail={user.email} 
+            userName={user.name} 
+          />
+        )}
       </main>
 
       {/* QUICK ACCESS TESTING BAR - FLOATING AND COLLAPSIBLE */}
@@ -236,7 +243,7 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   onClick={() => {
                     handleChangeRole("ADMIN");
@@ -275,6 +282,19 @@ export default function App() {
                   }`}
                 >
                   QC
+                </button>
+                <button
+                  onClick={() => {
+                    handleChangeRole("VIEWER");
+                    setIsTestingBarOpen(false);
+                  }}
+                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                    user.role === "VIEWER" 
+                      ? "bg-blue-600 text-white border-blue-600 shadow-2xs" 
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  👁️ Viewer
                 </button>
               </div>
             </div>

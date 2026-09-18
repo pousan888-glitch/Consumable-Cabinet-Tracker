@@ -21,6 +21,8 @@ export default function Header({ user, onChangeRole, onLogout, lowStockCount }: 
         return { text: "📋 นับสต็อก (Helper)", bg: "bg-indigo-50 text-indigo-700 border-indigo-200" };
       case "QC":
         return { text: "🔬 เบิกใช้ QC", bg: "bg-purple-50 text-purple-700 border-purple-200" };
+      case "VIEWER":
+        return { text: "👁️ ผู้เข้าชม (Viewer)", bg: "bg-blue-50 text-blue-700 border-blue-200 font-bold" };
     }
   };
 
@@ -77,6 +79,7 @@ export default function Header({ user, onChangeRole, onLogout, lowStockCount }: 
                   <option value="ADMIN">แอดมิน</option>
                   <option value="HELPER">ทีมตรวจนับ</option>
                   <option value="QC">QCเบิกใช้</option>
+                  <option value="VIEWER">ผู้เข้าชม (Viewer)</option>
                 </select>
                 <RefreshCw className="h-3 w-3 text-slate-400 animate-spin-slow mr-1 shrink-0" />
               </div>
