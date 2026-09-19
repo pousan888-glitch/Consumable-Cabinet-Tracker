@@ -27,6 +27,7 @@ import {
   Eye, 
   RotateCcw,
   Sparkles,
+  PackageCheck,
   X
 } from "lucide-react";
 
@@ -38,6 +39,35 @@ interface PurchaseOrderViewProps {
   getCabinetName: (id: string) => string;
   onToast: (msg: string) => void;
   currentUserEmail: string;
+}
+
+export interface GroupedCabinetStock {
+  cabinetId: string;
+  cabinetName: string;
+  currentQty: number;
+  minThreshold: number;
+  targetStock: number;
+  deficit: number;
+  consumable: Consumable;
+}
+
+export interface GroupedPOItem {
+  key: string;
+  id: string;
+  name: string;
+  department: string;
+  unit: string;
+  imageUrl: string;
+  isMultiCabinet: boolean;
+  cabinets: GroupedCabinetStock[];
+  subItems: Consumable[];
+  totalCurrentQty: number;
+  totalMinThreshold: number;
+  totalTargetStock: number;
+  totalDeficit: number;
+  isOutOfStock: boolean;
+  isBelowThreshold: boolean;
+  isNormal: boolean;
 }
 
 export default function PurchaseOrderView({
@@ -53,11 +83,17 @@ export default function PurchaseOrderView({
   const [selectedDept, setSelectedDept] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [onlyBelowThreshold, setOnlyBelowThreshold] = useState<boolean>(true);
+  // Multi-cabinet consumable grouping (เปิดใช้งานเป็นค่าเริ่มต้นตามที่ผู้ใช้ร้องขอ)
+  const [groupMultiCabinet, setGroupMultiCabinet] = useState<boolean>(true);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
   const [selectedMultiStock, setSelectedMultiStock] = useState<MultiCabinetStockInfo | null>(null);
 
-  // Custom order quantities overrides per item ID: { [consumableId]: number }
+  // Restock distribution modal state for multi-cabinet items
+  const [restockModalItem, setRestockModalItem] = useState<GroupedPOItem | null>(null);
+  const [restockDistributions, setRestockDistributions] = useState<Record<string, number>>({});
+
+  // Custom order quantities overrides per item Key/ID: { [key]: number }
   const [customOrderQtys, setCustomOrderQtys] = useState<Record<string, number>>({});
 
   // Compute union of all departments (strictly excluding Production)
@@ -81,46 +117,42 @@ export default function PurchaseOrderView({
 
   // Default calculation for refill quantity:
   // target capacity - currentQty (0 if already at or above target)
-  const getDefaultOrderQty = (item: Consumable): number => {
+  const getDefaultOrderQty = (item: GroupedPOItem): number => {
+    if (customOrderQtys[item.key] !== undefined) {
+      return customOrderQtys[item.key];
+    }
     if (customOrderQtys[item.id] !== undefined) {
       return customOrderQtys[item.id];
     }
-    return getItemOrderDeficit(item);
+    return Math.max(0, item.totalDeficit);
   };
 
-  const handleAdjustOrderQty = (item: Consumable, delta: number) => {
+  const handleAdjustOrderQty = (item: GroupedPOItem, delta: number) => {
     const current = getDefaultOrderQty(item);
     const next = Math.max(0, current + delta);
     setCustomOrderQtys(prev => ({
       ...prev,
-      [item.id]: next
+      [item.key]: next
     }));
   };
 
-  const handleSetOrderQty = (item: Consumable, val: number) => {
+  const handleSetOrderQty = (item: GroupedPOItem, val: number) => {
     const next = Math.max(0, val || 0);
     setCustomOrderQtys(prev => ({
       ...prev,
-      [item.id]: next
+      [item.key]: next
     }));
   };
 
-  // Filter items for the Purchase Order
-  const poItems = useMemo(() => {
-    return consumables.filter(item => {
+  // Filter items for the Purchase Order with multi-cabinet grouping
+  const poItems = useMemo((): GroupedPOItem[] => {
+    const filteredRaw = consumables.filter(item => {
       // 1. Department Filter
       if (selectedDept !== "ALL" && item.department?.toLowerCase() !== selectedDept.toLowerCase()) {
         return false;
       }
 
-      // 2. Only items below safety threshold (or out of stock)
-      if (onlyBelowThreshold) {
-        if (!isItemLowStock(item)) {
-          return false;
-        }
-      }
-
-      // 3. Search Filter
+      // 2. Search Filter
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const matchesName = item.name.toLowerCase().includes(q);
@@ -130,18 +162,176 @@ export default function PurchaseOrderView({
       }
 
       return true;
-    }).sort((a, b) => {
-      // Sort: Out of stock first, then lowest stock percentage
-      if (a.currentQty === 0 && b.currentQty > 0) return -1;
-      if (b.currentQty === 0 && a.currentQty > 0) return 1;
-      return a.currentQty - b.currentQty;
     });
-  }, [consumables, selectedDept, onlyBelowThreshold, searchTerm, getCabinetName]);
 
-  // Aggregate Metrics (คล้ายรูปที่ 3)
+    if (!groupMultiCabinet) {
+      // Flat list (no grouping)
+      return filteredRaw
+        .filter(item => (onlyBelowThreshold ? isItemLowStock(item) : true))
+        .map(item => {
+          const targetStock = getItemTargetStock(item);
+          const deficit = getItemOrderDeficit(item);
+          const isOut = isItemOutOfStock(item);
+          const isLow = isItemLowStock(item);
+          const cabName = getCabinetName(item.cabinetId);
+          return {
+            key: item.id,
+            id: item.id,
+            name: item.name,
+            department: item.department || "-",
+            unit: item.unit || "ชิ้น",
+            imageUrl: item.imageUrl || "",
+            isMultiCabinet: false,
+            cabinets: [{
+              cabinetId: item.cabinetId,
+              cabinetName: cabName,
+              currentQty: item.currentQty || 0,
+              minThreshold: item.minThreshold || 0,
+              targetStock,
+              deficit,
+              consumable: item
+            }],
+            subItems: [item],
+            totalCurrentQty: item.currentQty || 0,
+            totalMinThreshold: item.minThreshold || 0,
+            totalTargetStock: targetStock,
+            totalDeficit: deficit,
+            isOutOfStock: isOut,
+            isBelowThreshold: isLow,
+            isNormal: !isLow && !isOut
+          };
+        })
+        .sort((a, b) => {
+          if (a.totalCurrentQty === 0 && b.totalCurrentQty > 0) return -1;
+          if (b.totalCurrentQty === 0 && a.totalCurrentQty > 0) return 1;
+          return a.totalCurrentQty - b.totalCurrentQty;
+        });
+    }
+
+    // Grouping by: Department + Normalized Item Name
+    const groupMap = new Map<string, Consumable[]>();
+    filteredRaw.forEach(item => {
+      const deptKey = (item.department || "").trim().toUpperCase();
+      const nameKey = (item.name || "").trim().toLowerCase();
+      const groupKey = `${deptKey}___${nameKey}`;
+      if (!groupMap.has(groupKey)) {
+        groupMap.set(groupKey, []);
+      }
+      groupMap.get(groupKey)!.push(item);
+    });
+
+    const result: GroupedPOItem[] = [];
+
+    groupMap.forEach((items, groupKey) => {
+      const firstItem = items[0];
+      const imageUrl = items.find(i => i.imageUrl)?.imageUrl || firstItem.imageUrl || "";
+      const unit = firstItem.unit || "ชิ้น";
+      const department = firstItem.department || "-";
+      const name = firstItem.name;
+
+      const cabinetsData: GroupedCabinetStock[] = items.map(item => {
+        const targetStock = getItemTargetStock(item);
+        const deficit = getItemOrderDeficit(item);
+        return {
+          cabinetId: item.cabinetId,
+          cabinetName: getCabinetName(item.cabinetId),
+          currentQty: item.currentQty || 0,
+          minThreshold: item.minThreshold || 0,
+          targetStock,
+          deficit,
+          consumable: item
+        };
+      });
+
+      const totalCurrentQty = cabinetsData.reduce((acc, c) => acc + c.currentQty, 0);
+      const totalMinThreshold = cabinetsData.reduce((acc, c) => acc + c.minThreshold, 0);
+      const totalTargetStock = cabinetsData.reduce((acc, c) => acc + c.targetStock, 0);
+      const totalDeficit = cabinetsData.reduce((acc, c) => acc + c.deficit, 0);
+
+      const isOutOfStock = totalCurrentQty === 0;
+      // An item needs reorder if total current is below min OR deficit > 0 OR any sub-cabinet is below threshold
+      const hasAnySubItemLow = items.some(i => isItemLowStock(i));
+      const isBelowThreshold = totalCurrentQty < totalMinThreshold || hasAnySubItemLow || totalDeficit > 0;
+
+      if (onlyBelowThreshold && !isBelowThreshold) {
+        return;
+      }
+
+      result.push({
+        key: groupKey,
+        id: firstItem.id,
+        name,
+        department,
+        unit,
+        imageUrl,
+        isMultiCabinet: items.length > 1,
+        cabinets: cabinetsData,
+        subItems: items,
+        totalCurrentQty,
+        totalMinThreshold,
+        totalTargetStock,
+        totalDeficit,
+        isOutOfStock,
+        isBelowThreshold,
+        isNormal: !isBelowThreshold && !isOutOfStock
+      });
+    });
+
+    // Sort: Out of stock first, then lowest total current qty
+    return result.sort((a, b) => {
+      if (a.isOutOfStock && !b.isOutOfStock) return -1;
+      if (!a.isOutOfStock && b.isOutOfStock) return 1;
+      return a.totalCurrentQty - b.totalCurrentQty;
+    });
+  }, [consumables, selectedDept, onlyBelowThreshold, searchTerm, groupMultiCabinet, getCabinetName]);
+
+  // Aggregate Metrics
   const totalItemsToOrder = poItems.length;
   const totalPiecesToOrder = poItems.reduce((acc, item) => acc + getDefaultOrderQty(item), 0);
-  const outOfStockCount = poItems.filter(item => item.currentQty === 0).length;
+  const outOfStockCount = poItems.filter(item => item.isOutOfStock).length;
+
+  // Open Multi-Cabinet Restock Distribution Modal
+  const handleOpenRestockModal = (item: GroupedPOItem) => {
+    const defaultDist: Record<string, number> = {};
+    const totalOrder = getDefaultOrderQty(item);
+
+    let remaining = totalOrder;
+    item.cabinets.forEach(cab => {
+      const needed = Math.max(0, cab.deficit);
+      const allocated = Math.min(needed, remaining);
+      defaultDist[cab.consumable.id] = allocated;
+      remaining -= allocated;
+    });
+
+    // If there is any leftover quantity, allocate to the first cabinet
+    if (remaining > 0 && item.cabinets.length > 0) {
+      const firstId = item.cabinets[0].consumable.id;
+      defaultDist[firstId] = (defaultDist[firstId] || 0) + remaining;
+    }
+
+    setRestockDistributions(defaultDist);
+    setRestockModalItem(item);
+  };
+
+  // Confirm Multi-Cabinet Restock
+  const handleConfirmRestockModal = async () => {
+    if (!restockModalItem) return;
+    try {
+      let totalAdded = 0;
+      for (const cab of restockModalItem.cabinets) {
+        const addQty = restockDistributions[cab.consumable.id] || 0;
+        if (addQty > 0) {
+          await onUpdateQty(cab.consumable, cab.consumable.currentQty + addQty);
+          totalAdded += addQty;
+        }
+      }
+      onToast(`รับของเข้าตู้ ${restockModalItem.name} เข้าตู้เรียบร้อย (+${totalAdded} ${restockModalItem.unit})`);
+      setRestockModalItem(null);
+    } catch (err) {
+      console.error(err);
+      onToast("เกิดข้อผิดพลาดในการรับของเข้าตู้");
+    }
+  };
 
   // 1. Action: Copy formatted order for LINE
   const handleCopyForLine = () => {
@@ -162,15 +352,15 @@ export default function PurchaseOrderView({
     } else {
       poItems.forEach((item, index) => {
         const orderQty = getDefaultOrderQty(item);
-        const cab = getCabinetName(item.cabinetId);
-        const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
-        const status = isItemOutOfStock(item) ? "⚠️ หมดสต็อก" : isItemLowStock(item) ? "⚡ ต่ำกว่าเกณฑ์" : "📦 สั่งสำรอง";
+        const status = item.isOutOfStock ? "⚠️ หมดสต็อก" : item.isBelowThreshold ? "⚡ ต่ำกว่าเกณฑ์" : "📦 สั่งสำรอง";
         msg += `${index + 1}. ${item.name} (${item.department})\n`;
         msg += `   • สั่งซื้อ: ${orderQty} ${item.unit}\n`;
-        msg += `   • สต็อกตู้นี้: ${item.currentQty} / เกณฑ์ ${item.minThreshold} ${item.unit} [${status}]\n`;
-        msg += `   • ตำแหน่งจัดเก็บ: ${cab}\n`;
-        if (multiInfo.hasMultipleCabinets) {
-          msg += `   • 📍 สต็อกข้ามตู้ (แผนก ${item.department}): มีในตู้ ${multiInfo.breakdownText} (รวมสต็อกทุกตู้ของแผนก ${multiInfo.totalQtyAcrossCabinets} ${item.unit})\n`;
+        msg += `   • สต็อกรวม: ${item.totalCurrentQty} / เกณฑ์ขั้นต่ำ ${item.totalMinThreshold} ${item.unit} [${status}]\n`;
+        if (item.isMultiCabinet) {
+          const breakdown = item.cabinets.map(c => `${c.cabinetName}: มี ${c.currentQty} (ขาด ${c.deficit})`).join(", ");
+          msg += `   • 📍 มีใน ${item.cabinets.length} ตู้: ${breakdown}\n`;
+        } else {
+          msg += `   • ตำแหน่งจัดเก็บ: ${item.cabinets[0]?.cabinetName || "-"}\n`;
         }
         msg += `\n`;
       });
@@ -194,40 +384,38 @@ export default function PurchaseOrderView({
 
     const headers = [
       "ลำดับ",
-      "รหัสพัสดุ",
       "ชื่อรายการวัสดุสิ้นเปลือง",
       "แผนก",
       "ตู้จัดเก็บ",
-      "สต็อกคงเหลือในตู้นี้",
-      "เกณฑ์ขั้นต่ำ (Min)",
-      "เกณฑ์เป้าหมาย (Max)",
+      "สต็อกคงเหลือรวม",
+      "เกณฑ์ขั้นต่ำรวม (Min)",
+      "เกณฑ์เป้าหมายรวม (Max)",
       "จำนวนที่ต้องสั่งซื้อ",
       "หน่วยนับ",
       "สถานะความเร่งด่วน",
-      "สต็อกรวมทุกตู้ของแผนก (กรณีมีหลายตู้)",
-      "รายละเอียดตู้จัดเก็บในแผนก"
+      "จำนวนตู้จัดเก็บ",
+      "รายละเอียดสต็อกแยกตามตู้"
     ];
 
     const rows = poItems.map((item, index) => {
       const orderQty = getDefaultOrderQty(item);
-      const cab = getCabinetName(item.cabinetId);
-      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
-      const status = isItemOutOfStock(item) ? "วิกฤต (หมดสต็อก)" : isItemLowStock(item) ? "ต่ำกว่าเกณฑ์" : "ปกติ/สต็อกเต็ม";
+      const cabNames = item.cabinets.map(c => c.cabinetName).join(", ");
+      const breakdown = item.cabinets.map(c => `${c.cabinetName}: คงเหลือ ${c.currentQty}/${c.minThreshold} (ขาด ${c.deficit})`).join(" | ");
+      const status = item.isOutOfStock ? "วิกฤต (หมดสต็อก)" : item.isBelowThreshold ? "ต่ำกว่าเกณฑ์" : "ปกติ/สต็อกเต็ม";
 
       return [
         index + 1,
-        `"${item.id}"`,
         `"${item.name.replace(/"/g, '""')}"`,
         `"${item.department}"`,
-        `"${cab.replace(/"/g, '""')}"`,
-        item.currentQty,
-        item.minThreshold,
-        getItemTargetStock(item),
+        `"${cabNames.replace(/"/g, '""')}"`,
+        item.totalCurrentQty,
+        item.totalMinThreshold,
+        item.totalTargetStock,
         orderQty,
         `"${item.unit}"`,
         `"${status}"`,
-        multiInfo.hasMultipleCabinets ? multiInfo.totalQtyAcrossCabinets : item.currentQty,
-        `"${(multiInfo.hasMultipleCabinets ? multiInfo.breakdownText : cab).replace(/"/g, '""')}"`
+        item.isMultiCabinet ? `มีใน ${item.cabinets.length} ตู้` : "1 ตู้",
+        `"${breakdown.replace(/"/g, '""')}"`
       ].join(",");
     });
 
@@ -319,7 +507,7 @@ export default function PurchaseOrderView({
                 <span className="text-xs font-bold text-slate-600">รายการ</span>
               </div>
               <span className="text-[10px] text-slate-400 mt-0.5 block">
-                จากรายการตรวจนับทั้งหมด {consumables.length} ชนิด
+                {groupMultiCabinet ? "รวบรวมพัสดุชื่อเดียวกันให้แสดงเป็น 1 รายการ" : `จากรายการตรวจนับทั้งหมด ${consumables.length} ชนิด`}
               </span>
             </div>
             <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
@@ -398,6 +586,18 @@ export default function PurchaseOrderView({
             />
             <span>แสดงเฉพาะรายการที่ต้องสั่ง (สต็อกต่ำกว่าเกณฑ์)</span>
           </label>
+
+          {/* Group Multi-Cabinet Toggle (เปิดไว้เป็นค่าเริ่มต้นเพื่อให้แสดง 1 ช่องตามที่ต้องการ) */}
+          <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none bg-emerald-50/70 border border-emerald-200/80 px-2.5 py-1.5 rounded-xl hover:bg-emerald-100/70 transition-colors">
+            <input
+              type="checkbox"
+              checked={groupMultiCabinet}
+              onChange={(e) => setGroupMultiCabinet(e.target.checked)}
+              className="rounded text-emerald-700 focus:ring-emerald-700 h-4 w-4 cursor-pointer"
+            />
+            <Layers className="h-3.5 w-3.5 text-emerald-700" />
+            <span>รวมรายการแยกตู้เป็น 1 แถว</span>
+          </label>
         </div>
 
         {/* Right: Print / Excel / Line Actions */}
@@ -469,13 +669,12 @@ export default function PurchaseOrderView({
           ) : (
             poItems.map((item, index) => {
               const orderQty = getDefaultOrderQty(item);
-              const isOutOfStock = isItemOutOfStock(item);
-              const isBelowThreshold = isItemLowStock(item);
-              const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+              const isOutOfStock = item.isOutOfStock;
+              const isBelowThreshold = item.isBelowThreshold;
 
               return (
                 <div 
-                  key={item.id}
+                  key={item.key}
                   className={`p-3.5 space-y-3 transition-colors ${
                     isOutOfStock ? "bg-rose-50/25" : isBelowThreshold ? "bg-amber-50/15" : ""
                   }`}
@@ -490,19 +689,25 @@ export default function PurchaseOrderView({
                         referrerPolicy="no-referrer"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[10px] font-bold text-slate-400 font-mono">
                             #{index + 1}
                           </span>
                           <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 font-bold text-[9px] rounded uppercase">
                             {item.department}
                           </span>
+                          {item.isMultiCabinet && (
+                            <span className="px-1.5 py-0.2 bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[9px] rounded flex items-center gap-1">
+                              <Layers className="h-2.5 w-2.5" />
+                              <span>รวม {item.cabinets.length} ตู้</span>
+                            </span>
+                          )}
                         </div>
                         <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm leading-snug break-words mt-0.5">
                           {item.name}
                         </h4>
                         <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                          ตู้: {getCabinetName(item.cabinetId)}
+                          ตู้: {item.cabinets.map(c => c.cabinetName).join(", ")}
                         </p>
                       </div>
                     </div>
@@ -527,35 +732,36 @@ export default function PurchaseOrderView({
 
                   {/* Middle: Current vs Min Target */}
                   <div className="flex items-center justify-between text-xs py-1.5 px-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <span className="text-slate-500 font-medium">สต็อกจริง / เกณฑ์ขั้นต่ำ:</span>
+                    <span className="text-slate-500 font-medium">สต็อกรวม / เกณฑ์ขั้นต่ำรวม:</span>
                     <span className="font-extrabold text-slate-800">
                       <span className={isOutOfStock ? "text-rose-600" : isBelowThreshold ? "text-amber-600" : "text-emerald-700"}>
-                        {item.currentQty}
+                        {item.totalCurrentQty}
                       </span>
-                      {" / "}{item.minThreshold} {item.unit}
+                      {" / "}{item.totalMinThreshold} {item.unit}
                     </span>
                   </div>
 
-                  {/* Multi-Cabinet Cross-Check Banner on Mobile */}
-                  {multiInfo.hasMultipleCabinets && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMultiStock(multiInfo)}
-                      className="w-full text-left p-2.5 bg-indigo-50 hover:bg-indigo-100/80 rounded-xl border border-indigo-200 flex items-center justify-between text-xs transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-center gap-1.5 text-indigo-900 min-w-0">
-                        <Layers className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-                        <span className="truncate font-semibold text-[11px]">
-                          มีในตู้: {multiInfo.breakdownText}
-                        </span>
+                  {/* Multi-Cabinet Breakdown on Mobile */}
+                  {item.isMultiCabinet && (
+                    <div className="p-2.5 bg-indigo-50/70 rounded-xl border border-indigo-200/80 space-y-1 text-xs">
+                      <div className="font-bold text-indigo-900 text-[11px] flex items-center gap-1">
+                        <Layers className="h-3.5 w-3.5 text-indigo-600" />
+                        <span>รายละเอียดสต็อกแยกตาม {item.cabinets.length} ตู้:</span>
                       </div>
-                      <span className="font-bold text-indigo-700 text-[11px] shrink-0 ml-1.5">
-                        รวมทุกตู้ {multiInfo.totalQtyAcrossCabinets} {item.unit} &rarr;
-                      </span>
-                    </button>
+                      <div className="space-y-1 pt-0.5">
+                        {item.cabinets.map(cab => (
+                          <div key={cab.cabinetId} className="flex items-center justify-between text-[11px] bg-white/80 p-1 px-2 rounded border border-indigo-100">
+                            <span className="font-medium text-slate-800 truncate">{cab.cabinetName}</span>
+                            <span className="font-bold text-slate-600 shrink-0">
+                              มี {cab.currentQty} / เกณฑ์ {cab.minThreshold} (ขาด {cab.deficit})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
 
-                  {/* Bottom: Stepper Order Qty & Quick Restock Button */}
+                  {/* Bottom: Stepper Order Qty & Restock Button */}
                   <div className="flex items-center justify-between gap-2 pt-1">
                     {/* Stepper */}
                     <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
@@ -593,12 +799,16 @@ export default function PurchaseOrderView({
                     {/* Quick Restock Fill Button */}
                     <button
                       onClick={async () => {
-                        await onUpdateQty(item, item.currentQty + orderQty);
-                        onToast(`เติมสต็อก ${item.name} +${orderQty} ${item.unit} เรียบร้อย!`);
+                        if (item.isMultiCabinet) {
+                          handleOpenRestockModal(item);
+                        } else {
+                          await onUpdateQty(item.subItems[0], item.subItems[0].currentQty + orderQty);
+                          onToast(`เติมสต็อก ${item.name} +${orderQty} ${item.unit} เรียบร้อย!`);
+                        }
                       }}
-                      className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 cursor-pointer transition-colors shadow-2xs"
+                      className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 cursor-pointer transition-colors shadow-2xs whitespace-nowrap"
                     >
-                      รับของเข้าตู้
+                      {item.isMultiCabinet ? "จัดสรรเข้าตู้" : "รับของเข้าตู้"}
                     </button>
                   </div>
                 </div>
@@ -638,13 +848,12 @@ export default function PurchaseOrderView({
               ) : (
                 poItems.map((item, index) => {
                   const orderQty = getDefaultOrderQty(item);
-                  const isOutOfStock = isItemOutOfStock(item);
-                  const isBelowThreshold = isItemLowStock(item);
-                  const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+                  const isOutOfStock = item.isOutOfStock;
+                  const isBelowThreshold = item.isBelowThreshold;
 
                   return (
                     <tr 
-                      key={item.id}
+                      key={item.key}
                       className={`hover:bg-slate-50/70 transition-colors ${
                         isOutOfStock ? "bg-rose-50/30" : isBelowThreshold ? "bg-amber-50/20" : ""
                       }`}
@@ -667,9 +876,16 @@ export default function PurchaseOrderView({
                             <span className="font-black text-slate-900 text-xs sm:text-sm block leading-tight">
                               {item.name}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
-                              ID: {item.id.slice(-6)}
-                            </span>
+                            {item.isMultiCabinet ? (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-[10px]">
+                                <Layers className="h-3 w-3 text-indigo-600" />
+                                <span>รวม {item.cabinets.length} ตู้จัดเก็บ</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
+                                ID: {item.id.slice(-6)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -679,19 +895,21 @@ export default function PurchaseOrderView({
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded uppercase">
                           {item.department}
                         </span>
-                        <span className="text-slate-600 font-medium text-[11px] block mt-1 truncate max-w-[150px]">
-                          {getCabinetName(item.cabinetId)}
-                        </span>
-                        {multiInfo.hasMultipleCabinets && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedMultiStock(multiInfo)}
-                            className="mt-1 px-1.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 font-bold text-[9px] flex items-center gap-1 transition-colors cursor-pointer"
-                            title="คลิกเพื่อดูสต็อกแยกตามตู้ทั้งหมด"
-                          >
-                            <Layers className="h-2.5 w-2.5" />
-                            <span>มีใน {multiInfo.cabinetLocations.length} ตู้</span>
-                          </button>
+                        {item.isMultiCabinet ? (
+                          <div className="mt-1 space-y-1">
+                            {item.cabinets.map(cab => (
+                              <div key={cab.cabinetId} className="flex items-center justify-between gap-2 text-[11px] bg-slate-50 p-1 px-1.5 rounded border border-slate-200/60 max-w-[210px]">
+                                <span className="font-medium text-slate-700 truncate">{cab.cabinetName}</span>
+                                <span className="font-bold text-slate-500 shrink-0 text-[10px]">
+                                  ({cab.currentQty}/{cab.minThreshold})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-600 font-medium text-[11px] block mt-1 truncate max-w-[150px]">
+                            {item.cabinets[0]?.cabinetName || "-"}
+                          </span>
                         )}
                       </td>
 
@@ -701,19 +919,15 @@ export default function PurchaseOrderView({
                           <span className={`font-black text-xs sm:text-sm ${
                             isOutOfStock ? "text-rose-600 font-black" : isBelowThreshold ? "text-amber-600" : "text-emerald-700"
                           }`}>
-                            {item.currentQty} / {item.minThreshold}
+                            {item.totalCurrentQty} / {item.totalMinThreshold}
                           </span>
-                          {multiInfo.hasMultipleCabinets ? (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedMultiStock(multiInfo)}
-                              className="text-[9px] text-indigo-700 font-bold hover:underline cursor-pointer mt-0.5"
-                            >
-                              (รวมทุกตู้ {multiInfo.totalQtyAcrossCabinets})
-                            </button>
+                          {item.isMultiCabinet ? (
+                            <span className="text-[10px] text-indigo-700 font-bold mt-0.5">
+                              (รวม {item.cabinets.length} ตู้ | เป้าหมาย: {item.totalTargetStock})
+                            </span>
                           ) : (
                             <span className="text-[10px] text-slate-400">
-                              (เป้าหมาย Max: {getItemTargetStock(item)})
+                              (เป้าหมาย Max: {item.totalTargetStock})
                             </span>
                           )}
                         </div>
@@ -724,7 +938,7 @@ export default function PurchaseOrderView({
                         {item.unit}
                       </td>
 
-                      {/* Order Quantity Stepper [-] [number] [+] (คล้ายรูปที่ 3) */}
+                      {/* Order Quantity Stepper [-] [number] [+] */}
                       <td className="py-4 px-5 text-center">
                         <div className="inline-flex items-center justify-center gap-1.5 bg-slate-100/90 p-1 rounded-xl border border-slate-200">
                           <button
@@ -752,6 +966,11 @@ export default function PurchaseOrderView({
                             <Plus className="h-3 w-3" />
                           </button>
                         </div>
+                        {item.isMultiCabinet && (
+                          <span className="text-[9px] text-slate-400 block mt-0.5">
+                            (ขาด: {item.cabinets.map(c => `${c.cabinetName.split(' ')[0]} ${c.deficit}`).join(' + ')})
+                          </span>
+                        )}
                       </td>
 
                       {/* Urgency Badge */}
@@ -775,13 +994,17 @@ export default function PurchaseOrderView({
                       <td className="py-4 px-4 text-right">
                         <button
                           onClick={async () => {
-                            await onUpdateQty(item, item.currentQty + orderQty);
-                            onToast(`เติมสต็อก ${item.name} +${orderQty} ${item.unit} เรียบร้อย!`);
+                            if (item.isMultiCabinet) {
+                              handleOpenRestockModal(item);
+                            } else {
+                              await onUpdateQty(item.subItems[0], item.subItems[0].currentQty + orderQty);
+                              onToast(`เติมสต็อก ${item.name} เข้าตู้ +${orderQty} ${item.unit} เรียบร้อย!`);
+                            }
                           }}
-                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[11px] rounded-lg border border-emerald-200 cursor-pointer transition-colors"
-                          title="ทำเครื่องหมายว่าของมาส่งแล้ว ปรับยอดคงเหลือทันที"
+                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 font-bold text-[11px] rounded-lg border border-emerald-200 cursor-pointer transition-colors shadow-2xs whitespace-nowrap"
+                          title={item.isMultiCabinet ? "กระจายรับของเข้าตู้ทั้ง 2 ตู้" : "ทำเครื่องหมายว่าของมาส่งแล้ว ปรับยอดคงเหลือทันที"}
                         >
-                          รับของเข้าตู้
+                          {item.isMultiCabinet ? "จัดสรรเข้าตู้" : "รับของเข้าตู้"}
                         </button>
                       </td>
                     </tr>
@@ -792,6 +1015,155 @@ export default function PurchaseOrderView({
           </table>
         </div>
       </div>
+
+      {/* 5. MULTI-CABINET RESTOCK DISTRIBUTION MODAL */}
+      {restockModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-900 to-emerald-800 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-white/10 flex items-center justify-center text-emerald-200 shrink-0">
+                  <PackageCheck className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider block">
+                      จัดสรรรับของเข้าตู้ (Multi-Cabinet Restock)
+                    </span>
+                    <span className="px-1.5 py-0.2 bg-white/20 text-white rounded text-[9px] font-bold uppercase">
+                      แผนก {restockModalItem.department}
+                    </span>
+                  </div>
+                  <h3 className="font-black text-sm sm:text-base leading-tight truncate mt-0.5">
+                    {restockModalItem.name}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRestockModalItem(null)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors shrink-0 ml-2"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Total Order Summary Banner */}
+            <div className="p-3.5 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between text-xs">
+              <div>
+                <span className="font-bold text-emerald-950 block">
+                  ยอดสั่งซื้อรวมทั้งหมด: <b className="text-sm">{getDefaultOrderQty(restockModalItem)}</b> {restockModalItem.unit}
+                </span>
+                <span className="text-emerald-700 text-[11px]">
+                  กรุณากำหนดจำนวนที่ต้องการเติมเข้าแต่ละตู้ด้านล่าง (ระบบคำนวณตามยอดที่ขาดให้อัตโนมัติ)
+                </span>
+              </div>
+            </div>
+
+            {/* Cabinet Allocation Rows */}
+            <div className="p-4 sm:p-5 space-y-3 overflow-y-auto max-h-[50vh]">
+              {restockModalItem.cabinets.map((cab) => {
+                const currentRestock = restockDistributions[cab.consumable.id] || 0;
+                return (
+                  <div 
+                    key={cab.cabinetId}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white transition-all shadow-2xs space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 text-sm">
+                          {cab.cabinetName}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          สต็อกปัจจุบัน: <b className="text-slate-800">{cab.currentQty}</b> / เกณฑ์ Min: <b>{cab.minThreshold}</b> {restockModalItem.unit} (ขาด {cab.deficit})
+                        </p>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 text-[10px] font-bold">
+                        เป้าหมาย Max: {cab.targetStock}
+                      </span>
+                    </div>
+
+                    {/* Stepper for this cabinet */}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                      <span className="text-xs font-bold text-slate-600">
+                        จำนวนที่เติมเข้าตู้นี้:
+                      </span>
+                      <div className="inline-flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRestockDistributions(prev => ({
+                              ...prev,
+                              [cab.consumable.id]: Math.max(0, (prev[cab.consumable.id] || 0) - 1)
+                            }));
+                          }}
+                          disabled={currentRestock <= 0}
+                          className="h-7 w-7 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-30 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+
+                        <input
+                          type="number"
+                          min="0"
+                          value={currentRestock}
+                          onChange={(e) => {
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setRestockDistributions(prev => ({
+                              ...prev,
+                              [cab.consumable.id]: val
+                            }));
+                          }}
+                          className="w-12 text-center text-xs sm:text-sm font-black text-slate-900 bg-transparent outline-none"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRestockDistributions(prev => ({
+                              ...prev,
+                              [cab.consumable.id]: (prev[cab.consumable.id] || 0) + 1
+                            }));
+                          }}
+                          className="h-7 w-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black flex items-center justify-center cursor-pointer transition-all"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                        <span className="text-xs font-bold text-slate-400 pr-1">
+                          {restockModalItem.unit}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setRestockModalItem(null)}
+                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestockModal}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+              >
+                <Check className="h-4 w-4" />
+                <span>
+                  ยืนยันรับของเข้าตู้ (รวม {(Object.values(restockDistributions) as number[]).reduce((a: number, b: number) => a + b, 0)} {restockModalItem.unit})
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PRINT PREVIEW MODAL */}
       {showPrintModal && (
@@ -875,7 +1247,7 @@ export default function PurchaseOrderView({
                     <th className="p-2 border-r border-slate-300">รายการพัสดุ</th>
                     <th className="p-2 border-r border-slate-300">แผนก</th>
                     <th className="p-2 border-r border-slate-300">ตู้จัดเก็บ</th>
-                    <th className="p-2 border-r border-slate-300 text-center">คงเหลือ</th>
+                    <th className="p-2 border-r border-slate-300 text-center">คงเหลือรวม</th>
                     <th className="p-2 border-r border-slate-300 text-center">เกณฑ์มาตรฐาน</th>
                     <th className="p-2 border-r border-slate-300 text-center font-black">จำนวนที่สั่ง</th>
                     <th className="p-2 text-center">หน่วยนับ</th>
@@ -883,29 +1255,24 @@ export default function PurchaseOrderView({
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {poItems.map((item, idx) => {
-                    const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+                    const cabText = item.cabinets.map(c => c.cabinetName).join(", ");
                     return (
-                      <tr key={item.id} className="border-b border-slate-200">
+                      <tr key={item.key} className="border-b border-slate-200">
                         <td className="p-2 border-r border-slate-200 text-center font-bold">{idx + 1}</td>
                         <td className="p-2 border-r border-slate-200 font-bold text-slate-900">
                           <div>{item.name}</div>
-                          {multiInfo.hasMultipleCabinets && (
+                          {item.isMultiCabinet && (
                             <div className="text-[9px] font-normal text-indigo-700 mt-0.5">
-                              * มีใน {multiInfo.cabinetLocations.length} ตู้: {multiInfo.breakdownText} (รวมสต็อกทุกตู้: {multiInfo.totalQtyAcrossCabinets} {item.unit})
+                              * มีใน {item.cabinets.length} ตู้: {item.cabinets.map(c => `${c.cabinetName} (${c.currentQty}/${c.minThreshold})`).join(", ")}
                             </div>
                           )}
                         </td>
                         <td className="p-2 border-r border-slate-200 uppercase">{item.department}</td>
-                        <td className="p-2 border-r border-slate-200">{getCabinetName(item.cabinetId)}</td>
+                        <td className="p-2 border-r border-slate-200">{cabText}</td>
                         <td className="p-2 border-r border-slate-200 text-center font-semibold">
-                          {item.currentQty}
-                          {multiInfo.hasMultipleCabinets && (
-                            <span className="block text-[9px] text-indigo-700 font-bold">
-                              (รวม {multiInfo.totalQtyAcrossCabinets})
-                            </span>
-                          )}
+                          {item.totalCurrentQty}
                         </td>
-                        <td className="p-2 border-r border-slate-200 text-center">{item.minThreshold}</td>
+                        <td className="p-2 border-r border-slate-200 text-center">{item.totalMinThreshold}</td>
                         <td className="p-2 border-r border-slate-200 text-center font-black text-slate-900 bg-slate-50">
                           {getDefaultOrderQty(item)}
                         </td>
