@@ -21,6 +21,7 @@ import {
   Sparkles, 
   Clock, 
   Search,
+  X,
   Eye,
   QrCode,
   PackageMinus,
@@ -50,6 +51,7 @@ export default function HelperCountView({
   const [consumables, setConsumables] = useState<Consumable[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [consumableSearchTerm, setConsumableSearchTerm] = useState("");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>("ALL");
   const [cabinetDeptFilter, setCabinetDeptFilter] = useState<string>("ALL");
   const [currentMode, setCurrentMode] = useState<"count" | "withdraw">(initialMode);
@@ -117,6 +119,7 @@ export default function HelperCountView({
     setSelectedCabinet(cabinet);
     setCurrentMode(mode);
     setCabinetDeptFilter("ALL");
+    setConsumableSearchTerm("");
     
     // Update URL query parameter in the browser without reloading to mimic real QR scanning
     const url = new URL(window.location.href);
@@ -140,6 +143,7 @@ export default function HelperCountView({
     setConsumables([]);
     setCounts({});
     setCabinetDeptFilter("ALL");
+    setConsumableSearchTerm("");
     setSuccess(false);
 
     // Clean up URL parameters
@@ -462,18 +466,63 @@ export default function HelperCountView({
 
             {/* Consumables List */}
             {(() => {
-              const displayedConsumables = cabinetDeptFilter === "ALL"
-                ? consumables
-                : consumables.filter(item => item.department === cabinetDeptFilter);
+              const term = consumableSearchTerm.trim().toLowerCase();
+              const displayedConsumables = consumables.filter(item => {
+                const matchesDept = cabinetDeptFilter === "ALL" || item.department === cabinetDeptFilter;
+                const matchesSearch = !term ||
+                  item.name.toLowerCase().includes(term) ||
+                  (item.department && item.department.toLowerCase().includes(term)) ||
+                  (item.unit && item.unit.toLowerCase().includes(term)) ||
+                  (item.notes && item.notes.toLowerCase().includes(term));
+                return matchesDept && matchesSearch;
+              });
 
               return (
                 <>
+                  {/* Search Bar for Consumables in this Cabinet */}
+                  <div className="bg-white p-3 sm:p-3.5 rounded-2xl shadow-xs border border-slate-200/80 mb-4">
+                    <div className="relative flex items-center">
+                      <Search className="absolute left-3.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={consumableSearchTerm}
+                        onChange={(e) => setConsumableSearchTerm(e.target.value)}
+                        placeholder="ค้นหาชื่อพัสดุ, แผนก หรือหน่วยนับในตู้นี้..."
+                        className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                      />
+                      {consumableSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setConsumableSearchTerm("")}
+                          className="absolute right-2.5 p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-all cursor-pointer"
+                          title="ล้างคำค้นหา"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {consumableSearchTerm && (
+                      <div className="mt-2 px-1 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                        <span>
+                          ผลการค้นหา: <strong className="text-indigo-600 font-bold">"{consumableSearchTerm}"</strong> (พบ {displayedConsumables.length} รายการ)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setConsumableSearchTerm("")}
+                          className="text-indigo-600 hover:text-indigo-700 font-bold hover:underline cursor-pointer"
+                        >
+                          ล้างการค้นหา
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex items-center justify-between mb-3 px-1">
                     <h2 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Inbox className="h-3.5 w-3.5" />
                       <span>
                         รายการวัสดุสิ้นเปลืองในตู้ ({displayedConsumables.length}
-                        {cabinetDeptFilter !== "ALL" ? ` จาก ${consumables.length}` : ""} ชนิด)
+                        {cabinetDeptFilter !== "ALL" || term ? ` จากทั้งหมด ${consumables.length}` : ""} ชนิด)
                       </span>
                     </h2>
                     <span className="text-xs text-slate-500 font-semibold">
@@ -483,10 +532,28 @@ export default function HelperCountView({
 
                   <div className="space-y-3 mb-8">
                     {displayedConsumables.length === 0 ? (
-                      <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center text-slate-400 text-sm">
-                        {cabinetDeptFilter !== "ALL" 
-                          ? `ไม่พบรายการสิ่งของของแผนก ${cabinetDeptFilter} ในตู้นี้` 
-                          : "ไม่มีสินค้าในตู้นี้ที่ลงทะเบียนไว้ กรุณาติดต่อแอดมิน"}
+                      <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center text-slate-500 text-sm space-y-3">
+                        <div className="h-12 w-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                          <Search className="h-6 w-6" />
+                        </div>
+                        {consumableSearchTerm ? (
+                          <>
+                            <p className="font-bold text-slate-700">ไม่พบพัสดุที่ตรงกับ "{consumableSearchTerm}"</p>
+                            <p className="text-xs text-slate-400">ลองตรวจสอบตัวสะกด หรือค้นหาด้วยชื่อ แผนก หรือหน่วยนับอื่น</p>
+                            <button
+                              type="button"
+                              onClick={() => setConsumableSearchTerm("")}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-2 rounded-xl transition-all cursor-pointer"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                              <span>ล้างคำค้นหา</span>
+                            </button>
+                          </>
+                        ) : cabinetDeptFilter !== "ALL" ? (
+                          <p>ไม่พบรายการสิ่งของของแผนก {cabinetDeptFilter} ในตู้นี้</p>
+                        ) : (
+                          <p>ไม่มีสินค้าในตู้นี้ที่ลงทะเบียนไว้ กรุณาติดต่อแอดมิน</p>
+                        )}
                       </div>
                     ) : (
                       displayedConsumables.map(item => {
