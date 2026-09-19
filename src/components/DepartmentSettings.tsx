@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import { DepartmentRecord, Cabinet, Consumable } from "../types";
+import React, { useState, useEffect } from "react";
+import { DepartmentRecord, Cabinet, Consumable, MasterConsumable } from "../types";
 import { 
   addDepartment, 
   updateDepartment, 
   deleteDepartment 
 } from "../lib/dbService";
+import MasterCatalogView from "./MasterCatalogView";
 import { 
   Building2, 
   Plus, 
@@ -18,16 +19,29 @@ import {
   Shield, 
   Info,
   Loader2,
-  X
+  X,
+  Boxes
 } from "lucide-react";
 
 interface DepartmentSettingsProps {
   departments: DepartmentRecord[];
   cabinets: Cabinet[];
   consumables: Consumable[];
+  masterItems: MasterConsumable[];
   currentUserEmail: string;
   isSuperAdmin: boolean;
+  activeSubTab?: "departments" | "master_catalog";
+  onSubTabChange?: (subTab: "departments" | "master_catalog") => void;
   onRefresh: () => Promise<void>;
+  onRefreshMasters: () => Promise<void>;
+  onDeployToCabinet: (
+    masterItem: MasterConsumable, 
+    cabinetId: string, 
+    department: string, 
+    initialQty: number, 
+    minThresh: number, 
+    maxThresh: number
+  ) => Promise<void>;
   onToast: (msg: string) => void;
 }
 
@@ -46,11 +60,33 @@ export default function DepartmentSettings({
   departments,
   cabinets,
   consumables,
+  masterItems,
   currentUserEmail,
   isSuperAdmin,
+  activeSubTab,
+  onSubTabChange,
   onRefresh,
+  onRefreshMasters,
+  onDeployToCabinet,
   onToast
 }: DepartmentSettingsProps) {
+  const [internalSubTab, setInternalSubTab] = useState<"departments" | "master_catalog">(
+    activeSubTab || "departments"
+  );
+
+  useEffect(() => {
+    if (activeSubTab) {
+      setInternalSubTab(activeSubTab);
+    }
+  }, [activeSubTab]);
+
+  const currentSubTab = activeSubTab || internalSubTab;
+
+  const handleSubTabChange = (tab: "departments" | "master_catalog") => {
+    setInternalSubTab(tab);
+    onSubTabChange?.(tab);
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingDept, setEditingDept] = useState<DepartmentRecord | null>(null);
@@ -141,156 +177,224 @@ export default function DepartmentSettings({
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Top Banner */}
-      <div className="bg-white p-6 sm:p-7 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-              <Building2 className="h-5 w-5" />
-            </span>
-            <h2 className="text-xl font-black text-slate-900 font-display">
-              จัดการแผนกโรงงาน (Department Settings)
-            </h2>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-              Admin & Super Admin
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-2xl leading-relaxed">
-            เพิ่มหรือลบแผนกได้ตามการเติบโตของโรงงาน โดยแผนกที่สร้างจะแสดงในตัวเลือกตู้เก็บของ, พัสดุ, และฟิลเตอร์การนับสต็อกของ Helper ทันที
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 shrink-0">
+      {/* Sub-navigation Switcher: จัดการแผนกโรงงาน vs พัสดุมาตรฐาน (Master Catalog) */}
+      <div className="bg-white rounded-2xl p-1.5 sm:p-2 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           <button
-            onClick={openAddModal}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/10 cursor-pointer transition-all flex items-center gap-1.5"
+            type="button"
+            onClick={() => handleSubTabChange("departments")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              currentSubTab === "departments"
+                ? "bg-slate-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
           >
-            <Plus className="h-4 w-4 stroke-[3]" />
-            <span>+ เพิ่มแผนกใหม่</span>
+            <Building2 className={`h-4 w-4 ${currentSubTab === "departments" ? "text-indigo-400" : "text-slate-400"}`} />
+            <span>โครงสร้างและรายชื่อแผนก</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              currentSubTab === "departments" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+            }`}>
+              {departments.length} แผนก
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSubTabChange("master_catalog")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              currentSubTab === "master_catalog"
+                ? "bg-indigo-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <Boxes className={`h-4 w-4 ${currentSubTab === "master_catalog" ? "text-indigo-400" : "text-slate-400"}`} />
+            <span>พัสดุมาตรฐาน (Master Catalog)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              currentSubTab === "master_catalog" ? "bg-indigo-800 text-indigo-200" : "bg-slate-100 text-slate-600"
+            }`}>
+              {masterItems.length} รายการ
+            </span>
           </button>
         </div>
-      </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-            <Building2 className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 font-semibold">จำนวนแผนกทั้งหมด</div>
-            <div className="text-lg font-black text-slate-900">{departments.length} แผนก</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <FolderKanban className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 font-semibold">ตู้เก็บพัสดุในระบบ</div>
-            <div className="text-lg font-black text-slate-900">{cabinets.length} ตู้</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-            <Package className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 font-semibold">พัสดุวัสดุสิ้นเปลือง</div>
-            <div className="text-lg font-black text-slate-900">{consumables.length} รายการ</div>
-          </div>
+        <div className="text-[11px] text-slate-400 font-medium px-2 hidden sm:block">
+          {currentSubTab === "departments"
+            ? "เพิ่ม/แก้ไขแผนกสำหรับจัดสรรตู้และพัสดุ"
+            : "ศูนย์กลางข้อมูลรูปภาพ ชื่อ และหน่วยนับมาตรฐานทุกแผนก"}
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="ค้นหาชื่อแผนก หรือคำอธิบาย..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+      {/* SUB-TAB 1: DEPARTMENTS MANAGEMENT */}
+      {currentSubTab === "departments" && (
+        <div className="space-y-6">
+          {/* Top Banner */}
+          <div className="bg-white p-6 sm:p-7 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <Building2 className="h-5 w-5" />
+                </span>
+                <h2 className="text-xl font-black text-slate-900 font-display">
+                  จัดการแผนกโรงงาน (Department Settings)
+                </h2>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  Admin & Super Admin
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-500 max-w-2xl leading-relaxed">
+                เพิ่มหรือลบแผนกได้ตามการเติบโตของโรงงาน โดยแผนกที่สร้างจะแสดงในตัวเลือกตู้เก็บของ, พัสดุ, และฟิลเตอร์การนับสต็อกของ Helper ทันที
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={openAddModal}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/10 cursor-pointer transition-all flex items-center gap-1.5"
+              >
+                <Plus className="h-4 w-4 stroke-[3]" />
+                <span>+ เพิ่มแผนกใหม่</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Summary KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                <Building2 className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 font-semibold">จำนวนแผนกทั้งหมด</div>
+                <div className="text-lg font-black text-slate-900">{departments.length} แผนก</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <FolderKanban className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 font-semibold">ตู้เก็บพัสดุในระบบ</div>
+                <div className="text-lg font-black text-slate-900">{cabinets.length} ตู้</div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                <Package className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 font-semibold">พัสดุวัสดุสิ้นเปลือง</div>
+                <div className="text-lg font-black text-slate-900">{consumables.length} รายการ</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="ค้นหาชื่อแผนก หรือคำอธิบาย..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div className="text-xs text-slate-400 font-medium">
+              แสดง {filteredDepartments.length} จากทั้งหมด {departments.length} แผนก
+            </div>
+          </div>
+
+          {/* Departments Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredDepartments.length === 0 ? (
+              <div className="col-span-full bg-white p-10 text-center rounded-2xl border border-slate-200 text-slate-400 text-xs">
+                ไม่พบแผนกที่ตรงกับคำค้นหา
+              </div>
+            ) : (
+              filteredDepartments.map((dept) => {
+                // Calculate usage count
+                const assignedCabinets = cabinets.filter(c => c.departments?.includes(dept.name));
+                const assignedConsumables = consumables.filter(item => item.department === dept.name);
+
+                return (
+                  <div
+                    key={dept.id}
+                    className="bg-white rounded-2xl p-5 border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-4 w-4 rounded-full shrink-0 shadow-xs border border-white"
+                            style={{ backgroundColor: dept.color || "#4f46e5" }}
+                          />
+                          <h3 className="font-extrabold text-slate-900 text-base">
+                            {dept.name}
+                          </h3>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(dept)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
+                            title="แก้ไขแผนก"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingDept(dept)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                            title="ลบแผนก"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-500 mb-4 min-h-[32px] line-clamp-2">
+                        {dept.description || "ไม่มีคำอธิบายเพิ่มเติม"}
+                      </p>
+                    </div>
+
+                    {/* Badges / Stats */}
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                      <div className="flex items-center gap-1 font-semibold">
+                        <FolderKanban className="h-3.5 w-3.5 text-slate-400" />
+                        <span>{assignedCabinets.length} ตู้</span>
+                      </div>
+                      <div className="flex items-center gap-1 font-semibold">
+                        <Package className="h-3.5 w-3.5 text-slate-400" />
+                        <span>{assignedConsumables.length} พัสดุ</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 2: MASTER CATALOG VIEW */}
+      {currentSubTab === "master_catalog" && (
+        <div className="animate-in fade-in duration-200">
+          <MasterCatalogView
+            masterItems={masterItems}
+            consumables={consumables}
+            cabinets={cabinets}
+            departments={departments}
+            onRefresh={onRefreshMasters}
+            onDeployToCabinet={onDeployToCabinet}
+            onToast={onToast}
+            userEmail={currentUserEmail}
           />
         </div>
-        <div className="text-xs text-slate-400 font-medium">
-          แสดง {filteredDepartments.length} จากทั้งหมด {departments.length} แผนก
-        </div>
-      </div>
-
-      {/* Departments Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredDepartments.length === 0 ? (
-          <div className="col-span-full bg-white p-10 text-center rounded-2xl border border-slate-200 text-slate-400 text-xs">
-            ไม่พบแผนกที่ตรงกับคำค้นหา
-          </div>
-        ) : (
-          filteredDepartments.map((dept) => {
-            // Calculate usage count
-            const assignedCabinets = cabinets.filter(c => c.departments?.includes(dept.name));
-            const assignedConsumables = consumables.filter(item => item.department === dept.name);
-
-            return (
-              <div
-                key={dept.id}
-                className="bg-white rounded-2xl p-5 border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-4 w-4 rounded-full shrink-0 shadow-xs border border-white"
-                        style={{ backgroundColor: dept.color || "#4f46e5" }}
-                      />
-                      <h3 className="font-extrabold text-slate-900 text-base">
-                        {dept.name}
-                      </h3>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(dept)}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
-                        title="แก้ไขแผนก"
-                      >
-                        <Edit3 className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingDept(dept)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                        title="ลบแผนก"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 mb-4 min-h-[32px] line-clamp-2">
-                    {dept.description || "ไม่มีคำอธิบายเพิ่มเติม"}
-                  </p>
-                </div>
-
-                {/* Badges / Stats */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-                  <div className="flex items-center gap-1 font-semibold">
-                    <FolderKanban className="h-3.5 w-3.5 text-slate-400" />
-                    <span>{assignedCabinets.length} ตู้</span>
-                  </div>
-                  <div className="flex items-center gap-1 font-semibold">
-                    <Package className="h-3.5 w-3.5 text-slate-400" />
-                    <span>{assignedConsumables.length} พัสดุ</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+      )}
 
       {/* MODAL: ADD / EDIT DEPARTMENT */}
       {showAddModal && (

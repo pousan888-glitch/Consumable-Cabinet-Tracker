@@ -98,7 +98,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   
   // Loading & View States
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"department_consumables" | "master_catalog" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings">("department_consumables");
+  const [activeTab, setActiveTab] = useState<"department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings">("department_consumables");
+  const [settingsSubTab, setSettingsSubTab] = useState<"departments" | "master_catalog">("departments");
   const [searchTerm, setSearchTerm] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [previewModalImage, setPreviewModalImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
@@ -800,22 +801,28 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             </div>
           </div>
 
-          {/* Card 2: Master Catalog */}
+          {/* Card 2: Departments & Master Catalog */}
           <div 
-            onClick={() => setActiveTab("master_catalog")}
+            onClick={() => {
+              setSettingsSubTab("departments");
+              setActiveTab("settings");
+            }}
             className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
-              activeTab === "master_catalog"
+              activeTab === "settings"
                 ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
                 : "bg-white/10 hover:bg-white/15 border-white/10"
             }`}
           >
             <div className="flex items-center justify-between text-indigo-200 text-[11px] font-bold">
-              <span>พัสดุมาตรฐาน</span>
-              <Boxes className="h-4 w-4 text-indigo-300" />
+              <span>แผนก & พัสดุมาตรฐาน</span>
+              <Building2 className="h-4 w-4 text-indigo-300" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-indigo-200 mt-1">
-              {masterConsumables.length}
-              <span className="text-xs font-normal text-indigo-300/80 ml-1">รายการ</span>
+            <div className="text-xl sm:text-2xl font-black text-indigo-200 mt-1 flex items-baseline gap-1">
+              <span>{departments.length}</span>
+              <span className="text-xs font-normal text-indigo-300/80 mr-1">แผนก</span>
+              <span className="text-xs font-normal text-indigo-300/50">•</span>
+              <span className="text-base font-bold text-indigo-200 ml-1">{masterConsumables.length}</span>
+              <span className="text-[11px] font-normal text-indigo-300/80">พัสดุกลาง</span>
             </div>
           </div>
 
@@ -1072,23 +1079,6 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             )}
           </button>
 
-          {/* Tab 2: Master Item Catalog */}
-          <button
-            onClick={() => setActiveTab("master_catalog")}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              activeTab === "master_catalog"
-                ? "bg-indigo-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-          >
-            <Boxes className="h-4 w-4 text-indigo-400" />
-            <span>พัสดุมาตรฐาน (Master Catalog)</span>
-            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-              activeTab === "master_catalog" ? "bg-indigo-800 text-indigo-200" : "bg-slate-100 text-slate-600"
-            }`}>
-              {masterConsumables.length}
-            </span>
-          </button>
 
           {/* Tab 3: Cabinets & QR */}
           <button
@@ -1162,7 +1152,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             </span>
           </button>
 
-          {/* Tab 6: Department Settings */}
+          {/* Tab 6: Department Settings & Master Catalog */}
           <button
             onClick={() => setActiveTab("settings")}
             className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
@@ -1172,11 +1162,11 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             }`}
           >
             <Settings className="h-4 w-4 text-slate-400" />
-            <span>จัดการแผนก</span>
+            <span>จัดการแผนก & พัสดุมาตรฐาน</span>
             <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
               activeTab === "settings" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
             }`}>
-              {departments.length}
+              {departments.length} แผนก
             </span>
           </button>
 
@@ -1360,27 +1350,6 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         />
       )}
 
-      {/* MASTER CATALOG TAB (CENTRALIZED CANONICAL INVENTORY REPOSITORY) */}
-      {activeTab === "master_catalog" && (
-        <MasterCatalogView
-          masterItems={masterConsumables}
-          consumables={consumables}
-          cabinets={cabinets}
-          departments={departments}
-          onRefresh={async () => {
-            const masters = await getMasterConsumables();
-            setMasterConsumables(masters);
-            const items = await getConsumables();
-            setConsumables(items);
-          }}
-          onDeployToCabinet={handleDeployMasterToCabinet}
-          onToast={(msg) => {
-            setToastMessage(msg);
-            setTimeout(() => setToastMessage(null), 4000);
-          }}
-          userEmail={userEmail}
-        />
-      )}
 
       {/* 3. PURCHASE ORDERS (AUTO STOCK REFILL) TAB (Matching Image 3) */}
       {activeTab === "purchase_orders" && (
@@ -2016,18 +1985,28 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         />
       )}
 
-      {/* 6. DEPARTMENT SETTINGS TAB (ADMIN & SUPER ADMIN) */}
+      {/* 6. DEPARTMENT SETTINGS & MASTER CATALOG TAB (ADMIN & SUPER ADMIN) */}
       {activeTab === "settings" && (
         <DepartmentSettings
           departments={departments}
           cabinets={cabinets}
           consumables={consumables}
+          masterItems={masterConsumables}
           currentUserEmail={userEmail}
           isSuperAdmin={isUserSuperAdmin}
+          activeSubTab={settingsSubTab}
+          onSubTabChange={(sub) => setSettingsSubTab(sub)}
           onRefresh={async () => {
             const depts = await getDepartments();
             setDepartments(depts);
           }}
+          onRefreshMasters={async () => {
+            const masters = await getMasterConsumables();
+            setMasterConsumables(masters);
+            const items = await getConsumables();
+            setConsumables(items);
+          }}
+          onDeployToCabinet={handleDeployMasterToCabinet}
           onToast={(msg) => {
             setToastMessage(msg);
             setTimeout(() => setToastMessage(null), 4000);
@@ -2234,7 +2213,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                         type="button"
                         onClick={() => {
                           setShowConsumableModal(false);
-                          setActiveTab("master_catalog");
+                          setSettingsSubTab("master_catalog");
+                          setActiveTab("settings");
                         }}
                         className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
                       >
