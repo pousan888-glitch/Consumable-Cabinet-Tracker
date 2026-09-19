@@ -57,12 +57,12 @@ export default function Header({ user, onChangeRole, onLogout, lowStockCount }: 
               </div>
             )}
 
-            {/* Profile Summary & Role switcher */}
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-xs font-semibold text-slate-700 leading-tight">
+            {/* Profile Summary */}
+            <div className="flex flex-col text-right max-w-[120px] sm:max-w-[200px]">
+              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight truncate" title={user.name}>
                 {user.name}
               </span>
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[9px] sm:text-[10px] text-slate-400 truncate hidden sm:block">
                 {user.email}
               </span>
             </div>

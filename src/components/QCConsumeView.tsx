@@ -131,7 +131,7 @@ export default function QCConsumeView({ userEmail, userName, onBackToMainMenu }:
     try {
       await saveQCConsumption(
         selectedDept === "ALL" ? "QC (General)" : selectedDept,
-        userEmail,
+        userName ? `${userName} (${userEmail})` : userEmail,
         itemsToConsume
       );
 

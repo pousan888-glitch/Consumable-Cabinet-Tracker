@@ -1473,9 +1473,9 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                         </div>
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-500 font-semibold">
-                        <span className="flex items-center gap-1 truncate max-w-[130px]">
+                        <span className="flex items-center gap-1 truncate max-w-[160px]" title={log.checkedBy}>
                           <Activity className="h-3 w-3 shrink-0" />
-                          โดย: {log.checkedBy.split("@")[0]}
+                          โดย: {log.checkedBy.includes("(") ? log.checkedBy.split("(")[0].trim() : log.checkedBy.split("@")[0]}
                         </span>
                         <span className="text-indigo-600 font-bold">
                           เช็ก {log.items.length} ชนิด

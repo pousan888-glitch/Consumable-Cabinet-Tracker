@@ -190,7 +190,7 @@ export default function HelperCountView({
       await saveCountHistory(
         selectedCabinet.id,
         selectedCabinet.name,
-        userEmail,
+        userName ? `${userName} (${userEmail})` : userEmail,
         itemCountsLog
       );
 

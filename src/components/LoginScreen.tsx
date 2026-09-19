@@ -1,50 +1,45 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   auth, 
   signInWithPopup, 
-  GoogleAuthProvider, 
-  getActiveFirebaseConfig, 
-  saveInAppFirebaseConfig, 
-  clearInAppFirebaseConfig 
+  GoogleAuthProvider 
 } from "../lib/firebase";
-import { fetchOrRegisterUser } from "../lib/dbService";
+import { fetchOrRegisterUser, updateAppUserName } from "../lib/dbService";
 import { UserProfile, UserRole } from "../types";
 import { 
-  QrCode, 
-  Sparkles, 
   AlertTriangle, 
-  Key, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  ShieldCheck, 
-  Database, 
-  Info, 
-  ChevronRight, 
-  X,
-  Settings
+  Lock, 
+  Boxes, 
+  ArrowRight,
+  Mail,
+  UserCheck,
+  Check,
+  ShieldCheck
 } from "lucide-react";
 
 interface LoginScreenProps {
   onLogin: (user: UserProfile) => void;
 }
 
+interface PendingUser {
+  email: string;
+  defaultName: string;
+  role: UserRole;
+  isSuperAdmin: boolean;
+}
+
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showSetupModal, setShowSetupModal] = useState(false);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [jsonInput, setJsonInput] = useState("");
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showContact, setShowContact] = useState(false);
 
-  const currentConfigInfo = getActiveFirebaseConfig();
+  // Step 2: Full name input state after email authentication
+  const [pendingUser, setPendingUser] = useState<PendingUser | null>(null);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+
   const currentHostname = typeof window !== "undefined" ? window.location.hostname : "";
-
-  const handleCopy = (text: string, keyName: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(keyName);
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -58,14 +53,26 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       const user = result.user;
       
       const emailLower = user.email?.toLowerCase() || "";
-      const userMeta = await fetchOrRegisterUser(emailLower, user.displayName || user.email || "");
+      const googleDisplayName = user.displayName || user.email || "";
+      const userMeta = await fetchOrRegisterUser(emailLower, googleDisplayName);
 
-      onLogin({
+      // Extract existing first & last name if available
+      const existingName = userMeta.name || googleDisplayName;
+      const parts = existingName.trim().split(" ");
+      if (parts.length > 1) {
+        setFirstName(parts[0]);
+        setLastName(parts.slice(1).join(" "));
+      } else {
+        setFirstName(parts[0] || "");
+        setLastName("");
+      }
+
+      // Transition to Step 2: Confirm or input user's Full Name
+      setPendingUser({
         email: emailLower,
-        name: user.displayName || user.email || "ผู้ใช้งาน",
+        defaultName: existingName,
         role: userMeta.role,
-        isSuperAdmin: userMeta.isSuperAdmin,
-        isSimulation: false
+        isSuperAdmin: userMeta.isSuperAdmin
       });
     } catch (err: any) {
       console.error("Google Sign-In Error:", err);
@@ -74,25 +81,19 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       
       if (errCode === "auth/popup-blocked") {
         setError(
-          "เบราว์เซอร์หรือ Iframe บล็อกการเปิดหน้าต่างภายนอก (Popup Blocked) กรุณาคลิกปุ่ม 'เปิดในแท็บใหม่' ด้านขวาบนของหน้าจอ แล้วลองเข้าสู่ระบบอีกครั้ง"
+          "เบราว์เซอร์บล็อกหน้าต่างเข้าสู่ระบบ (Popup Blocked) กรุณาคลิก 'เปิดในแท็บใหม่' ด้านขวาบนของหน้าต่าง แล้วลองใหม่อีกครั้ง"
         );
       } else if (errCode === "auth/popup-closed-by-user") {
         setError("หน้าต่างลงชื่อเข้าใช้ถูกปิดก่อนจะยืนยันสำเร็จ กรุณากดเข้าสู่ระบบใหม่อีกครั้ง");
       } else if (errCode === "auth/unauthorized-domain") {
         setError(
-          `โดเมน "${currentHostname}" ยังไม่ได้รับอนุญาตใน Firebase! วิธีแก้: เข้า Firebase Console > Authentication > Settings > Authorized domains แล้วกด "Add domain" ใส่ "${currentHostname}"`
+          `โดเมน "${currentHostname}" ยังไม่ได้รับอนุญาตใน Firebase Authentication กรุณาแจ้งผู้ดูแลระบบให้เพิ่มโดเมนใน Firebase Console`
         );
       } else if (errCode === "auth/operation-not-allowed") {
-        setError(
-          "ผู้ให้บริการ Google Sign-In ยังไม่ถูกเปิดใช้งาน! วิธีแก้: เข้า Firebase Console > Authentication > Sign-in method แล้วกดเปิดใช้งาน (Enable) ตัวเลือก 'Google'"
-        );
-      } else if (errCode === "auth/api-key-not-valid") {
-        setError(
-          "Firebase API Key ที่ระบุไม่ถูกต้อง กรุณาตรวจสอบว่าได้คัดลอก apiKey มาจาก Firebase Console ครบถ้วนแล้วหรือไม่ หรือกดปุ่ม 'คู่มือดึงข้อมูลจาก Firebase' ด้านล่าง"
-        );
+        setError("ผู้ให้บริการ Google Sign-In ยังไม่ถูกเปิดใช้งานในระบบ กรุณาติดต่อผู้ดูแลระบบ");
       } else {
         setError(
-          `เข้าสู่ระบบไม่สำเร็จ (${errCode || "unknown"}): ${errMsg || "กรุณาตรวจสอบการตั้งค่า Firebase หรืออินเทอร์เน็ตของคุณ"}`
+          `เข้าสู่ระบบไม่สำเร็จ: ${errMsg || "กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือติดต่อผู้ดูแลระบบ"}`
         );
       }
     } finally {
@@ -100,354 +101,322 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     }
   };
 
-  const handleApplyJsonConfig = (e: React.FormEvent) => {
+  const handleConfirmName = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!pendingUser) return;
+
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    const fullName = trimmedLast ? `${trimmedFirst} ${trimmedLast}` : trimmedFirst;
+
+    if (!fullName) {
+      setError("กรุณาระบุชื่อและนามสกุลสำหรับบันทึกการทำงานในระบบ");
+      return;
+    }
+
+    setSavingName(true);
+    setError("");
+
     try {
-      // Try to parse raw JSON or object text
-      let cleaned = jsonInput.trim();
-      if (cleaned.startsWith("const firebaseConfig =")) {
-        cleaned = cleaned.replace("const firebaseConfig =", "").replace(/;$/, "").trim();
-      }
-      // If object keys are unquoted, handle simple JSON format
-      const parsed = JSON.parse(cleaned);
-      if (!parsed.apiKey || !parsed.projectId) {
-        alert("ข้อมูลไม่ถูกต้อง ต้องมี apiKey และ projectId เป็นอย่างน้อย");
-        return;
-      }
-      saveInAppFirebaseConfig(parsed);
-      setSaveSuccess(true);
+      await updateAppUserName(pendingUser.email, fullName);
+
+      onLogin({
+        email: pendingUser.email,
+        name: fullName,
+        role: pendingUser.role,
+        isSuperAdmin: pendingUser.isSuperAdmin,
+        isSimulation: false
+      });
     } catch (err) {
-      alert("ไม่สามารถอ่านรูปแบบ JSON ได้ กรุณาตรวจสอบรูปแบบข้อความให้ถูกต้อง");
+      console.error("Error updating user name:", err);
+      // Even if cloud sync has minor network delay, allow proceeding with input name
+      onLogin({
+        email: pendingUser.email,
+        name: fullName,
+        role: pendingUser.role,
+        isSuperAdmin: pendingUser.isSuperAdmin,
+        isSimulation: false
+      });
+    } finally {
+      setSavingName(false);
     }
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center bg-slate-50 px-4 py-12 sm:px-6 lg:px-8 font-sans">
-      {/* Top Right: System Status & Setup Guide (Moved out of central card to corner) */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-        <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-white/90 backdrop-blur-xs rounded-full border border-slate-200/90 text-xs shadow-xs">
+    <div className="min-h-screen relative flex flex-col items-center justify-center bg-[#0b0f19] px-4 py-8 sm:px-6 lg:px-8 font-sans overflow-hidden select-none">
+      {/* 1. Industrial Background: Dot Grid & Blueprint Tech Grid */}
+      <div 
+        className="absolute inset-0 opacity-[0.06] pointer-events-none" 
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px)
+          `,
+          backgroundSize: "40px 40px"
+        }}
+      />
+      <div 
+        className="absolute inset-0 opacity-[0.08] pointer-events-none" 
+        style={{
+          backgroundImage: `radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px)`,
+          backgroundSize: "20px 20px"
+        }}
+      />
+
+      {/* 2. Soft Radial Glows (Dark Navy / Blue / Safety Orange Ambient Accents) */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-600/15 rounded-full blur-[110px] pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-orange-500/15 rounded-full blur-[110px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
+
+      {/* 3. System Status Ticker / Telemetry Badges */}
+      <div className="relative z-10 mb-6 flex flex-wrap items-center justify-center gap-2 max-w-md w-full px-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-700/70 text-slate-300 text-xs shadow-lg backdrop-blur-md">
           <span className="flex h-2 w-2 relative">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span className="font-medium text-slate-600">
-            ระบบจริง: <strong className="text-emerald-700 font-mono text-[11px]">warehouse-consumables-monitor</strong>
-          </span>
+          <span className="font-medium text-emerald-300">Cloud Sync พร้อม</span>
         </div>
 
-        <button
-          onClick={() => setShowSetupModal(true)}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-indigo-600 rounded-full border border-slate-200/90 text-xs font-medium shadow-xs transition-colors cursor-pointer"
-          title="ตั้งค่าตัวแปร Firebase & คู่มือ Vercel"
-        >
-          <Settings className="h-3.5 w-3.5 text-indigo-600" />
-          <span className="hidden sm:inline">ตัวแปร Vercel / คู่มือ</span>
-          <span className="sm:hidden">ตัวแปร Vercel</span>
-        </button>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-700/70 text-slate-300 text-xs shadow-lg backdrop-blur-md">
+          <Boxes className="h-3.5 w-3.5 text-orange-400" />
+          <span className="font-medium text-slate-300">ระบบติดตามวัสดุและตู้พัสดุ</span>
+        </div>
       </div>
 
-      <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
-        <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-4">
-            <QrCode className="h-10 w-10" id="login-logo" />
-          </div>
-          <h2 className="text-3xl font-extrabold text-slate-950 tracking-tight font-display">
-            Cabinet Consumable
-          </h2>
-          <p className="mt-2 text-sm text-slate-500 font-sans">
-            ระบบตรวจสอบและติดตามพัสดุวัสดุสิ้นเปลืองประจำตู้เก็บของแผนก
-          </p>
-        </div>
+      {/* 4. Central Card with Safety Orange Accent Top Border */}
+      <div className="max-w-md w-full relative z-10 bg-white/98 backdrop-blur-xl p-7 sm:p-9 rounded-2xl shadow-2xl shadow-black/70 border border-slate-200/80 border-t-4 border-t-orange-500 space-y-6">
+        
+        {/* STEP 1: Google Authentication Screen */}
+        {!pendingUser ? (
+          <>
+            {/* Card Header & 3D Smart Cabinet Illustration */}
+            <div className="text-center space-y-3">
+              {/* Smart Cabinet 3D/Isometric Style Icon */}
+              <div className="mx-auto relative w-20 h-20 flex items-center justify-center">
+                <div className="absolute inset-0 bg-gradient-to-tr from-orange-500/30 to-indigo-600/30 rounded-2xl blur-lg pointer-events-none" />
+                
+                <div className="relative w-20 h-20 bg-gradient-to-b from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-2.5 shadow-xl border border-slate-700/80 flex flex-col justify-between">
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                    </div>
+                    <span className="text-[8px] font-mono font-bold text-slate-400 tracking-wider">SMART-CAB</span>
+                  </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-900 p-4 rounded-xl text-xs leading-relaxed space-y-2">
-            <div className="font-semibold text-red-800 flex items-center gap-1.5">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
-              <span>แจ้งเตือนจากระบบเข้าสู่ระบบ:</span>
+                  <div className="grid grid-cols-2 gap-1.5 px-1 py-1">
+                    <div className="h-4 bg-slate-800/90 rounded border border-slate-700 flex items-center justify-center">
+                      <div className="w-3 h-1.5 bg-orange-500/80 rounded-xs" />
+                    </div>
+                    <div className="h-4 bg-slate-800/90 rounded border border-slate-700 flex items-center justify-center">
+                      <div className="w-3 h-1.5 bg-indigo-400/80 rounded-xs" />
+                    </div>
+                    <div className="h-4 bg-slate-800/90 rounded border border-slate-700 flex items-center justify-center">
+                      <div className="w-3 h-1.5 bg-sky-400/80 rounded-xs" />
+                    </div>
+                    <div className="h-4 bg-slate-800/90 rounded border border-slate-700 flex items-center justify-center">
+                      <div className="w-3 h-1.5 bg-emerald-400/80 rounded-xs" />
+                    </div>
+                  </div>
+
+                  <div className="h-1.5 bg-gradient-to-r from-orange-500 via-amber-400 to-orange-500 rounded-full shadow-xs shadow-orange-500/50" />
+                </div>
+              </div>
+
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight font-display">
+                  Cabinet Consumable
+                </h1>
+                <p className="mt-1 text-xs sm:text-sm text-slate-600 font-sans leading-relaxed">
+                  ระบบตรวจสอบและติดตามพัสดุวัสดุสิ้นเปลืองประจำตู้เก็บของแผนก
+                </p>
+              </div>
+
+              {/* Security & Access Badge */}
+              <div className="pt-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-600">
+                  <Lock className="h-3 w-3 text-slate-500" />
+                  Restricted Access: Authorized Personnel Only
+                </span>
+              </div>
             </div>
-            <p className="text-red-800 font-sans">{error}</p>
-            <div className="pt-1">
+
+            {/* Error Alert if any */}
+            {error && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-900 p-3.5 rounded-xl text-xs leading-relaxed space-y-1 animate-fadeIn">
+                <div className="font-semibold text-rose-800 flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+                  <span>แจ้งเตือนจากระบบ:</span>
+                </div>
+                <p className="text-rose-700 font-sans pl-5.5">{error}</p>
+              </div>
+            )}
+
+            {/* Corporate Standard Google Sign-In Button */}
+            <div className="pt-1 space-y-3">
               <button
-                onClick={() => setShowSetupModal(true)}
-                className="text-indigo-700 underline font-semibold hover:text-indigo-900 cursor-pointer"
+                id="google-signin-btn"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 px-5 py-3.5 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl font-semibold transition-all duration-150 shadow-md shadow-slate-900/20 hover:shadow-lg border border-slate-800 disabled:opacity-60 cursor-pointer text-sm sm:text-base group"
               >
-                คลิกดูวิธีตั้งค่า Firebase ให้ถูกต้อง
+                <div className="w-6 h-6 bg-white rounded-md flex items-center justify-center shrink-0 shadow-2xs">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                    />
+                  </svg>
+                </div>
+                
+                <span className="tracking-normal font-medium">
+                  {loading ? "กำลังเปิดหน้าต่างยืนยัน..." : "เข้าสู่ระบบด้วย Google Workspace"}
+                </span>
+
+                <ArrowRight className="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
               </button>
+
+              {/* Discreet Help / Admin Contact Note */}
+              <div className="pt-3 border-t border-slate-100 text-center">
+                {!showContact ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowContact(true)}
+                    className="text-[11px] sm:text-xs text-slate-500 hover:text-orange-600 font-medium transition-colors underline decoration-slate-300 hover:decoration-orange-500 cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <span>ต้องการขอสิทธิ์เข้าใช้งาน</span>
+                  </button>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 text-[11px] sm:text-xs text-slate-600 space-y-1 animate-fadeIn">
+                    <p className="font-medium text-slate-700">ติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์:</p>
+                    <a 
+                      href="mailto:pousan888@gmail.com" 
+                      className="inline-flex items-center gap-1.5 text-orange-600 hover:text-orange-700 font-semibold transition-colors underline"
+                    >
+                      <Mail className="h-3.5 w-3.5" />
+                      <span>pousan888@gmail.com</span>
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
+          </>
+        ) : (
+          /* STEP 2: Name & Surname Input Prompt */
+          <div className="space-y-5 animate-fadeIn">
+            <div className="text-center space-y-2">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 shadow-xs">
+                <UserCheck className="h-6 w-6" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                ระบุชื่อ - นามสกุลผู้ใช้งาน
+              </h2>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+                เพื่อใช้แสดงชื่อผู้ตรวจนับและบันทึกประวัติการเบิกใช้วัสดุในระบบอย่างชัดเจน
+              </p>
+            </div>
+
+            {/* Account Confirmation Pill */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
+              <div className="min-w-0 pr-2">
+                <span className="text-[10px] text-slate-400 block font-medium">บัญชีอีเมลที่ยืนยันแล้ว:</span>
+                <span className="font-semibold text-slate-800 truncate block font-mono text-[11px]">
+                  {pendingUser.email}
+                </span>
+              </div>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                ยืนยันแล้ว
+              </span>
+            </div>
+
+            {/* Error Alert */}
+            {error && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-900 p-3 rounded-xl text-xs flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleConfirmName} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label htmlFor="user-first-name" className="text-xs font-semibold text-slate-700 block">
+                    ชื่อจริง <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="user-first-name"
+                    type="text"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="เช่น สมชาย"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label htmlFor="user-last-name" className="text-xs font-semibold text-slate-700 block">
+                    นามสกุล
+                  </label>
+                  <input
+                    id="user-last-name"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="เช่น ใจดี"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 space-y-2">
+                <button
+                  id="confirm-name-btn"
+                  type="submit"
+                  disabled={savingName || !firstName.trim()}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded-xl font-semibold shadow-md shadow-orange-600/20 transition-all cursor-pointer disabled:opacity-50 text-sm"
+                >
+                  <Check className="h-4 w-4 stroke-[2.5]" />
+                  <span>{savingName ? "กำลังบันทึกข้อมูล..." : "บันทึกและเข้าใช้งานระบบ"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingUser(null);
+                    setError("");
+                  }}
+                  className="w-full py-2 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer text-center"
+                >
+                  สลับบัญชี หรือเข้าสู่ระบบใหม่
+                </button>
+              </div>
+            </form>
           </div>
         )}
-
-        <div className="pt-1">
-          <button
-            id="google-signin-btn"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-5 py-3.5 border border-slate-300 rounded-xl shadow-sm bg-white hover:bg-slate-50 text-slate-800 font-medium transition-all duration-150 cursor-pointer disabled:opacity-50 hover:border-indigo-300 focus:ring-2 focus:ring-indigo-500 outline-none text-base"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24">
-              <path
-                fill="#EA4335"
-                d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.18 4.114-3.483 0-6.312-2.83-6.312-6.314s2.83-6.314 6.312-6.314c1.55 0 2.97.56 4.07 1.48l3.14-3.14C19.06 1.99 15.89 1 12.24 1 6.033 1 12.24s5.033 11.24 11.24 11.24c5.898 0 10.607-4.218 10.607-10.607 0-.486-.048-.96-.13-1.42H12.24z"
-              />
-            </svg>
-            {loading ? "กำลังเปิดหน้าต่าง Google..." : "เข้าสู่ระบบด้วย Google Account"}
-          </button>
-        </div>
-
-        <div className="text-center pt-2 border-t border-slate-100">
-          <p className="text-xs text-slate-500 flex items-center justify-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-            สิทธิ์ผู้ดูแลระบบสูงสุด (ADMIN): <span className="font-semibold text-slate-700">pousan888@gmail.com</span>
-          </p>
-        </div>
       </div>
 
-      {/* Firebase Setup Instructions & Config Modal */}
-      {showSetupModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-2xl">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
-                  <Database className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-base">
-                    วิธีนำค่าจาก Firebase Console มาใส่ใน Vercel
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    ขั้นตอนอย่างละเอียดสำหรับใช้งานจริงด้วยบัญชี Google ของคุณ
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSetupModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 text-sm text-slate-700 leading-relaxed">
-              {/* Step 1 */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 font-bold text-slate-900">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">1</span>
-                  <h4>เข้าสู่ระบบ Firebase Console</h4>
-                </div>
-                <p className="text-xs text-slate-600 pl-8">
-                  เปิดเว็บเบราว์เซอร์ไปที่{" "}
-                  <a
-                    href="https://console.firebase.google.com/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-indigo-600 underline font-medium inline-flex items-center gap-1"
-                  >
-                    console.firebase.google.com <ExternalLink className="h-3 w-3" />
-                  </a>{" "}
-                  แล้วกดเลือกโปรเจกต์ของคุณ (หรือกด Create a project หากยังไม่มี)
-                </p>
-              </div>
-
-              {/* Step 2 */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 font-bold text-slate-900">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">2</span>
-                  <h4>หาค่าคอนฟิก Web App ใน Project Settings</h4>
-                </div>
-                <div className="text-xs text-slate-600 pl-8 space-y-2">
-                  <ol className="list-disc pl-4 space-y-1">
-                    <li>กดที่ไอคอนรูปเฟือง ⚙️ ด้านบนซ้าย ข้างข้อความ "Project Overview"</li>
-                    <li>เลือกเมนู <strong>Project settings (การตั้งค่าโปรเจกต์)</strong></li>
-                    <li>เลื่อนลงมาด้านล่างสุด จะพบหัวข้อ <strong>"Your apps" (แอปของคุณ)</strong></li>
-                    <li>
-                      หากยังไม่มีแอป ให้คลิกไอคอนเว็บ <strong>&lt;/&gt;</strong> (Web app) ตั้งชื่อเล่นแอป แล้วกด Register app
-                    </li>
-                    <li>
-                      คุณจะเห็นโค้ดที่มีหน้าตาแบบนี้:
-                    </li>
-                  </ol>
-                  <div className="bg-slate-900 text-slate-200 p-3 rounded-xl font-mono text-[11px] overflow-x-auto">
-                    <div>const firebaseConfig = &#123;</div>
-                    <div className="pl-4 text-amber-300">apiKey: "AIzaSy...",</div>
-                    <div className="pl-4 text-emerald-300">authDomain: "your-project.firebaseapp.com",</div>
-                    <div className="pl-4 text-sky-300">projectId: "your-project",</div>
-                    <div className="pl-4 text-indigo-300">storageBucket: "your-project.firebasestorage.app",</div>
-                    <div className="pl-4 text-rose-300">messagingSenderId: "123456789",</div>
-                    <div className="pl-4 text-purple-300">appId: "1:123456:web:..."</div>
-                    <div>&#125;;</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 font-bold text-slate-900">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">3</span>
-                  <h4>รายชื่อตัวแปรที่ต้องนำไปใส่ใน Vercel (กด Copy ได้ทันที)</h4>
-                </div>
-                <p className="text-xs text-slate-600 pl-8">
-                  ไปที่ <strong>Vercel Dashboard &gt; เลือกโปรเจกต์ &gt; Settings &gt; Environment Variables</strong> แล้วเพิ่มตามตารางนี้:
-                </p>
-                <div className="pl-8">
-                  <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-100 font-semibold text-slate-700">
-                        <tr>
-                          <th className="p-2.5">Key (ตัวแปร Vercel)</th>
-                          <th className="p-2.5">Value (ค่าจากโปรเจกต์ของคุณ)</th>
-                          <th className="p-2.5 text-center">คัดลอก Value</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
-                        {[
-                          { env: "VITE_FIREBASE_API_KEY", val: "AIzaSyAQO0gBpkiASG1NhdUJfQA25R7kUgUzRUQ", desc: "apiKey" },
-                          { env: "VITE_FIREBASE_AUTH_DOMAIN", val: "warehouse-consumables-monitor.firebaseapp.com", desc: "authDomain" },
-                          { env: "VITE_FIREBASE_PROJECT_ID", val: "warehouse-consumables-monitor", desc: "projectId" },
-                          { env: "VITE_FIREBASE_STORAGE_BUCKET", val: "warehouse-consumables-monitor.firebasestorage.app", desc: "storageBucket" },
-                          { env: "VITE_FIREBASE_MESSAGING_SENDER_ID", val: "917732792556", desc: "messagingSenderId" },
-                          { env: "VITE_FIREBASE_APP_ID", val: "1:917732792556:web:bf74faa9940babf768edc9", desc: "appId" }
-                        ].map((item) => (
-                          <tr key={item.env} className="hover:bg-slate-50">
-                            <td className="p-2.5">
-                              <div className="flex items-center gap-1">
-                                <span className="font-bold text-indigo-700">{item.env}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopy(item.env, `key_${item.env}`)}
-                                  title="คัดลอกชื่อตัวแปร"
-                                  className="text-slate-400 hover:text-indigo-600 p-0.5"
-                                >
-                                  {copiedKey === `key_${item.env}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                                </button>
-                              </div>
-                            </td>
-                            <td className="p-2.5 text-slate-700 max-w-[200px] truncate" title={item.val}>
-                              {item.val}
-                            </td>
-                            <td className="p-2.5 text-center font-sans">
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(item.val, `val_${item.env}`)}
-                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md inline-flex items-center gap-1 text-[11px] font-medium transition-colors"
-                              >
-                                {copiedKey === `val_${item.env}` ? (
-                                  <>
-                                    <Check className="h-3 w-3 text-emerald-600" />
-                                    <span className="text-emerald-600">คัดลอกแล้ว</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="h-3 w-3" />
-                                    คัดลอกค่า
-                                  </>
-                                )}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 font-bold text-slate-900">
-                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs">4</span>
-                  <h4>เปิดใช้งาน Google Sign-In และเพิ่ม Authorized Domain</h4>
-                </div>
-                <div className="text-xs text-slate-600 pl-8 space-y-2">
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
-                    <div className="font-semibold text-amber-900 flex items-center gap-1.5">
-                      <ShieldCheck className="h-4 w-4 text-amber-600" />
-                      สำคัญมาก: มิฉะนั้น Google Sign-In จะขึ้นว่า Unauthorized Domain!
-                    </div>
-                    <ol className="list-decimal pl-4 space-y-1 text-amber-900">
-                      <li>
-                        ใน Firebase Console ไปที่เมนู <strong>Build &gt; Authentication &gt; Sign-in method</strong>
-                      </li>
-                      <li>คลิกที่ <strong>Google</strong> แล้วกดเปิดสวิตช์ <strong>Enable</strong> จากนั้นเลือก Support email แล้วกด Save</li>
-                      <li>
-                        คลิกแท็บ <strong>Settings</strong> ด้านบนของหน้า Authentication
-                      </li>
-                      <li>
-                        เลื่อนลงมาที่หัวข้อ <strong>Authorized domains</strong> แล้วกด <strong>Add domain</strong>
-                      </li>
-                      <li>
-                        ใส่โดเมนของ Vercel ของคุณ (เช่น: <code className="bg-white px-1.5 py-0.5 rounded border border-amber-300 font-bold">{currentHostname || "your-app.vercel.app"}</code>)
-                      </li>
-                    </ol>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 5 */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 font-bold text-slate-900">
-                  <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs">5</span>
-                  <h4>Redeploy บน Vercel</h4>
-                </div>
-                <p className="text-xs text-slate-600 pl-8">
-                  หลังจากเพิ่มตัวแปรใน Vercel ครบ 6 ตัวแล้ว ให้ไปที่แท็บ <strong>Deployments</strong> ใน Vercel แล้วกด <strong>Redeploy</strong> (หรือ Push โค้ดใหม่) เพื่อให้ Vite นำตัวแปรไปคอมไพล์ใช้งานจริงทันที!
-                </p>
-              </div>
-
-              {/* Optional Quick Test form */}
-              <div className="border-t border-slate-200 pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <Key className="h-4 w-4 text-indigo-600" />
-                    ทางเลือกลัด: วางโค้ด Firebase Config เพื่อทดสอบบนเครื่องนี้ทันที
-                  </h4>
-                  {currentConfigInfo.source === "custom" && (
-                    <button
-                      onClick={clearInAppFirebaseConfig}
-                      className="text-xs text-red-600 hover:underline"
-                    >
-                      ล้างค่าคอนฟิกที่บันทึกไว้
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500">
-                  สามารถคัดลอกบล็อก <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">&#123; "apiKey": "...", ... &#125;</code> จาก Firebase Console มาวางด้านล่างเพื่อบันทึกและเชื่อมต่อได้ทันทีโดยไม่ต้องรอ Deploy:
-                </p>
-                <form onSubmit={handleApplyJsonConfig} className="space-y-2">
-                  <textarea
-                    rows={4}
-                    value={jsonInput}
-                    onChange={(e) => setJsonInput(e.target.value)}
-                    placeholder='{"apiKey": "AIzaSy...", "authDomain": "...", "projectId": "...", "storageBucket": "...", "messagingSenderId": "...", "appId": "..."}'
-                    className="w-full text-xs font-mono p-3 bg-slate-900 text-slate-100 rounded-xl border border-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium text-xs shadow-sm transition-colors cursor-pointer"
-                    >
-                      บันทึกและเชื่อมต่อ Firebase ทันที
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex justify-end rounded-b-2xl">
-              <button
-                onClick={() => setShowSetupModal(false)}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-xl transition-colors cursor-pointer"
-              >
-                เข้าใจแล้ว / ปิดหน้าต่างนี้
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 5. Minimal Engineering Footer Note */}
+      <div className="relative z-10 mt-6 text-center text-slate-500 text-[11px] font-mono tracking-wider">
+        INTELLIGENT CABINET & INVENTORY CONTROL SYSTEM • v2.4
+      </div>
     </div>
   );
 }
-

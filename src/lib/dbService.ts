@@ -1589,22 +1589,26 @@ export async function deleteAppUser(userId: string): Promise<void> {
 export async function fetchOrRegisterUser(
   email: string,
   displayName: string
-): Promise<{ role: UserRole; isSuperAdmin: boolean }> {
+): Promise<{ role: UserRole; isSuperAdmin: boolean; name: string }> {
   const emailClean = email.trim().toLowerCase();
   const isSuperAdmin = emailClean === SUPER_ADMIN_EMAIL;
 
   if (isSuperAdmin) {
+    const existingUsers = getLocalUsers();
+    const existingSuper = existingUsers.find(u => u.email.toLowerCase() === emailClean);
+    const finalName = existingSuper?.name || displayName || "ผู้ดูแลระบบสูงสุด (Super Admin)";
+
     try {
       await saveAppUserRole(
         emailClean,
-        displayName || "ผู้ดูแลระบบสูงสุด (Super Admin)",
+        finalName,
         "ADMIN",
         "ระบบหลัก (System)"
       );
     } catch (e) {
       console.error(e);
     }
-    return { role: "ADMIN", isSuperAdmin: true };
+    return { role: "ADMIN", isSuperAdmin: true, name: finalName };
   }
 
   // Lookup in existing users
@@ -1612,19 +1616,49 @@ export async function fetchOrRegisterUser(
   const matched = users.find(u => u.email.toLowerCase() === emailClean);
 
   if (matched) {
-    // Return existing assigned role (ADMIN, QC, or HELPER)
-    return { role: matched.role, isSuperAdmin: false };
+    // Return existing assigned role (ADMIN, QC, or HELPER) and saved customized name
+    return { role: matched.role, isSuperAdmin: false, name: matched.name || displayName || emailClean.split("@")[0] };
   }
 
   // If first time login, register with default role HELPER
+  const defaultName = displayName || emailClean.split("@")[0];
   const newRecord = await saveAppUserRole(
     emailClean,
-    displayName || emailClean.split("@")[0],
+    defaultName,
     "HELPER",
     "ระบบอัตโนมัติ (ลงชื่อเข้าใช้ครั้งแรก)"
   );
 
-  return { role: newRecord.role, isSuperAdmin: false };
+  return { role: newRecord.role, isSuperAdmin: false, name: newRecord.name };
+}
+
+// Update user's full name (ชื่อ-นามสกุล)
+export async function updateAppUserName(email: string, newName: string): Promise<AppUserRecord | null> {
+  const emailClean = email.trim().toLowerCase();
+  const cleanName = newName.trim();
+  if (!cleanName) return null;
+
+  const localUsers = getLocalUsers();
+  const idx = localUsers.findIndex(u => u.email.toLowerCase() === emailClean);
+  if (idx === -1) return null;
+
+  localUsers[idx].name = cleanName;
+  localUsers[idx].updatedAt = Timestamp.now();
+  setLocal("local_users", localUsers);
+
+  if (!isOfflineFallback) {
+    try {
+      await updateDoc(doc(db, "users", localUsers[idx].id), {
+        name: cleanName,
+        updatedAt: Timestamp.now()
+      });
+    } catch (err) {
+      recordCloudError(err);
+      console.warn("Notice: Name updated locally, Cloud sync deferred:", err);
+    }
+  }
+
+  return localUsers[idx];
 }
 
 // =========================================================================
