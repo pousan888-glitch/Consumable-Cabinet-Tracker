@@ -14,6 +14,7 @@ export interface AppUserRecord {
   name: string;
   role: UserRole;
   isSuperAdmin?: boolean;
+  profileCompleted?: boolean;
   assignedBy?: string;
   createdAt?: any;
   updatedAt?: any;

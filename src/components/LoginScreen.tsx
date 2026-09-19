@@ -56,7 +56,20 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       const googleDisplayName = user.displayName || user.email || "";
       const userMeta = await fetchOrRegisterUser(emailLower, googleDisplayName);
 
-      // Extract existing first & last name if available
+      // Check if user has already confirmed their name previously
+      // If user has already set up their profile, log them in immediately without prompting again!
+      if (userMeta.profileCompleted && userMeta.name) {
+        onLogin({
+          email: emailLower,
+          name: userMeta.name,
+          role: userMeta.role,
+          isSuperAdmin: userMeta.isSuperAdmin,
+          isSimulation: false
+        });
+        return;
+      }
+
+      // If it's their first time login, prompt them to confirm first & last name once
       const existingName = userMeta.name || googleDisplayName;
       const parts = existingName.trim().split(" ");
       if (parts.length > 1) {
@@ -67,7 +80,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         setLastName("");
       }
 
-      // Transition to Step 2: Confirm or input user's Full Name
+      // Transition to Step 2: Confirm or input user's Full Name (First time only)
       setPendingUser({
         email: emailLower,
         defaultName: existingName,
@@ -325,7 +338,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 ระบุชื่อ - นามสกุลผู้ใช้งาน
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
-                เพื่อใช้แสดงชื่อผู้ตรวจนับและบันทึกประวัติการเบิกใช้วัสดุในระบบอย่างชัดเจน
+                กรอกเฉพาะการเข้าใช้งานครั้งแรก เพื่อใช้แสดงชื่อผู้ตรวจนับและบันทึกประวัติการเบิกใช้วัสดุในระบบ (ครั้งต่อไปจะเข้าใช้งานได้ทันที)
               </p>
             </div>
 

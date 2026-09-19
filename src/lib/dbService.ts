@@ -1589,7 +1589,7 @@ export async function deleteAppUser(userId: string): Promise<void> {
 export async function fetchOrRegisterUser(
   email: string,
   displayName: string
-): Promise<{ role: UserRole; isSuperAdmin: boolean; name: string }> {
+): Promise<{ role: UserRole; isSuperAdmin: boolean; name: string; profileCompleted: boolean }> {
   const emailClean = email.trim().toLowerCase();
   const isSuperAdmin = emailClean === SUPER_ADMIN_EMAIL;
 
@@ -1597,6 +1597,7 @@ export async function fetchOrRegisterUser(
     const existingUsers = getLocalUsers();
     const existingSuper = existingUsers.find(u => u.email.toLowerCase() === emailClean);
     const finalName = existingSuper?.name || displayName || "ผู้ดูแลระบบสูงสุด (Super Admin)";
+    const profileCompleted = existingSuper?.profileCompleted ?? (!!existingSuper?.name && existingSuper.name !== "ผู้ดูแลระบบสูงสุด (Super Admin)");
 
     try {
       await saveAppUserRole(
@@ -1608,7 +1609,7 @@ export async function fetchOrRegisterUser(
     } catch (e) {
       console.error(e);
     }
-    return { role: "ADMIN", isSuperAdmin: true, name: finalName };
+    return { role: "ADMIN", isSuperAdmin: true, name: finalName, profileCompleted };
   }
 
   // Lookup in existing users
@@ -1616,11 +1617,17 @@ export async function fetchOrRegisterUser(
   const matched = users.find(u => u.email.toLowerCase() === emailClean);
 
   if (matched) {
-    // Return existing assigned role (ADMIN, QC, or HELPER) and saved customized name
-    return { role: matched.role, isSuperAdmin: false, name: matched.name || displayName || emailClean.split("@")[0] };
+    // If user already registered and has completed profile setup previously
+    const hasCompleted = matched.profileCompleted === true;
+    return { 
+      role: matched.role, 
+      isSuperAdmin: false, 
+      name: matched.name || displayName || emailClean.split("@")[0],
+      profileCompleted: hasCompleted
+    };
   }
 
-  // If first time login, register with default role HELPER
+  // If first time login, register with default role HELPER, profileCompleted = false
   const defaultName = displayName || emailClean.split("@")[0];
   const newRecord = await saveAppUserRole(
     emailClean,
@@ -1629,10 +1636,10 @@ export async function fetchOrRegisterUser(
     "ระบบอัตโนมัติ (ลงชื่อเข้าใช้ครั้งแรก)"
   );
 
-  return { role: newRecord.role, isSuperAdmin: false, name: newRecord.name };
+  return { role: newRecord.role, isSuperAdmin: false, name: newRecord.name, profileCompleted: false };
 }
 
-// Update user's full name (ชื่อ-นามสกุล)
+// Update user's full name (ชื่อ-นามสกุล) and mark profile setup as completed
 export async function updateAppUserName(email: string, newName: string): Promise<AppUserRecord | null> {
   const emailClean = email.trim().toLowerCase();
   const cleanName = newName.trim();
@@ -1643,6 +1650,7 @@ export async function updateAppUserName(email: string, newName: string): Promise
   if (idx === -1) return null;
 
   localUsers[idx].name = cleanName;
+  localUsers[idx].profileCompleted = true;
   localUsers[idx].updatedAt = Timestamp.now();
   setLocal("local_users", localUsers);
 
@@ -1650,6 +1658,7 @@ export async function updateAppUserName(email: string, newName: string): Promise
     try {
       await updateDoc(doc(db, "users", localUsers[idx].id), {
         name: cleanName,
+        profileCompleted: true,
         updatedAt: Timestamp.now()
       });
     } catch (err) {
