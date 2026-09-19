@@ -15,7 +15,7 @@ import {
   writeBatch,
   isOfflineFallback
 } from "./firebase";
-import { Cabinet, Consumable, CountHistory, QCConsumptionHistory, AppUserRecord, UserRole, DepartmentRecord } from "../types";
+import { Cabinet, Consumable, MasterConsumable, CountHistory, QCConsumptionHistory, AppUserRecord, UserRole, DepartmentRecord } from "../types";
 
 // Generate unique ID
 const generateId = () => Math.random().toString(36).substring(2, 11);
@@ -332,17 +332,22 @@ export async function testAndSyncAllToCloud(): Promise<{
     const localQC = getLocalQCConsumptionHistory();
     const localUsers = getLocalUsers();
     const localDepts = getLocalDepartments();
+    const localMasters = getLocalMasterConsumables();
 
     const batch = writeBatch(db);
 
     // Also purge any deleted tombstones from Cloud
     const deletedConsIds = getDeletedConsumableIds();
     const deletedCabIds = getDeletedCabinetIds();
+    const deletedMasterIds = getDeletedMasterConsumableIds();
     for (const delId of deletedConsIds) {
       batch.delete(doc(db, "consumables", delId));
     }
     for (const delCabId of deletedCabIds) {
       batch.delete(doc(db, "cabinets", delCabId));
+    }
+    for (const delMId of deletedMasterIds) {
+      batch.delete(doc(db, "master_consumables", delMId));
     }
 
     for (const cab of localCabs) {
@@ -350,6 +355,9 @@ export async function testAndSyncAllToCloud(): Promise<{
     }
     for (const con of localCons) {
       batch.set(doc(db, "consumables", con.id), con);
+    }
+    for (const master of localMasters) {
+      batch.set(doc(db, "master_consumables", master.id), master);
     }
     for (const log of localCount) {
       batch.set(doc(db, "count_history", log.id), log);
@@ -371,7 +379,7 @@ export async function testAndSyncAllToCloud(): Promise<{
 
     return {
       success: true,
-      message: `ซิงค์ข้อมูลขึ้น Cloud Firestore สำเร็จแล้ว (${localCabs.length} ตู้, ${localCons.length} พัสดุ) ทุกเครื่องและมือถือจะมองเห็นข้อมูลตรงกันทันที!`,
+      message: `ซิงค์ข้อมูลขึ้น Cloud Firestore สำเร็จแล้ว (${localCabs.length} ตู้, ${localCons.length} พัสดุ, ${localMasters.length} แคตตาล็อกกลาง) ทุกเครื่องและมือถือจะมองเห็นข้อมูลตรงกันทันที!`,
       syncedCabinets: localCabs.length,
       syncedConsumables: localCons.length
     };
@@ -1761,4 +1769,329 @@ export async function reassignDepartmentConsumables(
   }
   return count;
 }
+
+// ==========================================
+// MASTER CONSUMABLE CATALOG (รายการพัสดุมาตรฐานส่วนกลาง)
+// ==========================================
+
+export const DEFAULT_MASTER_CONSUMABLES: MasterConsumable[] = [
+  {
+    id: "mc-wrap",
+    code: "MAT-WRAP-01",
+    name: "พลาสติกแรป (PLASTIC WRAP)",
+    category: "บรรจุภัณฑ์",
+    unit: "ม้วน",
+    imageUrl: "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=400",
+    defaultMinThreshold: 5,
+    defaultMaxThreshold: 25,
+    description: "ฟิล์มยืดพลาสติกแรปใสสำหรับพันสินค้าและพาเลท หน้ากว้าง 50 ซม."
+  },
+  {
+    id: "mc-glove",
+    code: "PPE-GLOVE-01",
+    name: "ถุงมือไนไตรสีฟ้า (Nitrile Gloves)",
+    category: "อุปกรณ์ PPE",
+    unit: "กล่อง",
+    imageUrl: CONSUMABLE_PRESETS["glove"],
+    defaultMinThreshold: 5,
+    defaultMaxThreshold: 30,
+    description: "ถุงมือยางสังเคราะห์ไนไตร ไร้แป้ง ป้องกันสารเคมีและสิ่งสกปรก (กล่องละ 100 ชิ้น)"
+  },
+  {
+    id: "mc-mask",
+    code: "PPE-MASK-01",
+    name: "หน้ากากอนามัย 3 ชั้น (3-Ply Mask)",
+    category: "อุปกรณ์ PPE",
+    unit: "กล่อง",
+    imageUrl: CONSUMABLE_PRESETS["mask"],
+    defaultMinThreshold: 5,
+    defaultMaxThreshold: 30,
+    description: "หน้ากากอนามัยทางการแพทย์ 3 ชั้น มีแถบปรับสันจมูก (กล่องละ 50 ชิ้น)"
+  },
+  {
+    id: "mc-tape",
+    code: "MAT-TAPE-01",
+    name: "ดักเทปสีเทา (Cloth Duct Tape)",
+    category: "เทป & กาว",
+    unit: "ม้วน",
+    imageUrl: CONSUMABLE_PRESETS["tape"],
+    defaultMinThreshold: 5,
+    defaultMaxThreshold: 20,
+    description: "เทปผ้ากาวยางธรรมชาติ เหนียวแน่น ทนแรงดึงสูง ขนาด 2 นิ้ว"
+  },
+  {
+    id: "mc-brush",
+    code: "TOOL-BRUSH-01",
+    name: "แปรงทาสี 1 นิ้ว (Paint Brush 1 Inch)",
+    category: "เครื่องมือ & ซ่อมบำรุง",
+    unit: "อัน",
+    imageUrl: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=400",
+    defaultMinThreshold: 3,
+    defaultMaxThreshold: 15,
+    description: "แปรงทาสีขนสัตว์แท้ ด้ามไม้ สำหรับทาสี ทาน้ำมัน และปัดฝุ่นชิ้นงาน"
+  },
+  {
+    id: "mc-ratchet",
+    code: "SAFE-BELT-01",
+    name: "รัชชิ่งเบล สายรัดก๊อกแก๊ก (Ratchet Belt)",
+    category: "อุปกรณ์เซฟตี้ & ขนย้าย",
+    unit: "ชุด",
+    imageUrl: "https://images.unsplash.com/photo-1540638349517-3abd5afc5847?auto=format&fit=crop&q=80&w=400",
+    defaultMinThreshold: 2,
+    defaultMaxThreshold: 10,
+    description: "สายรัดโพลีเอสเตอร์พร้อมตัวโยกก๊อกแก๊ก สำหรับผูกรัดสินค้าบนรถและพาเลท"
+  },
+  {
+    id: "mc-sling2m",
+    code: "LIFT-SLING-2M",
+    name: "Webbing sling 2 MT – 2 M long (สลิงยก 2 ตัน 2 ม.)",
+    category: "อุปกรณ์เซฟตี้ & ขนย้าย",
+    unit: "เส้น",
+    imageUrl: "https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&q=80&w=400",
+    defaultMinThreshold: 2,
+    defaultMaxThreshold: 8,
+    description: "สลิงผ้าใบโพลีเอสเตอร์แบน รับน้ำหนัก 2 ตัน ยาว 2 เมตร มีห่วงหัวท้าย"
+  },
+  {
+    id: "mc-sling3m",
+    code: "LIFT-SLING-3M",
+    name: "Webbing sling 3 MT – 2 M long (สลิงยก 3 ตัน 2 ม.)",
+    category: "อุปกรณ์เซฟตี้ & ขนย้าย",
+    unit: "เส้น",
+    imageUrl: "https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&q=80&w=400",
+    defaultMinThreshold: 2,
+    defaultMaxThreshold: 8,
+    description: "สลิงผ้าใบโพลีเอสเตอร์แบน รับน้ำหนัก 3 ตัน ยาว 2 เมตร มีห่วงหัวท้าย"
+  },
+  {
+    id: "mc-cotterpin",
+    code: "FAST-PIN-M4",
+    name: "GAVZ COTTER PIN M 4 X 40 (สลักปิ้นล็อค)",
+    category: "สลักภัณฑ์ & น็อต",
+    unit: "กล่อง",
+    imageUrl: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&q=80&w=400",
+    defaultMinThreshold: 2,
+    defaultMaxThreshold: 6,
+    description: "ปิ้นสลักล็อคเหล็กชุบขาวป้องกันสนิม ขนาด M4 x 40 มม. (กล่องละ 100 ชิ้น)"
+  },
+  {
+    id: "mc-cabletie",
+    code: "MAT-CABLETIE-01",
+    name: "CABLE TIE CT-310-4C (เคเบิ้ลไทร์ 310x4.8mm)",
+    category: "บรรจุภัณฑ์",
+    unit: "ถุง",
+    imageUrl: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=400",
+    defaultMinThreshold: 3,
+    defaultMaxThreshold: 15,
+    description: "สายรัดเคเบิ้ลไทร์ไนลอนสีขาว/ดำ ขนาด 310mm x 4.8mm (ถุงละ 100 เส้น)"
+  },
+  {
+    id: "mc-alcohol",
+    code: "CHEM-ALC-75",
+    name: "สเปรย์แอลกอฮอล์ 75% (Alcohol Spray)",
+    category: "เคมีภัณฑ์ & ทำความสะอาด",
+    unit: "ขวด",
+    imageUrl: CONSUMABLE_PRESETS["alcohol"],
+    defaultMinThreshold: 5,
+    defaultMaxThreshold: 20,
+    description: "สเปรย์แอลกอฮอล์ทำความสะอาดและฆ่าเชื้อโรค ขนาด 500 มล."
+  },
+  {
+    id: "mc-goggles",
+    code: "PPE-GOGGLE-01",
+    name: "แว่นตานิรภัยกันสะเก็ด (Safety Goggles)",
+    category: "อุปกรณ์ PPE",
+    unit: "อัน",
+    imageUrl: CONSUMABLE_PRESETS["goggles"],
+    defaultMinThreshold: 3,
+    defaultMaxThreshold: 15,
+    description: "แว่นตานิรภัยเลนส์ใส มาตรฐาน ANSI ป้องกันสะเก็ดและรังสี UV"
+  },
+  {
+    id: "mc-wipes",
+    code: "CLEAN-WIPE-01",
+    name: "กระดาษเช็ดอุตสาหกรรม (Industrial Wipes)",
+    category: "เคมีภัณฑ์ & ทำความสะอาด",
+    unit: "ม้วน",
+    imageUrl: CONSUMABLE_PRESETS["paper"],
+    defaultMinThreshold: 4,
+    defaultMaxThreshold: 16,
+    description: "กระดาษหนาพิเศษซับน้ำมันและคราบจารบี ไม่เปื่อยยุ่ย ไม่เป็นขุย"
+  },
+  {
+    id: "mc-grease",
+    code: "LUB-GREASE-01",
+    name: "จารบีหล่อลื่นทนความร้อนสูง (Industrial Grease)",
+    category: "เคมีภัณฑ์ & ทำความสะอาด",
+    unit: "กระป๋อง",
+    imageUrl: CONSUMABLE_PRESETS["grease"],
+    defaultMinThreshold: 2,
+    defaultMaxThreshold: 10,
+    description: "จารบีลิเธียมคอมเพล็กซ์ทนความร้อนสูง ป้องกันสนิมและการสึกหรอ"
+  }
+];
+
+const DELETED_MASTER_CONSUMABLES_KEY = "cabinet_deleted_master_consumables_tombstone";
+
+export const getDeletedMasterConsumableIds = (): string[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(DELETED_MASTER_CONSUMABLES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return (parsed as any[]).flat(Infinity).map(x => String(x).trim()).filter(Boolean);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+};
+
+export const addDeletedMasterConsumableId = (id: string) => {
+  if (!id || typeof window === "undefined") return;
+  const current = getDeletedMasterConsumableIds();
+  if (!current.includes(id)) {
+    current.push(id);
+    localStorage.setItem(DELETED_MASTER_CONSUMABLES_KEY, JSON.stringify(current));
+  }
+};
+
+export const getLocalMasterConsumables = (): MasterConsumable[] => {
+  const deletedIds = getDeletedMasterConsumableIds();
+  let list = getLocal<any>("local_master_consumables");
+  if (!list || list.length === 0) {
+    setLocal("local_master_consumables", DEFAULT_MASTER_CONSUMABLES);
+    list = DEFAULT_MASTER_CONSUMABLES;
+  }
+  return list
+    .map(item => convertToTimestamps<MasterConsumable>(item))
+    .filter(item => !deletedIds.includes(item.id));
+};
+
+export async function getMasterConsumables(): Promise<MasterConsumable[]> {
+  const deletedIds = getDeletedMasterConsumableIds();
+  const localList = getLocalMasterConsumables();
+
+  if (isOfflineFallback) {
+    return localList;
+  }
+
+  try {
+    const snap = await withTimeout(
+      getDocs(collection(db, "master_consumables")),
+      4000
+    );
+
+    for (const d of snap.docs) {
+      if (deletedIds.includes(d.id)) {
+        deleteDoc(d.ref).catch(() => {});
+      }
+    }
+
+    const cloudList = snap.docs
+      .filter(doc => !deletedIds.includes(doc.id))
+      .map(doc => ({ id: doc.id, ...doc.data() } as MasterConsumable));
+
+    cloudList.sort((a, b) => (a.name || "").localeCompare(b.name || "", "th"));
+
+    // Auto-sync local to cloud if cloud is empty or missing items
+    for (const loc of localList) {
+      if (!cloudList.some(c => c.id === loc.id) && !deletedIds.includes(loc.id)) {
+        setDoc(doc(db, "master_consumables", loc.id), loc).catch(() => {});
+      }
+    }
+
+    const map = new Map<string, MasterConsumable>();
+    cloudList.forEach(m => map.set(m.id, m));
+    localList.forEach(m => {
+      if (!map.has(m.id)) map.set(m.id, m);
+    });
+
+    const result = Array.from(map.values()).filter(m => !deletedIds.includes(m.id));
+    result.sort((a, b) => (a.name || "").localeCompare(b.name || "", "th"));
+    setLocal("local_master_consumables", result);
+    return result;
+  } catch (err) {
+    recordCloudError(err);
+    return localList;
+  }
+}
+
+export async function addMasterConsumable(
+  data: Omit<MasterConsumable, "id" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<MasterConsumable> {
+  const id = data.id || "mc-" + generateId();
+  const newMaster: MasterConsumable = {
+    id,
+    code: data.code?.trim() || "",
+    name: data.name.trim(),
+    category: data.category?.trim() || "ทั่วไป",
+    unit: data.unit.trim(),
+    imageUrl: data.imageUrl || CONSUMABLE_PRESETS["tape"],
+    defaultMinThreshold: Number(data.defaultMinThreshold) || 5,
+    defaultMaxThreshold: Number(data.defaultMaxThreshold) || 20,
+    description: data.description?.trim() || "",
+    createdAt: Timestamp.now(),
+    createdBy: data.createdBy || "admin"
+  };
+
+  const list = getLocalMasterConsumables();
+  const existingIdx = list.findIndex(m => m.id === id || m.name.toLowerCase() === newMaster.name.toLowerCase());
+  if (existingIdx !== -1) {
+    list[existingIdx] = { ...list[existingIdx], ...newMaster };
+  } else {
+    list.unshift(newMaster);
+  }
+  setLocal("local_master_consumables", list);
+
+  if (!isOfflineFallback) {
+    try {
+      await setDoc(doc(db, "master_consumables", id), newMaster);
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+
+  return newMaster;
+}
+
+export async function updateMasterConsumable(
+  id: string,
+  updates: Partial<MasterConsumable>
+): Promise<void> {
+  const list = getLocalMasterConsumables();
+  const idx = list.findIndex(m => m.id === id);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...updates, updatedAt: Timestamp.now() };
+    setLocal("local_master_consumables", list);
+  }
+
+  if (!isOfflineFallback) {
+    try {
+      await updateDoc(doc(db, "master_consumables", id), {
+        ...updates,
+        updatedAt: Timestamp.now()
+      });
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+}
+
+export async function deleteMasterConsumable(id: string): Promise<void> {
+  addDeletedMasterConsumableId(id);
+  const list = getLocalMasterConsumables();
+  const updated = list.filter(m => m.id !== id);
+  setLocal("local_master_consumables", updated);
+
+  if (!isOfflineFallback) {
+    try {
+      await deleteDoc(doc(db, "master_consumables", id));
+    } catch (err) {
+      recordCloudError(err);
+    }
+  }
+}
+
 

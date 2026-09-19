@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Cabinet, Consumable, CountHistory, QCConsumptionHistory, DepartmentRecord } from "../types";
+import { Cabinet, Consumable, CountHistory, QCConsumptionHistory, DepartmentRecord, MasterConsumable } from "../types";
 import { 
   getCabinets, 
   getConsumables, 
@@ -17,6 +17,8 @@ import {
   testAndSyncAllToCloud,
   resetCloudSyncNotice,
   getDepartments,
+  getMasterConsumables,
+  addMasterConsumable,
   CABINET_PRESETS,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
@@ -30,6 +32,7 @@ import CabinetQRModal from "./CabinetQRModal";
 import ClearHistoryModal from "./ClearHistoryModal";
 import DepartmentConsumablesView from "./DepartmentConsumablesView";
 import PurchaseOrderView from "./PurchaseOrderView";
+import MasterCatalogView from "./MasterCatalogView";
 import { 
   Plus, 
   Edit, 
@@ -38,6 +41,7 @@ import {
   QrCode, 
   AlertTriangle, 
   Package, 
+  Boxes, 
   History, 
   Activity, 
   Settings, 
@@ -87,13 +91,14 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   // Database States
   const [cabinets, setCabinets] = useState<Cabinet[]>([]);
   const [consumables, setConsumables] = useState<Consumable[]>([]);
+  const [masterConsumables, setMasterConsumables] = useState<MasterConsumable[]>([]);
   const [countLogs, setCountLogs] = useState<CountHistory[]>([]);
   const [qcLogs, setQcLogs] = useState<QCConsumptionHistory[]>([]);
   const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
   
   // Loading & View States
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings">("department_consumables");
+  const [activeTab, setActiveTab] = useState<"department_consumables" | "master_catalog" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings">("department_consumables");
   const [searchTerm, setSearchTerm] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [previewModalImage, setPreviewModalImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
@@ -114,6 +119,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   const [showConsumableModal, setShowConsumableModal] = useState(false);
   const [selectedCabinetId, setSelectedCabinetId] = useState<string>("");
   const [editingConsumable, setEditingConsumable] = useState<Consumable | null>(null);
+  const [selectedMasterId, setSelectedMasterId] = useState<string>("");
+  const [saveToMasterCatalog, setSaveToMasterCatalog] = useState(false);
   const [consumableForm, setConsumableForm] = useState({
     name: "",
     department: "CMT",
@@ -121,7 +128,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     minThreshold: 5,
     maxThreshold: 50,
     unit: "ชิ้น",
-    imageUrl: CONSUMABLE_PRESETS["glove"]
+    imageUrl: CONSUMABLE_PRESETS["glove"],
+    masterId: undefined as string | undefined
   });
   const [isSavingConsumable, setIsSavingConsumable] = useState(false);
   const [consumableError, setConsumableError] = useState<string | null>(null);
@@ -177,6 +185,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         setCabinets(cabs);
         const items = await getConsumables();
         setConsumables(items);
+        const masters = await getMasterConsumables();
+        setMasterConsumables(masters);
         const histories = await getCountHistory();
         setCountLogs(histories);
         const qcHistories = await getQCConsumptionHistory();
@@ -283,6 +293,9 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
         const qcHistories = await getQCConsumptionHistory();
         setQcLogs(qcHistories);
+
+        const masters = await getMasterConsumables();
+        setMasterConsumables(masters);
       } catch (err) {
         console.error("Error loading admin dashboard data:", err);
       } finally {
@@ -400,6 +413,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     try {
       const payload = {
         ...consumableForm,
+        masterId: selectedMasterId || undefined,
         name: trimmedName,
         cabinetId: selectedCabinetId,
         lastUpdatedBy: userEmail
@@ -410,11 +424,37 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         setToastMessage("อัปเดตข้อมูลวัสดุสิ้นเปลืองเรียบร้อย");
       } else {
         await addConsumable(payload);
+        
+        // If user opted to also save to Master Catalog
+        if (saveToMasterCatalog && trimmedName) {
+          const exists = masterConsumables.some(m => m.name.trim().toLowerCase() === trimmedName.toLowerCase());
+          if (!exists) {
+            try {
+              await addMasterConsumable({
+                code: "MAT-" + Math.floor(100 + Math.random() * 900),
+                name: trimmedName,
+                category: "ทั่วไป",
+                unit: consumableForm.unit.trim() || "ชิ้น",
+                imageUrl: consumableForm.imageUrl,
+                defaultMinThreshold: consumableForm.minThreshold || 5,
+                defaultMaxThreshold: consumableForm.maxThreshold || 25,
+                description: `สร้างอัตโนมัติจากสต็อกแผนก ${consumableForm.department}`,
+                createdBy: userEmail
+              });
+              const updatedMasters = await getMasterConsumables();
+              setMasterConsumables(updatedMasters);
+            } catch (e) {
+              console.warn("Could not save to master catalog:", e);
+            }
+          }
+        }
         setToastMessage("เพิ่มวัสดุสิ้นเปลืองลงในตู้สำเร็จเรียบร้อย!");
       }
 
       setShowConsumableModal(false);
       setEditingConsumable(null);
+      setSelectedMasterId("");
+      setSaveToMasterCatalog(false);
       const defaultDept = departments.find(d => d.name.toLowerCase() === "cmt")?.name 
         || departments[0]?.name 
         || "CMT";
@@ -425,7 +465,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         minThreshold: 5,
         maxThreshold: 50,
         unit: "ชิ้น",
-        imageUrl: CONSUMABLE_PRESETS["glove"]
+        imageUrl: CONSUMABLE_PRESETS["glove"],
+        masterId: undefined
       });
       setConsumableError(null);
       triggerRefresh();
@@ -441,6 +482,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   const handleEditConsumable = (item: Consumable) => {
     setEditingConsumable(item);
     setSelectedCabinetId(item.cabinetId);
+    setSelectedMasterId(item.masterId || "");
+    setSaveToMasterCatalog(false);
     setConsumableForm({
       name: item.name,
       department: item.department,
@@ -448,9 +491,34 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
       minThreshold: item.minThreshold,
       maxThreshold: item.maxThreshold ?? (item.minThreshold ? item.minThreshold * 5 : 50),
       unit: item.unit,
-      imageUrl: item.imageUrl
+      imageUrl: item.imageUrl,
+      masterId: item.masterId
     });
     setShowConsumableModal(true);
+  };
+
+  // Deploy item from Master Catalog directly into a cabinet
+  const handleDeployMasterToCabinet = async (
+    masterItem: MasterConsumable,
+    cabinetId: string,
+    department: string,
+    initialQty: number,
+    minThresh: number,
+    maxThresh: number
+  ) => {
+    await addConsumable({
+      cabinetId,
+      masterId: masterItem.id,
+      name: masterItem.name,
+      department,
+      currentQty: initialQty,
+      minThreshold: minThresh,
+      maxThreshold: maxThresh,
+      unit: masterItem.unit,
+      imageUrl: masterItem.imageUrl,
+      lastUpdatedBy: userEmail
+    });
+    triggerRefresh();
   };
 
   const handleDeleteConsumable = async (id: string) => {
@@ -516,6 +584,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
   const handleAddConsumableForDept = (deptName: string) => {
     setEditingConsumable(null);
+    setSelectedMasterId("");
+    setSaveToMasterCatalog(false);
     const targetDept = (deptName && deptName !== "ALL")
       ? deptName
       : (departments.find(d => d.name.toLowerCase() === "cmt")?.name || departments[0]?.name || "CMT");
@@ -527,7 +597,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
       minThreshold: 5,
       maxThreshold: 50,
       unit: "ชิ้น",
-      imageUrl: CONSUMABLE_PRESETS["glove"]
+      imageUrl: CONSUMABLE_PRESETS["glove"],
+      masterId: undefined
     });
 
     // Auto-select cabinet matching this department if available
@@ -709,7 +780,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         </div>
 
         {/* QUICK STATS ROW INSIDE BANNER (VIEWER DASHBOARD STYLE) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 mt-6 pt-5 border-t border-white/10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-6 pt-5 border-t border-white/10">
           {/* Card 1: Consumables */}
           <div 
             onClick={() => setActiveTab("department_consumables")}
@@ -729,7 +800,26 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             </div>
           </div>
 
-          {/* Card 2: Cabinets */}
+          {/* Card 2: Master Catalog */}
+          <div 
+            onClick={() => setActiveTab("master_catalog")}
+            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+              activeTab === "master_catalog"
+                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
+                : "bg-white/10 hover:bg-white/15 border-white/10"
+            }`}
+          >
+            <div className="flex items-center justify-between text-indigo-200 text-[11px] font-bold">
+              <span>พัสดุมาตรฐาน</span>
+              <Boxes className="h-4 w-4 text-indigo-300" />
+            </div>
+            <div className="text-xl sm:text-2xl font-black text-indigo-200 mt-1">
+              {masterConsumables.length}
+              <span className="text-xs font-normal text-indigo-300/80 ml-1">รายการ</span>
+            </div>
+          </div>
+
+          {/* Card 3: Cabinets */}
           <div 
             onClick={() => setActiveTab("cabinets")}
             className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
@@ -748,7 +838,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             </div>
           </div>
 
-          {/* Card 3: Critical / Out of Stock -> PO */}
+          {/* Card 4: Critical / Out of Stock -> PO */}
           <div 
             onClick={() => setActiveTab("purchase_orders")}
             className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
@@ -769,7 +859,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             </div>
           </div>
 
-          {/* Card 4: QC Withdrawals */}
+          {/* Card 5: QC Withdrawals */}
           <div 
             onClick={() => setActiveTab("qc")}
             className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
@@ -788,10 +878,10 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             </div>
           </div>
 
-          {/* Card 5: Audit History */}
+          {/* Card 6: Audit History */}
           <div 
             onClick={() => setActiveTab("history")}
-            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border col-span-2 sm:col-span-1 ${
+            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
               activeTab === "history"
                 ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
                 : "bg-white/10 hover:bg-white/15 border-white/10"
@@ -982,7 +1072,25 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             )}
           </button>
 
-          {/* Tab 2: Cabinets & QR */}
+          {/* Tab 2: Master Item Catalog */}
+          <button
+            onClick={() => setActiveTab("master_catalog")}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "master_catalog"
+                ? "bg-indigo-950 text-white shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            }`}
+          >
+            <Boxes className="h-4 w-4 text-indigo-400" />
+            <span>พัสดุมาตรฐาน (Master Catalog)</span>
+            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
+              activeTab === "master_catalog" ? "bg-indigo-800 text-indigo-200" : "bg-slate-100 text-slate-600"
+            }`}>
+              {masterConsumables.length}
+            </span>
+          </button>
+
+          {/* Tab 3: Cabinets & QR */}
           <button
             onClick={() => setActiveTab("cabinets")}
             className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
@@ -1249,6 +1357,28 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           onPreviewImage={(img) => setPreviewModalImage(img)}
           getCabinetName={getCabinetName}
           onToast={(msg) => setToastMessage(msg)}
+        />
+      )}
+
+      {/* MASTER CATALOG TAB (CENTRALIZED CANONICAL INVENTORY REPOSITORY) */}
+      {activeTab === "master_catalog" && (
+        <MasterCatalogView
+          masterItems={masterConsumables}
+          consumables={consumables}
+          cabinets={cabinets}
+          departments={departments}
+          onRefresh={async () => {
+            const masters = await getMasterConsumables();
+            setMasterConsumables(masters);
+            const items = await getConsumables();
+            setConsumables(items);
+          }}
+          onDeployToCabinet={handleDeployMasterToCabinet}
+          onToast={(msg) => {
+            setToastMessage(msg);
+            setTimeout(() => setToastMessage(null), 4000);
+          }}
+          userEmail={userEmail}
         />
       )}
 
@@ -2092,6 +2222,88 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                   </div>
                 )}
 
+                {/* Master Catalog Quick Selection Card */}
+                {!editingConsumable && (
+                  <div className="p-3.5 bg-gradient-to-br from-indigo-50/90 via-blue-50/50 to-indigo-50/30 rounded-2xl border border-indigo-200/80 shadow-2xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-indigo-950">
+                        <Boxes className="h-4 w-4 text-indigo-600" />
+                        <span>เลือกจากแคตตาล็อกพัสดุมาตรฐาน (Master Catalog)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowConsumableModal(false);
+                          setActiveTab("master_catalog");
+                        }}
+                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+                      >
+                        จัดการแคตตาล็อกกลาง ({masterConsumables.length})
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      หากเป็นพัสดุส่วนกลางที่ใช้ร่วมกัน สามารถคลิกเลือกเพื่อดึงชื่อ รูปถ่าย และหน่วยนับมาตรฐานได้ทันที:
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedMasterId}
+                        onChange={(e) => {
+                          const mId = e.target.value;
+                          setSelectedMasterId(mId);
+                          if (mId) {
+                            const chosen = masterConsumables.find(m => m.id === mId);
+                            if (chosen) {
+                              setConsumableForm(prev => ({
+                                ...prev,
+                                name: chosen.name,
+                                unit: chosen.unit,
+                                imageUrl: chosen.imageUrl,
+                                minThreshold: chosen.defaultMinThreshold || prev.minThreshold,
+                                maxThreshold: chosen.defaultMaxThreshold || prev.maxThreshold,
+                                masterId: chosen.id
+                              }));
+                            }
+                          }
+                        }}
+                        className="flex-1 px-3 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 focus:ring-2 focus:ring-indigo-500 outline-none shadow-2xs"
+                      >
+                        <option value="">-- คลิกเลือกพัสดุมาตรฐาน ({masterConsumables.length} รายการ) --</option>
+                        {masterConsumables.map(m => (
+                          <option key={m.id} value={m.id}>
+                            [{m.code || "STD"}] {m.name} ({m.category} • {m.unit})
+                          </option>
+                        ))}
+                      </select>
+                      {selectedMasterId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMasterId("");
+                            setConsumableForm(prev => ({ ...prev, masterId: undefined }));
+                          }}
+                          className="px-2.5 py-2 text-[10px] font-bold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl cursor-pointer shrink-0"
+                          title="ยกเลิกการผูกพัสดุมาตรฐาน เพื่อพิมพ์เองอิสระ"
+                        >
+                          ล้าง
+                        </button>
+                      )}
+                    </div>
+
+                    {selectedMasterId && (() => {
+                      const chosen = masterConsumables.find(m => m.id === selectedMasterId);
+                      if (!chosen) return null;
+                      return (
+                        <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-800 font-medium">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          <span>ดึงข้อมูลมาตรฐานของ <b>{chosen.name}</b> สำเร็จแล้ว (หน่วย: {chosen.unit})</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="con-cabinet-select" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
                     เลือกจัดสรรลงตู้เก็บของ <span className="text-rose-500">*</span>
@@ -2288,6 +2500,25 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                     subtitle: `หน่วย: ${consumableForm.unit || "ชิ้น"}` 
                   })}
                 />
+
+                {!editingConsumable && !selectedMasterId && (
+                  <label className="flex items-start gap-2.5 p-3 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={saveToMasterCatalog}
+                      onChange={(e) => setSaveToMasterCatalog(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-slate-800 block">
+                        บันทึกรายการนี้เข้าสู่ "แคตตาล็อกพัสดุมาตรฐาน (Master Catalog)" ด้วย
+                      </span>
+                      <span className="text-[11px] text-slate-500 block mt-0.5">
+                        เพื่อให้แผนกอื่นๆ สามารถเลือกดึงข้อมูลไปใส่ในตู้ของตนเองได้ โดยไม่ต้องพิมพ์หรือถ่ายรูปซ้ำ
+                      </span>
+                    </div>
+                  </label>
+                )}
               </div>
 
               {/* Pinned Action Buttons Footer - Always visible on any screen size */}

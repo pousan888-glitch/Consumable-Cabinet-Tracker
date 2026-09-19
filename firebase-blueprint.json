@@ -86,6 +86,24 @@
         "items": { "type": "array" }
       },
       "required": ["department", "consumedBy"]
+    },
+    "MasterConsumable": {
+      "title": "MasterConsumable",
+      "description": "Standard factory-wide master consumable catalog item",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "defaultMinThreshold": { "type": "number" },
+        "defaultMaxThreshold": { "type": "number" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["name", "unit"]
     }
   },
   "firestore": {
@@ -96,6 +114,10 @@
     "/consumables/{consumableId}": {
       "schema": "Consumable",
       "description": "Consumables inventory list"
+    },
+    "/master_consumables/{masterId}": {
+      "schema": "MasterConsumable",
+      "description": "Master catalog of standard consumables across the factory"
     },
     "/count_history/{historyId}": {
       "schema": "CountHistory",

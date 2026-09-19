@@ -10,6 +10,10 @@ service cloud.firestore {
       allow read, write: if true;
     }
     
+    match /master_consumables/{masterId} {
+      allow read, write: if true;
+    }
+    
     match /count_history/{historyId} {
       allow read, write: if true;
     }

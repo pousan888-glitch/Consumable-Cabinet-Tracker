@@ -28,9 +28,25 @@ export interface Cabinet {
   createdAt: any;
 }
 
+export interface MasterConsumable {
+  id: string;
+  code?: string; // รหัสพัสดุกลาง เช่น MAT-001
+  name: string; // ชื่อพัสดุมาตรฐาน
+  category: string; // หมวดหมู่ เช่น บรรจุภัณฑ์, PPE, ซ่อมบำรุง
+  unit: string; // หน่วยนับมาตรฐาน เช่น ชิ้น, ม้วน, กล่อง
+  imageUrl: string; // รูปภาพอ้างอิงมาตรฐาน
+  defaultMinThreshold?: number; // เกณฑ์เตือนขั้นต่ำแนะนำ
+  defaultMaxThreshold?: number; // สต็อกสูงสุดแนะนำ
+  description?: string; // รายละเอียดเพิ่มเติม / สเปก
+  createdAt?: any;
+  createdBy?: string;
+  updatedAt?: any;
+}
+
 export interface Consumable {
   id: string;
   cabinetId: string;
+  masterId?: string; // Reference to MasterConsumable if cloned from catalog
   name: string;
   department: string; // The specific department it belongs to
   currentQty: number;
