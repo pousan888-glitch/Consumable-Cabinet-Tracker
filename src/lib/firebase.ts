@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { 
+  initializeFirestore,
   getFirestore, 
   collection, 
   doc, 
@@ -21,6 +22,9 @@ import {
   GoogleAuthProvider, 
   signOut, 
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  inMemoryPersistence,
   User
 } from "firebase/auth";
 
@@ -123,14 +127,47 @@ export function clearInAppFirebaseConfig() {
 // Initialize Firebase
 const app = initializeApp(activeConfig);
 
-// Initialize Firestore
-// The sandbox database requires a specific database ID: "ai-studio-4091080e-b2cc-4953-bfe1-99ad5bf7c077"
+// Initialize Firestore with settings optimized for iOS / WebKit & mobile devices
+// CRITICAL FOR IOS: WebKit on iOS indefinitely stalls or pauses HTTP/2 streaming WebChannels.
+// Using experimentalForceLongPolling / experimentalAutoDetectLongPolling ensures reliable HTTP communication.
 const isSandbox = activeConfig.projectId === "marklar-horizon-g9pl1";
-const db = isSandbox 
-  ? getFirestore(app, "ai-studio-4091080e-b2cc-4953-bfe1-99ad5bf7c077") 
-  : getFirestore(app);
+const sandboxDbId = "ai-studio-4091080e-b2cc-4953-bfe1-99ad5bf7c077";
+
+// Detect iOS / iPadOS / WebKit
+const isIOS = typeof navigator !== "undefined" && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+  (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1)
+);
+
+let db: any;
+try {
+  db = initializeFirestore(
+    app,
+    {
+      experimentalAutoDetectLongPolling: true,
+      // Force long-polling everywhere on mobile / iOS to eliminate WebKit stream hang issues
+      experimentalForceLongPolling: true
+    },
+    isSandbox ? sandboxDbId : undefined
+  );
+} catch (initErr) {
+  console.warn("initializeFirestore fallback to getFirestore:", initErr);
+  db = isSandbox ? getFirestore(app, sandboxDbId) : getFirestore(app);
+}
 
 const auth = getAuth(app);
+
+// On iOS Safari (especially Private Browsing or WebViews), IndexedDB may throw SecurityError.
+// Setting persistence with fallback ensures authentication won't crash on iOS devices.
+if (typeof window !== "undefined") {
+  try {
+    setPersistence(auth, browserLocalPersistence).catch(() => {
+      setPersistence(auth, inMemoryPersistence).catch(() => {});
+    });
+  } catch (e) {
+    console.warn("Auth persistence notice:", e);
+  }
+}
 
 export { 
   app, 

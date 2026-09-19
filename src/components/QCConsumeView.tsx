@@ -44,10 +44,11 @@ export default function QCConsumeView({ userEmail, userName, onBackToMainMenu }:
     async function loadData() {
       setLoading(true);
       try {
-        const cabs = await getCabinets();
+        const [cabs, items] = await Promise.all([
+          getCabinets(),
+          getConsumables()
+        ]);
         setCabinets(cabs);
-
-        const items = await getConsumables();
         setAllConsumables(items);
         setFilteredConsumables(items);
 

@@ -263,15 +263,19 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     async function loadAllData() {
       setLoading(true);
       try {
-        const depts = await getDepartments();
+        const [depts, cabs, items, histories, qcHistories, masters] = await Promise.all([
+          getDepartments(),
+          getCabinets(),
+          getConsumables(),
+          getCountHistory(),
+          getQCConsumptionHistory(),
+          getMasterConsumables()
+        ]);
+
         const activeDepts = depts.filter(d => d.name.toLowerCase() !== "production");
         setDepartments(activeDepts);
-
-        const cabs = await getCabinets();
         setCabinets(cabs);
 
-        const items = await getConsumables();
-        
         // Auto-migrate any items with legacy "Production" department to their cabinet department or CMT
         const hasLegacyProd = items.some(c => c.department?.toLowerCase() === "production");
         if (hasLegacyProd) {
@@ -289,13 +293,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           setConsumables(items);
         }
 
-        const histories = await getCountHistory();
         setCountLogs(histories);
-
-        const qcHistories = await getQCConsumptionHistory();
         setQcLogs(qcHistories);
-
-        const masters = await getMasterConsumables();
         setMasterConsumables(masters);
       } catch (err) {
         console.error("Error loading admin dashboard data:", err);

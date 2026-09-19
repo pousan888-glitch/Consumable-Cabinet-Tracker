@@ -39,16 +39,25 @@ export const CONSUMABLE_PRESETS: Record<string, string> = {
   "tubes": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&q=80&w=400"    // lab test tubes / bottles
 };
 
-// Local storage helper functions for offline/demo fallback
+// Local storage helper functions with Safari/iOS Private Browsing safety
 const getLocal = <T>(key: string): T[] => {
   if (typeof window === "undefined") return [];
-  const data = localStorage.getItem(key);
-  return data ? JSON.parse(data) : [];
+  try {
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : [];
+  } catch (e) {
+    console.warn(`Safe getLocal warning for "${key}":`, e);
+    return [];
+  }
 };
 
 const setLocal = <T>(key: string, data: T[]) => {
   if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(data));
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.warn(`Safe setLocal warning for "${key}" (iOS Safari private mode or quota):`, e);
+  }
 };
 
 // Deeply search an object to convert serialized `{ seconds, nanoseconds }` back to real Firestore Timestamps
@@ -137,6 +146,7 @@ export const unrecordDeletedCabinetId = (id: string) => {
 };
 
 // Sync deletion tombstones with Cloud Firestore so deletions are shared across all devices and never bounce back
+let lastTombstoneSyncTime = 0;
 export async function syncCloudTombstones(): Promise<{ deletedCabIds: string[]; deletedConsIds: string[] }> {
   const localCabIds = getDeletedCabinetIds();
   const localConsIds = getDeletedConsumableIds();
@@ -144,6 +154,13 @@ export async function syncCloudTombstones(): Promise<{ deletedCabIds: string[]; 
   if (isOfflineFallback) {
     return { deletedCabIds: localCabIds, deletedConsIds: localConsIds };
   }
+
+  // Throttle to avoid repeated blocking calls on mobile / iOS
+  const now = Date.now();
+  if (now - lastTombstoneSyncTime < 25000) {
+    return { deletedCabIds: localCabIds, deletedConsIds: localConsIds };
+  }
+  lastTombstoneSyncTime = now;
 
   try {
     const tombSnap = await withTimeout(getDocs(collection(db, "_tombstones")), 3500);
@@ -582,8 +599,8 @@ export async function seedDatabaseIfEmpty() {
 
   // standard Cloud Firestore seeding
   try {
-    const cabinetSnap = await getDocs(collection(db, "cabinets"));
-    const tombSnap = await getDocs(collection(db, "_tombstones")).catch(() => null);
+    const cabinetSnap = await withTimeout(getDocs(collection(db, "cabinets")), 3500);
+    const tombSnap = await withTimeout(getDocs(collection(db, "_tombstones")), 2000).catch(() => null);
     if (!cabinetSnap.empty || (tombSnap && !tombSnap.empty)) {
       console.log("Database already has data or tombstones. Skipping seed.");
       localStorage.setItem(DATABASE_SEEDED_KEY, "true");

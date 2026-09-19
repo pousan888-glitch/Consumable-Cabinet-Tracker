@@ -49,9 +49,13 @@ export default function App() {
         if (!active) return;
 
         // 2. Load and restore session if present
-        const savedUser = localStorage.getItem("cabinet_tracker_user");
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
+        try {
+          const savedUser = localStorage.getItem("cabinet_tracker_user");
+          if (savedUser) {
+            setUser(JSON.parse(savedUser));
+          }
+        } catch (e) {
+          console.warn("Could not read saved user session:", e);
         }
 
         // 3. Check for QR code URL parameters
@@ -101,7 +105,11 @@ export default function App() {
 
   const handleLogin = (profile: UserProfile) => {
     setUser(profile);
-    localStorage.setItem("cabinet_tracker_user", JSON.stringify(profile));
+    try {
+      localStorage.setItem("cabinet_tracker_user", JSON.stringify(profile));
+    } catch (e) {
+      console.warn("Could not write session to localStorage:", e);
+    }
   };
 
   const handleLogout = async () => {
@@ -111,7 +119,11 @@ export default function App() {
       console.error("Sign out error:", e);
     }
     setUser(null);
-    localStorage.removeItem("cabinet_tracker_user");
+    try {
+      localStorage.removeItem("cabinet_tracker_user");
+    } catch (e) {
+      console.warn("Could not remove session from localStorage:", e);
+    }
     // Clean up query param on logout
     const url = new URL(window.location.href);
     url.searchParams.delete("cabinetId");
@@ -124,7 +136,11 @@ export default function App() {
     if (!user) return;
     const updated = { ...user, role: newRole };
     setUser(updated);
-    localStorage.setItem("cabinet_tracker_user", JSON.stringify(updated));
+    try {
+      localStorage.setItem("cabinet_tracker_user", JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Could not update role in localStorage:", e);
+    }
   };
 
   const handleBackToMenu = () => {
