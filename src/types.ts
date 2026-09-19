@@ -55,6 +55,7 @@ export interface Consumable {
   maxThreshold?: number; // Maximum target stock threshold / capacity limit
   unit: string; // e.g., "ชิ้น", "กล่อง", "แพ็ค"
   imageUrl: string; // Visual reference for helpers to count correctly
+  notes?: string; // Optional remarks or aggregation details
   lastUpdated: any;
   lastUpdatedBy: string;
 }

@@ -5,6 +5,7 @@ import {
   isItemLowStock, 
   isItemOutOfStock, 
   getItemTargetStock,
+  normalizeConsumableName,
   getMultiCabinetStockInfo, 
   MultiCabinetStockInfo 
 } from "../lib/stockUtils";
@@ -74,6 +75,17 @@ export default function DepartmentConsumablesView({
   const [sortBy, setSortBy] = useState<"DEFAULT" | "QTY_ASC" | "NAME">("DEFAULT");
   const [viewLayout, setViewLayout] = useState<"table" | "grid">("table");
 
+  // Aggregate view toggle: default to true when viewing a specific department or overall
+  const [aggregateByDepartment, setAggregateByDepartment] = useState(true);
+
+  // Cabinet selection picker modal for Edit / Delete on aggregated items with multiple cabinets
+  const [cabinetActionPrompt, setCabinetActionPrompt] = useState<{
+    mode: "edit" | "delete";
+    items: Consumable[];
+    itemName: string;
+    deptName: string;
+  } | null>(null);
+
   // Multi-Cabinet Stock Detail Modal State
   const [selectedMultiStock, setSelectedMultiStock] = useState<MultiCabinetStockInfo | null>(null);
 
@@ -134,24 +146,79 @@ export default function DepartmentConsumablesView({
     return stats;
   }, [allDeptNames, consumables]);
 
-  // Filter consumables based on selected department, search, and status
+  // Filter consumables based on selected department, search, status, and aggregation mode
   const filteredConsumables = useMemo(() => {
-    return consumables.filter(item => {
-      // 1. Department match
+    // 1. First get items belonging to selected department
+    const deptMatches = consumables.filter(item => {
       if (selectedDept !== "ALL" && item.department?.toLowerCase() !== selectedDept.toLowerCase()) {
         return false;
       }
+      return true;
+    });
 
-      // 2. Search match
+    // 2. If aggregateByDepartment is enabled, aggregate items by normalized name per department
+    let displayList: Consumable[] = [];
+    if (aggregateByDepartment) {
+      const groups = new Map<string, Consumable[]>();
+      deptMatches.forEach(item => {
+        const normName = normalizeConsumableName(item.name);
+        const deptKey = (item.department || "").trim().toLowerCase();
+        const key = `${deptKey}:::${normName}`;
+        if (!groups.has(key)) {
+          groups.set(key, []);
+        }
+        groups.get(key)!.push(item);
+      });
+
+      groups.forEach((items) => {
+        if (items.length === 1) {
+          displayList.push(items[0]);
+        } else {
+          // Sort to find primary item (one with image or highest currentQty)
+          const primary = [...items].sort((a, b) => {
+            if (a.imageUrl && !b.imageUrl) return -1;
+            if (!a.imageUrl && b.imageUrl) return 1;
+            return (b.currentQty || 0) - (a.currentQty || 0);
+          })[0];
+
+          const totalCurrentQty = items.reduce((acc, it) => acc + (it.currentQty || 0), 0);
+          const totalMinThreshold = items.reduce((acc, it) => acc + (it.minThreshold || 0), 0);
+          const totalMaxThreshold = items.some(it => it.maxThreshold !== undefined && it.maxThreshold !== null)
+            ? items.reduce((acc, it) => acc + (it.maxThreshold || 0), 0)
+            : undefined;
+
+          // Combined cabinet label e.g., "3 ตู้จัดเก็บ (CMT-01, CMT-02...)"
+          const cabNames = Array.from(new Set(items.map(it => getCabinetName(it.cabinetId)))).filter(Boolean);
+          const aggregatedCabinetLabel = cabNames.join(", ");
+
+          displayList.push({
+            ...primary,
+            id: primary.id, // Primary ID
+            currentQty: totalCurrentQty,
+            minThreshold: totalMinThreshold,
+            maxThreshold: totalMaxThreshold,
+            // Keep original details for cabinet breakdown
+            cabinetId: primary.cabinetId,
+            notes: `รวมจาก ${items.length} ตู้: ${aggregatedCabinetLabel}`
+          });
+        }
+      });
+    } else {
+      displayList = [...deptMatches];
+    }
+
+    // 3. Apply search, status filter, and multi-cabinet filter
+    return displayList.filter(item => {
+      // Search match
       if (searchTerm.trim()) {
         const query = searchTerm.toLowerCase();
         const matchesName = item.name.toLowerCase().includes(query);
         const matchesDept = item.department?.toLowerCase().includes(query);
-        const matchesCab = getCabinetName(item.cabinetId).toLowerCase().includes(query);
+        const matchesCab = getCabinetName(item.cabinetId).toLowerCase().includes(query) || (item.notes || "").toLowerCase().includes(query);
         if (!matchesName && !matchesDept && !matchesCab) return false;
       }
 
-      // 3. Status match
+      // Status match
       if (statusFilter === "OUT") {
         return isItemOutOfStock(item);
       }
@@ -162,7 +229,7 @@ export default function DepartmentConsumablesView({
         return !isItemLowStock(item);
       }
 
-      // 4. Multi-cabinet filter
+      // Multi-cabinet filter
       if (onlyMultiCabinet) {
         const info = getMultiCabinetStockInfo(item, consumables, getCabinetName);
         if (!info.hasMultipleCabinets) return false;
@@ -178,13 +245,54 @@ export default function DepartmentConsumablesView({
       }
       return 0; // Default order
     });
-  }, [consumables, selectedDept, searchTerm, statusFilter, onlyMultiCabinet, sortBy, getCabinetName]);
+  }, [consumables, selectedDept, aggregateByDepartment, searchTerm, statusFilter, onlyMultiCabinet, sortBy, getCabinetName]);
 
-  // Counts for status chips
+  // Items in current department (accounting for aggregation if on)
   const currentDeptItems = useMemo(() => {
-    if (selectedDept === "ALL") return consumables;
-    return consumables.filter(c => c.department?.toLowerCase() === selectedDept.toLowerCase());
-  }, [consumables, selectedDept]);
+    const deptMatches = consumables.filter(item => {
+      if (selectedDept !== "ALL" && item.department?.toLowerCase() !== selectedDept.toLowerCase()) {
+        return false;
+      }
+      return true;
+    });
+
+    if (!aggregateByDepartment) return deptMatches;
+
+    const groups = new Map<string, Consumable[]>();
+    deptMatches.forEach(item => {
+      const normName = normalizeConsumableName(item.name);
+      const deptKey = (item.department || "").trim().toLowerCase();
+      const key = `${deptKey}:::${normName}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    });
+
+    const result: Consumable[] = [];
+    groups.forEach(items => {
+      if (items.length === 1) {
+        result.push(items[0]);
+      } else {
+        const primary = [...items].sort((a, b) => {
+          if (a.imageUrl && !b.imageUrl) return -1;
+          if (!a.imageUrl && b.imageUrl) return 1;
+          return (b.currentQty || 0) - (a.currentQty || 0);
+        })[0];
+        const totalCurrentQty = items.reduce((acc, it) => acc + (it.currentQty || 0), 0);
+        const totalMinThreshold = items.reduce((acc, it) => acc + (it.minThreshold || 0), 0);
+        const totalMaxThreshold = items.some(it => it.maxThreshold !== undefined && it.maxThreshold !== null)
+          ? items.reduce((acc, it) => acc + (it.maxThreshold || 0), 0)
+          : undefined;
+
+        result.push({
+          ...primary,
+          currentQty: totalCurrentQty,
+          minThreshold: totalMinThreshold,
+          maxThreshold: totalMaxThreshold
+        });
+      }
+    });
+    return result;
+  }, [consumables, selectedDept, aggregateByDepartment]);
 
   const totalInCurrentDept = currentDeptItems.length;
   const outInCurrentDept = currentDeptItems.filter(c => isItemOutOfStock(c)).length;
@@ -259,6 +367,50 @@ export default function DepartmentConsumablesView({
   // Helper to get cabinets location
   const getCabinetLocation = (cabId: string) => {
     return cabinets.find(c => c.id === cabId)?.location || "-";
+  };
+
+  // Aggregated Item action dispatcher for Edit
+  const handleRequestEdit = (item: Consumable) => {
+    const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+    if (multiInfo.hasMultipleCabinets) {
+      // Find all matching items across cabinets in this department
+      const matchingItems = consumables.filter(c => 
+        normalizeConsumableName(c.name) === multiInfo.normalizedName &&
+        (c.department || "").trim().toLowerCase() === (item.department || "").trim().toLowerCase()
+      );
+      if (matchingItems.length > 1) {
+        setCabinetActionPrompt({
+          mode: "edit",
+          items: matchingItems,
+          itemName: item.name,
+          deptName: item.department || "-"
+        });
+        return;
+      }
+    }
+    // Single cabinet: open edit directly
+    onEditConsumable(item);
+  };
+
+  // Aggregated Item action dispatcher for Delete
+  const handleRequestDelete = (item: Consumable) => {
+    const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+    if (multiInfo.hasMultipleCabinets) {
+      const matchingItems = consumables.filter(c => 
+        normalizeConsumableName(c.name) === multiInfo.normalizedName &&
+        (c.department || "").trim().toLowerCase() === (item.department || "").trim().toLowerCase()
+      );
+      if (matchingItems.length > 1) {
+        setCabinetActionPrompt({
+          mode: "delete",
+          items: matchingItems,
+          itemName: item.name,
+          deptName: item.department || "-"
+        });
+        return;
+      }
+    }
+    onDeleteConsumable(item.id);
   };
 
   // Export Excel: get items based on chosen scope
@@ -567,6 +719,26 @@ export default function DepartmentConsumablesView({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* View Aggregation Toggle: แสดงรวมยอดของแผนก หรือ แยกรายตู้ */}
+            <button
+              type="button"
+              onClick={() => setAggregateByDepartment(!aggregateByDepartment)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer shadow-2xs ${
+                aggregateByDepartment
+                  ? "bg-indigo-50 border-indigo-200 text-indigo-800 ring-1 ring-indigo-200"
+                  : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
+              }`}
+              title={aggregateByDepartment ? "กำลังแสดงรวมยอดสต็อกแต่ละแผนก (ไม่แยกตู้)" : "กำลังแสดงแยกตามตู้จัดเก็บ"}
+            >
+              <Layers className={`h-3.5 w-3.5 ${aggregateByDepartment ? "text-indigo-600" : "text-slate-400"}`} />
+              <span className="hidden sm:inline">
+                {aggregateByDepartment ? "แสดงรวมของแผนก (ไม่แยกตู้)" : "แสดงแยกตามตู้"}
+              </span>
+              <span className="sm:hidden">
+                {aggregateByDepartment ? "รวมแผนก" : "แยกตู้"}
+              </span>
+            </button>
+
             {/* View Layout Toggle (Table vs Grid) */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
               <button
@@ -803,7 +975,11 @@ export default function DepartmentConsumablesView({
                             </h4>
                             <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-1 truncate">
                               <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                              <span className="truncate">{getCabinetName(item.cabinetId)}</span>
+                              <span className="truncate">
+                                {aggregateByDepartment && multiInfo.hasMultipleCabinets
+                                  ? `รวม ${multiInfo.cabinetLocations.length} ตู้จัดเก็บ`
+                                  : getCabinetName(item.cabinetId)}
+                              </span>
                             </p>
                           </div>
 
@@ -859,14 +1035,14 @@ export default function DepartmentConsumablesView({
                         </span>
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => onEditConsumable(item)}
+                            onClick={() => handleRequestEdit(item)}
                             className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg cursor-pointer transition-colors shadow-2xs"
                             title="แก้ไขข้อมูลพัสดุ"
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            onClick={() => onDeleteConsumable(item.id)}
+                            onClick={() => handleRequestDelete(item)}
                             className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-lg cursor-pointer transition-colors shadow-2xs"
                             title="ลบพัสดุนี้"
                           >
@@ -942,7 +1118,11 @@ export default function DepartmentConsumablesView({
                         </h4>
                         <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                           <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                          <span>ตู้: {getCabinetName(item.cabinetId)}</span>
+                          <span>
+                            {aggregateByDepartment && multiInfo.hasMultipleCabinets
+                              ? `รวม ${multiInfo.cabinetLocations.length} ตู้จัดเก็บ`
+                              : `ตู้: ${getCabinetName(item.cabinetId)}`}
+                          </span>
                         </p>
                       </div>
                     </div>
@@ -950,14 +1130,14 @@ export default function DepartmentConsumablesView({
                     {/* Edit / Delete Buttons */}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        onClick={() => onEditConsumable(item)}
+                        onClick={() => handleRequestEdit(item)}
                         className="p-2 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-600 border border-slate-200 rounded-lg cursor-pointer transition-colors"
                         title="แก้ไขข้อมูลพัสดุ"
                       >
                         <Edit className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => onDeleteConsumable(item.id)}
+                        onClick={() => handleRequestDelete(item)}
                         className="p-2 bg-slate-50 hover:bg-rose-50 active:bg-rose-100 text-slate-400 hover:text-rose-600 border border-slate-200 rounded-lg cursor-pointer transition-colors"
                         title="ลบพัสดุนี้"
                       >
@@ -1242,14 +1422,14 @@ export default function DepartmentConsumablesView({
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => onEditConsumable(item)}
+                            onClick={() => handleRequestEdit(item)}
                             className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg cursor-pointer transition-colors"
                             title="แก้ไขข้อมูลพัสดุ"
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            onClick={() => onDeleteConsumable(item.id)}
+                            onClick={() => handleRequestDelete(item)}
                             className="p-1.5 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-lg cursor-pointer transition-colors"
                             title="ลบพัสดุนี้"
                           >
@@ -1978,6 +2158,102 @@ export default function DepartmentConsumablesView({
                   <span>ดาวน์โหลดไฟล์ Excel ({getExportItems().length} รายการ)</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 6. CABINET ACTION PROMPT MODAL (เมื่อเลือก แก้ไข หรือ ลบ พัสดุที่รวมสต็อกมาจากหลายตู้) */}
+      {cabinetActionPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className={`p-4 text-white flex items-center justify-between ${
+              cabinetActionPrompt.mode === "delete"
+                ? "bg-rose-700"
+                : "bg-indigo-700"
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-white/15 flex items-center justify-center text-white shrink-0">
+                  {cabinetActionPrompt.mode === "delete" ? (
+                    <Trash2 className="h-4 w-4" />
+                  ) : (
+                    <Edit className="h-4 w-4" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm leading-tight">
+                    {cabinetActionPrompt.mode === "delete" ? "เลือกตู้ที่ต้องการลบพัสดุ" : "เลือกตู้ที่ต้องการแก้ไขพัสดุ"}
+                  </h3>
+                  <p className="text-[11px] text-white/80 mt-0.5">
+                    พัสดุ "{cabinetActionPrompt.itemName}" มีจัดเก็บใน {cabinetActionPrompt.items.length} ตู้
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCabinetActionPrompt(null)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* List of Cabinets */}
+            <div className="p-4 space-y-2 max-h-[60vh] overflow-y-auto">
+              <p className="text-xs text-slate-500 mb-2">
+                เนื่องจากพัสดุนี้ถูกรวมมาจากหลายตู้จัดเก็บ โปรดเลือกตู้จัดเก็บรายการที่ท่านต้องการดำเนินการ:
+              </p>
+              {cabinetActionPrompt.items.map(subItem => (
+                <div
+                  key={subItem.id}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-100 transition-colors"
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-xs text-slate-900 truncate">
+                        {getCabinetName(subItem.cabinetId)}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded font-semibold">
+                        {subItem.department}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      คงเหลือในตู้นี้: <b className="text-slate-800">{subItem.currentQty} {subItem.unit}</b>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const mode = cabinetActionPrompt.mode;
+                      const target = subItem;
+                      setCabinetActionPrompt(null);
+                      if (mode === "edit") {
+                        onEditConsumable(target);
+                      } else {
+                        onDeleteConsumable(target.id);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors text-white ${
+                      cabinetActionPrompt.mode === "delete"
+                        ? "bg-rose-600 hover:bg-rose-700"
+                        : "bg-indigo-600 hover:bg-indigo-700"
+                    }`}
+                  >
+                    {cabinetActionPrompt.mode === "delete" ? "ลบออกจากตู้นี้" : "แก้ไขตู้นี้"}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCabinetActionPrompt(null)}
+                className="px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg cursor-pointer transition-colors"
+              >
+                ยกเลิก
+              </button>
             </div>
           </div>
         </div>
