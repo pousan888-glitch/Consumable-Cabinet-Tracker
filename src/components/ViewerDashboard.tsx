@@ -42,7 +42,8 @@ import {
   TrendingDown,
   TrendingUp,
   PackageMinus,
-  Check
+  Check,
+  FileSpreadsheet
 } from "lucide-react";
 
 interface ViewerDashboardProps {
@@ -374,6 +375,70 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
     document.body.removeChild(link);
   };
 
+  // Export Consumables Inventory to Excel (CSV with UTF-8 BOM)
+  const handleExportConsumablesCSV = () => {
+    const deptTitle = selectedDept === "ALL" ? "รวมทุกแผนก" : selectedDept;
+    const dateStr = new Date().toISOString().split("T")[0];
+    const filename = `รายการพัสดุ_${deptTitle}_${dateStr}.csv`;
+
+    const headers = [
+      "ลำดับ",
+      "รหัสพัสดุ",
+      "ชื่อยา / รายการเวชภัณฑ์ & พัสดุ",
+      "แผนก",
+      "ตู้จัดเก็บ",
+      "สถานที่ตั้งตู้",
+      "จำนวนคงเหลือจริง",
+      "หน่วยนับ",
+      "เกณฑ์เป้าหมาย (Max)",
+      "เกณฑ์ขั้นต่ำ (Min)",
+      "จำนวนที่ต้องเติม",
+      "สถานะสต็อก",
+      "มีในหลายตู้หรือไม่",
+      "สต็อกรวมทุกตู้ของแผนก",
+      "รายละเอียดตู้จัดเก็บ"
+    ];
+
+    const rows = filteredConsumables.map((item, idx) => {
+      const targetStock = getItemTargetStock(item);
+      const isOut = isItemOutOfStock(item);
+      const isLow = isItemLowStock(item) && !isOut;
+      const status = isOut ? "หมดสต็อก (วิกฤต)" : isLow ? "ใกล้หมด (ต่ำกว่าเกณฑ์)" : "ปกติ (พร้อมใช้)";
+      const refillNeeded = Math.max(0, targetStock - (item.currentQty || 0));
+      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+      const cabName = getCabinetName(item.cabinetId);
+      const cabLoc = getCabinetLocation(item.cabinetId);
+
+      return [
+        idx + 1,
+        `"${item.id}"`,
+        `"${(item.name || "").replace(/"/g, '""')}"`,
+        `"${(item.department || "").replace(/"/g, '""')}"`,
+        `"${cabName.replace(/"/g, '""')}"`,
+        `"${cabLoc.replace(/"/g, '""')}"`,
+        item.currentQty ?? 0,
+        `"${(item.unit || "ชิ้น").replace(/"/g, '""')}"`,
+        targetStock,
+        item.minThreshold ?? 0,
+        refillNeeded,
+        `"${status}"`,
+        multiInfo.hasMultipleCabinets ? "มีในหลายตู้" : "ตู้เดียว",
+        multiInfo.hasMultipleCabinets ? multiInfo.totalQtyAcrossCabinets : (item.currentQty ?? 0),
+        `"${(multiInfo.hasMultipleCabinets ? multiInfo.breakdownText : cabName).replace(/"/g, '""')}"`
+      ].join(",");
+    });
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Helper date formatter
   const formatDate = (val: any): string => {
     if (!val) return "-";
@@ -576,27 +641,38 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
             </button>
           </div>
 
-          {/* Consumables Tab Specific: Grid / Table Switch */}
+          {/* Consumables Tab Specific: Export Excel & Grid/Table Switch */}
           {activeTab === "consumables" && (
-            <div className="flex items-center gap-1 p-1 bg-slate-100/80 rounded-xl self-end lg:self-auto">
+            <div className="flex items-center gap-2 self-end lg:self-auto">
               <button
-                onClick={() => setDisplayMode("grid")}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  displayMode === "grid" ? "bg-white text-indigo-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
-                }`}
-                title="มุมมองการ์ด"
+                onClick={handleExportConsumablesCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                title="ส่งออกรายการพัสดุและยอดสต็อกเป็นไฟล์ Excel (.csv รองรับภาษาไทย)"
               >
-                <Grid className="h-4 w-4" />
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span>ส่งออก Excel ({filteredConsumables.length})</span>
               </button>
-              <button
-                onClick={() => setDisplayMode("table")}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  displayMode === "table" ? "bg-white text-indigo-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
-                }`}
-                title="มุมมองตาราง"
-              >
-                <List className="h-4 w-4" />
-              </button>
+              
+              <div className="flex items-center gap-1 p-1 bg-slate-100/80 rounded-xl">
+                <button
+                  onClick={() => setDisplayMode("grid")}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    displayMode === "grid" ? "bg-white text-indigo-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="มุมมองการ์ด"
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setDisplayMode("table")}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    displayMode === "table" ? "bg-white text-indigo-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  title="มุมมองตาราง"
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
 

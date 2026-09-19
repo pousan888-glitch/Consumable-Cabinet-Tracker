@@ -4,6 +4,7 @@ import { printElementById } from "../lib/printHelper";
 import { 
   isItemLowStock, 
   isItemOutOfStock, 
+  getItemTargetStock,
   getMultiCabinetStockInfo, 
   MultiCabinetStockInfo 
 } from "../lib/stockUtils";
@@ -32,7 +33,10 @@ import {
   Square,
   Sparkles,
   LayoutGrid,
-  List
+  List,
+  FileSpreadsheet,
+  Download,
+  Copy
 } from "lucide-react";
 
 interface DepartmentConsumablesViewProps {
@@ -79,6 +83,12 @@ export default function DepartmentConsumablesView({
   const [printIncludeImages, setPrintIncludeImages] = useState(false);
   const [printIncludeChecklistColumn, setPrintIncludeChecklistColumn] = useState(true);
   const [printOrientation, setPrintOrientation] = useState<"portrait" | "landscape">("portrait");
+
+  // Export Excel Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportScope, setExportScope] = useState<"CURRENT_FILTER" | "CURRENT_DEPT" | "ALL_ITEMS">("CURRENT_FILTER");
+  const [exportIncludeImages, setExportIncludeImages] = useState(false);
+  const [exportIncludeMultiCabinetDetails, setExportIncludeMultiCabinetDetails] = useState(true);
 
   // Compute union of all departments (strictly excluding Production)
   const allDeptNames = useMemo(() => {
@@ -244,6 +254,162 @@ export default function DepartmentConsumablesView({
       setPrintStatusFilter("ALL");
     }
     setShowPrintModal(true);
+  };
+
+  // Helper to get cabinets location
+  const getCabinetLocation = (cabId: string) => {
+    return cabinets.find(c => c.id === cabId)?.location || "-";
+  };
+
+  // Export Excel: get items based on chosen scope
+  const getExportItems = () => {
+    if (exportScope === "CURRENT_FILTER") return filteredConsumables;
+    if (exportScope === "CURRENT_DEPT") return currentDeptItems;
+    return consumables;
+  };
+
+  // Action: Export to CSV (Formatted for Microsoft Excel with UTF-8 BOM)
+  const handleExportExcel = () => {
+    const items = getExportItems();
+    if (items.length === 0) {
+      onToast("ไม่พบรายการพัสดุสำหรับส่งออก");
+      return;
+    }
+
+    const deptTag = exportScope === "CURRENT_DEPT" 
+      ? (selectedDept === "ALL" ? "ALL-DEPTS" : selectedDept)
+      : exportScope === "ALL_ITEMS" 
+      ? "ALL-INVENTORY" 
+      : `FILTERED_${selectedDept}`;
+    const dateStr = new Date().toISOString().split("T")[0];
+    const filename = `Consumables_Inventory_${deptTag}_${dateStr}.csv`;
+
+    const headers = [
+      "ลำดับ",
+      "รหัสพัสดุ",
+      "ชื่อยา / รายการเวชภัณฑ์ & พัสดุ",
+      "แผนก",
+      "ตู้จัดเก็บ",
+      "สถานที่ตั้งตู้",
+      "จำนวนคงเหลือที่มีจริง",
+      "หน่วยนับ",
+      "เกณฑ์เป้าหมาย (Max)",
+      "เกณฑ์ขั้นต่ำ (Min)",
+      "จำนวนที่ต้องเติมสต็อก",
+      "สถานะสต็อก",
+      "มีในหลายตู้หรือไม่",
+      "สต็อกรวมทุกตู้ของแผนก",
+      "รายละเอียดตู้จัดเก็บทั้งหมด",
+      ...(exportIncludeImages ? ["ลิงก์รูปถ่ายพัสดุ"] : [])
+    ];
+
+    const rows = items.map((item, idx) => {
+      const targetStock = getItemTargetStock(item);
+      const isOut = isItemOutOfStock(item);
+      const isLow = isItemLowStock(item) && !isOut;
+      const status = isOut ? "หมดสต็อก (วิกฤต)" : isLow ? "ใกล้หมด (ต่ำกว่าเกณฑ์)" : "ปกติ (พร้อมใช้)";
+      const refillNeeded = Math.max(0, targetStock - (item.currentQty || 0));
+      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+      const cabName = getCabinetName(item.cabinetId);
+      const cabLoc = getCabinetLocation(item.cabinetId);
+
+      const row = [
+        idx + 1,
+        `"${item.id}"`,
+        `"${(item.name || "").replace(/"/g, '""')}"`,
+        `"${(item.department || "").replace(/"/g, '""')}"`,
+        `"${cabName.replace(/"/g, '""')}"`,
+        `"${cabLoc.replace(/"/g, '""')}"`,
+        item.currentQty ?? 0,
+        `"${(item.unit || "ชิ้น").replace(/"/g, '""')}"`,
+        targetStock,
+        item.minThreshold ?? 0,
+        refillNeeded,
+        `"${status}"`,
+        multiInfo.hasMultipleCabinets ? "มีในหลายตู้" : "ตู้เดียว",
+        multiInfo.hasMultipleCabinets ? multiInfo.totalQtyAcrossCabinets : (item.currentQty ?? 0),
+        `"${(multiInfo.hasMultipleCabinets ? multiInfo.breakdownText : cabName).replace(/"/g, '""')}"`,
+        ...(exportIncludeImages ? [`"${(item.imageUrl || "").replace(/"/g, '""')}"`] : [])
+      ];
+      return row.join(",");
+    });
+
+    // Add UTF-8 BOM (\uFEFF) so Microsoft Excel opens Thai fonts correctly
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setShowExportModal(false);
+    onToast(`ส่งออกไฟล์ Excel (${filename}) จำนวน ${items.length} รายการสำเร็จเรียบร้อย!`);
+  };
+
+  // Action: Copy as TSV to Clipboard for direct paste in Excel / Google Sheets
+  const handleCopyExcelToClipboard = () => {
+    const items = getExportItems();
+    if (items.length === 0) {
+      onToast("ไม่พบรายการพัสดุสำหรับคัดลอก");
+      return;
+    }
+
+    const headers = [
+      "ลำดับ",
+      "รหัสพัสดุ",
+      "ชื่อยา / รายการเวชภัณฑ์ & พัสดุ",
+      "แผนก",
+      "ตู้จัดเก็บ",
+      "สถานที่ตั้งตู้",
+      "จำนวนคงเหลือจริง",
+      "หน่วยนับ",
+      "เกณฑ์เป้าหมาย (Max)",
+      "เกณฑ์ขั้นต่ำ (Min)",
+      "จำนวนที่ต้องเติม",
+      "สถานะสต็อก",
+      "สต็อกรวมทุกตู้ของแผนก",
+      "รายละเอียดตู้จัดเก็บ"
+    ];
+
+    const rows = items.map((item, idx) => {
+      const targetStock = getItemTargetStock(item);
+      const isOut = isItemOutOfStock(item);
+      const isLow = isItemLowStock(item) && !isOut;
+      const status = isOut ? "หมดสต็อก" : isLow ? "ใกล้หมด" : "ปกติ";
+      const refillNeeded = Math.max(0, targetStock - (item.currentQty || 0));
+      const multiInfo = getMultiCabinetStockInfo(item, consumables, getCabinetName);
+      const cabName = getCabinetName(item.cabinetId);
+      const cabLoc = getCabinetLocation(item.cabinetId);
+
+      return [
+        idx + 1,
+        item.id,
+        item.name || "",
+        item.department || "",
+        cabName,
+        cabLoc,
+        item.currentQty ?? 0,
+        item.unit || "ชิ้น",
+        targetStock,
+        item.minThreshold ?? 0,
+        refillNeeded,
+        status,
+        multiInfo.hasMultipleCabinets ? multiInfo.totalQtyAcrossCabinets : (item.currentQty ?? 0),
+        multiInfo.hasMultipleCabinets ? multiInfo.breakdownText : cabName
+      ].join("\t");
+    });
+
+    const tsvContent = [headers.join("\t"), ...rows].join("\n");
+    navigator.clipboard.writeText(tsvContent).then(() => {
+      setShowExportModal(false);
+      onToast(`คัดลอกข้อมูล ${items.length} รายการลงคลิปบอร์ดแล้ว! สามารถกด Paste (Ctrl+V) ลงใน Excel ได้ทันที`);
+    }).catch(() => {
+      onToast("ไม่สามารถคัดลอกลงคลิปบอร์ดได้ กรุณากดปุ่มดาวน์โหลดไฟล์แทน");
+    });
   };
 
   return (
@@ -444,6 +610,14 @@ export default function DepartmentConsumablesView({
             >
               <Printer className="h-3.5 w-3.5 text-sky-600" />
               <span>พิมพ์รายการ</span>
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+              title="ดึงข้อมูลพัสดุเป็นไฟล์ Excel (.csv) รองรับภาษาไทยสมบูรณ์"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-100" />
+              <span>ส่งออก Excel</span>
             </button>
           </div>
         </div>
@@ -1606,6 +1780,204 @@ export default function DepartmentConsumablesView({
               >
                 เข้าใจแล้ว / ปิดหน้าต่าง
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. EXPORT EXCEL MODAL DIALOG */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-800 to-teal-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0 shadow-xs">
+                  <FileSpreadsheet className="h-5 w-5 text-emerald-200" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base tracking-tight">
+                    ส่งออกข้อมูลพัสดุเป็นไฟล์ Excel
+                  </h3>
+                  <p className="text-[11px] text-emerald-200/90 mt-0.5">
+                    ดาวน์โหลด .CSV รองรับ Microsoft Excel ภาษาไทย 100% หรือคัดลอกลงตาราง
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="h-8 w-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              {/* Option 1: Select Export Scope */}
+              <div>
+                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-2">
+                  1. เลือกขอบเขตข้อมูลที่ต้องการส่งออก
+                </label>
+                <div className="space-y-2">
+                  {/* Current Filter */}
+                  <label 
+                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                      exportScope === "CURRENT_FILTER"
+                        ? "bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-2xs"
+                        : "bg-slate-50/70 border-slate-200 hover:bg-slate-100/70"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="exportScope"
+                      checked={exportScope === "CURRENT_FILTER"}
+                      onChange={() => setExportScope("CURRENT_FILTER")}
+                      className="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">
+                          รายการตามตัวกรองปัจจุบันที่แสดงอยู่
+                        </span>
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-extrabold text-[11px] rounded-full">
+                          {filteredConsumables.length} รายการ
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                        ส่งออกเฉพาะพัสดุที่ตรงกับแผนก ({selectedDept === "ALL" ? "รวมทุกแผนก" : selectedDept})
+                        {statusFilter !== "ALL" && `, สถานะ: ${statusFilter}`}
+                        {searchTerm && `, ค้นหา: "${searchTerm}"`}
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Current Department */}
+                  <label 
+                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                      exportScope === "CURRENT_DEPT"
+                        ? "bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-2xs"
+                        : "bg-slate-50/70 border-slate-200 hover:bg-slate-100/70"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="exportScope"
+                      checked={exportScope === "CURRENT_DEPT"}
+                      onChange={() => setExportScope("CURRENT_DEPT")}
+                      className="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">
+                          ทุกรายการของแผนก {selectedDept === "ALL" ? "รวมทุกแผนก" : selectedDept}
+                        </span>
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-800 font-extrabold text-[11px] rounded-full">
+                          {currentDeptItems.length} รายการ
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                        ไม่จำกัดคำค้นหาหรือตัวกรองสถานะ ดึงครบทุกรายการในแผนกนี้
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* All Items in System */}
+                  <label 
+                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                      exportScope === "ALL_ITEMS"
+                        ? "bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-2xs"
+                        : "bg-slate-50/70 border-slate-200 hover:bg-slate-100/70"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="exportScope"
+                      checked={exportScope === "ALL_ITEMS"}
+                      onChange={() => setExportScope("ALL_ITEMS")}
+                      className="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900">
+                          รายการพัสดุทั้งหมดทุกแผนกในระบบ (ทั้งคลัง)
+                        </span>
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-800 font-extrabold text-[11px] rounded-full">
+                          {consumables.length} รายการ
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                        รวบรวมสต็อกของทุกแผนก ทุกตู้จัดเก็บ รวมทั้งหมดที่มีในฐานข้อมูล
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Option 2: Column Customizations */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-2">
+                  2. ตัวเลือกคอลัมน์เพิ่มเติม
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-slate-100/80 rounded-xl cursor-pointer text-xs transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={exportIncludeImages}
+                      onChange={(e) => setExportIncludeImages(e.target.checked)}
+                      className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                    />
+                    <span className="font-medium text-slate-700">
+                      รวมคอลัมน์ลิงก์รูปถ่ายพัสดุ (Image URL)
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* File details & Thai font note */}
+              <div className="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200/80 text-emerald-950 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
+                  <span>รองรับภาษาไทยสำหรับ Microsoft Excel สมบูรณ์ (UTF-8 with BOM)</span>
+                </div>
+                <p className="text-[11px] text-emerald-800/90 leading-relaxed pl-5.5">
+                  เมื่อดาวน์โหลดแล้ว ดับเบิ้ลคลิกเปิดด้วยโปรแกรม <b>Microsoft Excel</b> หรือ <b>Google Sheets</b> ได้ทันทีโดยไม่ต้องตั้งค่าฟอนต์ภาษาไทยใหม่ ข้อมูลจะแยกเป็นคอลัมน์พร้อมใช้งาน
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="p-3.5 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer text-center"
+              >
+                ยกเลิก
+              </button>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                {/* Copy to clipboard */}
+                <button
+                  type="button"
+                  onClick={handleCopyExcelToClipboard}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                  title="คัดลอกตารางไป Paste (Ctrl+V) ลงใน Excel หรือ Google Sheets ที่เปิดค้างไว้ได้ทันที"
+                >
+                  <Copy className="h-3.5 w-3.5 text-slate-500" />
+                  <span>คัดลอกลงคลิปบอร์ด</span>
+                </button>
+
+                {/* Download Excel file */}
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-black text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-95"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>ดาวน์โหลดไฟล์ Excel ({getExportItems().length} รายการ)</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
