@@ -165,3 +165,27 @@ export function getMultiCabinetStockInfo(
     breakdownText
   };
 }
+
+/**
+ * Returns eye-catching, high-contrast badge styling classes for department names
+ * to make them stand out prominently across tables and cards.
+ */
+export function getDeptBadgeClass(dept?: string): string {
+  const d = (dept || "").trim().toUpperCase();
+  switch (d) {
+    case "CMT":
+      return "bg-blue-600 text-white border-blue-700 shadow-xs font-black";
+    case "DNM":
+      return "bg-emerald-600 text-white border-emerald-700 shadow-xs font-black";
+    case "QC":
+    case "QAQC":
+    case "QA":
+      return "bg-purple-600 text-white border-purple-700 shadow-xs font-black";
+    case "WL":
+      return "bg-amber-500 text-white border-amber-600 shadow-xs font-black";
+    case "SBS":
+      return "bg-rose-600 text-white border-rose-700 shadow-xs font-black";
+    default:
+      return "bg-indigo-600 text-white border-indigo-700 shadow-xs font-black";
+  }
+}

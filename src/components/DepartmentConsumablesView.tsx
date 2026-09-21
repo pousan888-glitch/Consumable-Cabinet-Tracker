@@ -7,6 +7,7 @@ import {
   getItemTargetStock,
   normalizeConsumableName,
   getMultiCabinetStockInfo, 
+  getDeptBadgeClass,
   MultiCabinetStockInfo 
 } from "../lib/stockUtils";
 import { 
@@ -439,7 +440,7 @@ export default function DepartmentConsumablesView({
     const headers = [
       "ลำดับ",
       "รหัสพัสดุ",
-      "ชื่อยา / รายการเวชภัณฑ์ & พัสดุ",
+      "ชื่อรายการพัสดุ",
       "แผนก",
       "ตู้จัดเก็บ",
       "สถานที่ตั้งตู้",
@@ -513,7 +514,7 @@ export default function DepartmentConsumablesView({
     const headers = [
       "ลำดับ",
       "รหัสพัสดุ",
-      "ชื่อยา / รายการเวชภัณฑ์ & พัสดุ",
+      "ชื่อรายการพัสดุ",
       "แผนก",
       "ตู้จัดเก็บ",
       "สถานที่ตั้งตู้",
@@ -803,7 +804,7 @@ export default function DepartmentConsumablesView({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="ค้นหาชื่อยา/พัสดุ..."
+              placeholder="ค้นหาชื่อพัสดุ..."
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white transition-all"
             />
           </div>
@@ -954,9 +955,10 @@ export default function DepartmentConsumablesView({
                         {/* Content */}
                         <div className="p-3.5 space-y-3">
                           <div>
-                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                              <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md uppercase">
-                                {item.department}
+                            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                                <Building2 className="h-3 w-3 shrink-0" />
+                                <span>แผนก {item.department}</span>
                               </span>
                               {multiInfo.hasMultipleCabinets && (
                                 <button
@@ -1105,12 +1107,13 @@ export default function DepartmentConsumablesView({
 
                       {/* Info */}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[10px] font-bold text-slate-400 font-mono">
                             #{index + 1}
                           </span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded uppercase">
-                            {item.department}
+                          <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                            <Building2 className="h-2.5 w-2.5 shrink-0" />
+                            <span>แผนก {item.department}</span>
                           </span>
                         </div>
                         <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm leading-snug break-words mt-0.5">
@@ -1245,7 +1248,7 @@ export default function DepartmentConsumablesView({
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 <th className="py-3.5 px-4 w-14 text-center">ลำดับ</th>
-                <th className="py-3.5 px-5">ชื่อยา / รายการเวชภัณฑ์ & พัสดุ</th>
+                <th className="py-3.5 px-5">รายการพัสดุ (CONSUMABLE ITEM)</th>
                 <th className="py-3.5 px-4 text-center">เป้าหมายมาตรฐาน</th>
                 <th className="py-3.5 px-4 text-center">จำนวนที่มีจริง</th>
                 <th className="py-3.5 px-3 text-center">หน่วยนับ</th>
@@ -1307,12 +1310,13 @@ export default function DepartmentConsumablesView({
                             <span className="font-black text-slate-900 text-xs sm:text-sm block leading-tight">
                               {item.name}
                             </span>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                                <Building2 className="h-3 w-3 shrink-0" />
+                                <span>แผนก {item.department}</span>
+                              </span>
                               <span className="text-[10px] text-slate-400 font-mono">
                                 ID: {item.id.slice(-6)}
-                              </span>
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded uppercase">
-                                {item.department}
                               </span>
                               {multiInfo.hasMultipleCabinets && (
                                 <button
@@ -1391,8 +1395,9 @@ export default function DepartmentConsumablesView({
                           </div>
                         ) : (
                           item.department?.toLowerCase() !== getCabinetName(item.cabinetId).toLowerCase() && (
-                            <span className="text-[10px] text-slate-400 block truncate">
-                              สังกัด: {item.department}
+                            <span className={`inline-flex items-center gap-1 mt-1 text-[10px] px-2 py-0.5 rounded-md uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                              <Building2 className="h-2.5 w-2.5 shrink-0" />
+                              <span>แผนก {item.department}</span>
                             </span>
                           )
                         )}
@@ -1588,7 +1593,7 @@ export default function DepartmentConsumablesView({
                         INVENTORY REPORT
                       </span>
                       <span className="text-xs text-slate-500 font-semibold">
-                        ระบบบริหารจัดการตู้เก็บพัสดุและเวชภัณฑ์โรงงาน
+                        ระบบบริหารจัดการตู้เก็บพัสดุและวัสดุโรงงาน
                       </span>
                     </div>
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
@@ -1648,7 +1653,7 @@ export default function DepartmentConsumablesView({
                     {printIncludeImages && (
                       <th className="p-2 border border-slate-300 text-center w-12">รูป</th>
                     )}
-                    <th className="p-2 border border-slate-300">รายการพัสดุ / เวชภัณฑ์</th>
+                    <th className="p-2 border border-slate-300">รายการพัสดุสิ้นเปลือง</th>
                     <th className="p-2 border border-slate-300 text-center w-20">แผนก</th>
                     <th className="p-2 border border-slate-300 w-32">ตู้จัดเก็บ</th>
                     <th className="p-2 border border-slate-300 text-center w-16">เกณฑ์มาตรฐาน</th>

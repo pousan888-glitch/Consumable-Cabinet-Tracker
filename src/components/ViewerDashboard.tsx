@@ -12,6 +12,7 @@ import {
   isItemLowStock, 
   isItemOutOfStock,
   getMultiCabinetStockInfo,
+  getDeptBadgeClass,
   MultiCabinetStockInfo
 } from "../lib/stockUtils";
 import ImagePreviewModal from "./ImagePreviewModal";
@@ -384,7 +385,7 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
     const headers = [
       "ลำดับ",
       "รหัสพัสดุ",
-      "ชื่อยา / รายการเวชภัณฑ์ & พัสดุ",
+      "ชื่อรายการพัสดุ",
       "แผนก",
       "ตู้จัดเก็บ",
       "สถานที่ตั้งตู้",
@@ -1168,8 +1169,8 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                           </td>
 
                           <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded font-bold text-[11px]">
-                              {item.department}
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                              <span>แผนก {item.department}</span>
                             </span>
                           </td>
 
@@ -1706,8 +1707,8 @@ export default function ViewerDashboard({ userEmail, userName }: ViewerDashboard
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[9px] font-bold">
-                                {item.department}
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                                <span>แผนก {item.department}</span>
                               </span>
                               {isOut ? (
                                 <span className="px-1.5 py-0.2 bg-rose-100 text-rose-700 rounded text-[9px] font-bold">

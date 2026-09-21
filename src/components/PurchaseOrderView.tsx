@@ -7,6 +7,7 @@ import {
   isItemLowStock, 
   isItemOutOfStock,
   getMultiCabinetStockInfo,
+  getDeptBadgeClass,
   MultiCabinetStockInfo
 } from "../lib/stockUtils";
 import { 
@@ -498,7 +499,7 @@ export default function PurchaseOrderView({
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs flex items-center justify-between">
             <div>
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                จำนวนตัวยา/พัสดุที่ต้องสั่งซื้อ
+                จำนวนรายการพัสดุที่ต้องสั่งซื้อ
               </span>
               <div className="flex items-baseline gap-1.5 mt-1">
                 <span className="text-2xl sm:text-3xl font-black text-slate-900">
@@ -693,8 +694,9 @@ export default function PurchaseOrderView({
                           <span className="text-[10px] font-bold text-slate-400 font-mono">
                             #{index + 1}
                           </span>
-                          <span className="px-1.5 py-0.2 bg-slate-100 text-slate-700 font-bold text-[9px] rounded uppercase">
-                            {item.department}
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                            <Building2 className="h-2.5 w-2.5" />
+                            <span>แผนก {item.department}</span>
                           </span>
                           {item.isMultiCabinet && (
                             <span className="px-1.5 py-0.2 bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[9px] rounded flex items-center gap-1">
@@ -892,8 +894,9 @@ export default function PurchaseOrderView({
 
                       {/* Department & Cabinet */}
                       <td className="py-4 px-4">
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-bold text-[10px] rounded uppercase">
-                          {item.department}
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs uppercase tracking-wider ${getDeptBadgeClass(item.department)}`}>
+                          <Building2 className="h-3.5 w-3.5" />
+                          <span>แผนก {item.department}</span>
                         </span>
                         {item.isMultiCabinet ? (
                           <div className="mt-1 space-y-1">
