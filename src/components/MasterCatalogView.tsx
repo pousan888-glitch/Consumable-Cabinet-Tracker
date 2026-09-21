@@ -4,6 +4,7 @@ import {
   addMasterConsumable, 
   updateMasterConsumable, 
   deleteMasterConsumable,
+  syncAllMasterConsumablesToCabinets,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
 import ImageUploadInput from "./ImageUploadInput";
@@ -25,7 +26,8 @@ import {
   Eye,
   AlertCircle,
   FolderSync,
-  HelpCircle
+  HelpCircle,
+  RefreshCw
 } from "lucide-react";
 
 interface MasterCatalogViewProps {
@@ -93,6 +95,9 @@ export default function MasterCatalogView({
 
   // Delete Confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Sync All to Cabinets state
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // Filtered master items
   const filteredItems = useMemo(() => {
@@ -184,7 +189,7 @@ export default function MasterCatalogView({
     setIsSubmitting(true);
     try {
       if (editingItem) {
-        await updateMasterConsumable(editingItem.id, {
+        const res = await updateMasterConsumable(editingItem.id, {
           code: itemForm.code.trim(),
           name: itemForm.name.trim(),
           category: itemForm.category,
@@ -194,7 +199,11 @@ export default function MasterCatalogView({
           defaultMaxThreshold: Number(itemForm.defaultMaxThreshold) || 20,
           description: itemForm.description.trim()
         });
-        onToast(`แก้ไขพัสดุ "${itemForm.name}" ในแคตตาล็อกเรียบร้อยแล้ว`);
+        if (res && res.updatedCabinetItemsCount > 0) {
+          onToast(`แก้ไขพัสดุ "${itemForm.name}" และซิงค์ชื่อ/รูปภาพไปยัง ${res.updatedCabinetItemsCount} รายการในตู้เรียบร้อยแล้ว`);
+        } else {
+          onToast(`แก้ไขพัสดุ "${itemForm.name}" ในแคตตาล็อกเรียบร้อยแล้ว`);
+        }
       } else {
         await addMasterConsumable({
           code: itemForm.code.trim(),
@@ -215,6 +224,31 @@ export default function MasterCatalogView({
       alert("เกิดข้อผิดพลาด: " + (err?.message || "ไม่สามารถบันทึกได้"));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Sync all master items' names and images to cabinet consumables
+  const handleSyncAllToCabinets = async () => {
+    if (masterItems.length === 0) {
+      onToast("ยังไม่มีพัสดุมาตรฐานในแคตตาล็อก");
+      return;
+    }
+    if (!confirm("คุณต้องการซิงค์ชื่อและรูปภาพจากพัสดุมาตรฐานทั้งหมด ไปยังพัสดุที่อยู่ในตู้จัดเก็บทุกตู้หรือไม่?")) {
+      return;
+    }
+    setIsSyncingAll(true);
+    try {
+      const res = await syncAllMasterConsumablesToCabinets();
+      if (res.affectedCabinetItemsCount > 0) {
+        onToast(`ซิงค์ชื่อและรูปภาพไปยังพัสดุในตู้สำเร็จ! (อัปเดต ${res.affectedCabinetItemsCount} รายการในตู้ จาก ${res.syncedMastersCount} พัสดุมาตรฐาน)`);
+      } else {
+        onToast("พัสดุในตู้ทั้งหมดซิงค์ตรงกับพัสดุมาตรฐานอยู่แล้ว");
+      }
+      onRefresh();
+    } catch (err: any) {
+      alert("เกิดข้อผิดพลาดในการซิงค์: " + (err?.message || ""));
+    } finally {
+      setIsSyncingAll(false);
     }
   };
 
@@ -339,6 +373,16 @@ export default function MasterCatalogView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={handleSyncAllToCabinets}
+              disabled={isSyncingAll}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600/70 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs border border-indigo-400/50 transition-all cursor-pointer shadow-xs active:scale-98 disabled:opacity-50"
+              title="ซิงค์รูปภาพและชื่อของพัสดุมาตรฐานทั้งหมด ไปยังพัสดุในตู้จัดเก็บทุกตู้ทันที"
+            >
+              <RefreshCw className={`h-4 w-4 text-indigo-200 ${isSyncingAll ? "animate-spin" : ""}`} />
+              <span>{isSyncingAll ? "กำลังซิงค์ข้อมูล..." : "ซิงค์รูปและชื่อไปยังทุกตู้"}</span>
+            </button>
+
             <button
               onClick={handleAutoImportFromConsumables}
               className="flex items-center gap-1.5 px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs border border-white/20 transition-all cursor-pointer shadow-xs active:scale-98"
@@ -595,6 +639,21 @@ export default function MasterCatalogView({
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {editingItem && (
+              <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200/90 rounded-2xl flex items-start gap-2.5">
+                <RefreshCw className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-emerald-950 leading-relaxed">
+                  <span className="font-extrabold text-emerald-900">⚡ ซิงค์อัตโนมัติไปยังทุกตู้ (Auto-Sync):</span>{" "}
+                  เมื่อบันทึกการแก้ไข <span className="font-bold underline">ชื่อ</span> หรือ <span className="font-bold underline">รูปภาพ</span> ระบบจะอัปเดตไปยังรายการพัสดุในตู้จัดเก็บทุกตู้ที่ตรงกันโดยอัตโนมัติทันที
+                  {itemUsageMap[editingItem.id]?.cabinetCount > 0 && (
+                    <span className="block mt-1 font-bold text-emerald-700">
+                      (พบพัสดุที่อ้างอิงรายการนี้อยู่ใน {itemUsageMap[editingItem.id].cabinetCount} ตู้จัดเก็บ)
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleSaveItem} className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-3">

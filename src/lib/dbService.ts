@@ -2116,12 +2116,97 @@ export async function addMasterConsumable(
   return newMaster;
 }
 
+/**
+ * Sync changes from a Master Consumable (name, imageUrl, unit, category)
+ * to all matching consumables placed across cabinets.
+ */
+export async function syncMasterItemToCabinetConsumables(
+  masterId: string,
+  oldName: string | undefined,
+  changes: {
+    name?: string;
+    imageUrl?: string;
+    unit?: string;
+    category?: string;
+  }
+): Promise<number> {
+  const allConsumables = getLocal<any>("local_consumables") || [];
+  const oldCleanName = (oldName || "").trim().toLowerCase();
+  const newCleanName = (changes.name || "").trim().toLowerCase();
+
+  const matchingIndices: number[] = [];
+  allConsumables.forEach((c: any, index: number) => {
+    const cName = (c.name || "").trim().toLowerCase();
+    const isMasterMatch = c.masterId === masterId;
+    const isOldNameMatch = Boolean(oldCleanName && cName === oldCleanName);
+    const isNewNameMatch = Boolean(newCleanName && cName === newCleanName);
+
+    if (isMasterMatch || isOldNameMatch || isNewNameMatch) {
+      matchingIndices.push(index);
+    }
+  });
+
+  if (matchingIndices.length === 0) {
+    return 0;
+  }
+
+  const updatedIds: string[] = [];
+  const updatePayload: Record<string, any> = {
+    masterId: masterId,
+    lastUpdated: Timestamp.now()
+  };
+  if (changes.name !== undefined && changes.name.trim()) {
+    updatePayload.name = changes.name.trim();
+  }
+  if (changes.imageUrl !== undefined && changes.imageUrl.trim()) {
+    updatePayload.imageUrl = changes.imageUrl.trim();
+  }
+  if (changes.unit !== undefined && changes.unit.trim()) {
+    updatePayload.unit = changes.unit.trim();
+  }
+  if (changes.category !== undefined && changes.category.trim()) {
+    updatePayload.category = changes.category.trim();
+  }
+
+  matchingIndices.forEach(idx => {
+    allConsumables[idx] = {
+      ...allConsumables[idx],
+      ...updatePayload
+    };
+    updatedIds.push(allConsumables[idx].id);
+  });
+
+  // 1. Update local storage so UI is updated instantaneously without flicker
+  setLocal("local_consumables", allConsumables);
+
+  // 2. Update Cloud Firestore
+  if (!isOfflineFallback && updatedIds.length > 0) {
+    try {
+      await Promise.all(
+        updatedIds.map(cid =>
+          updateDoc(doc(db, "consumables", cid), updatePayload).catch(err => {
+            console.warn(`Could not sync consumable ${cid} to cloud:`, err);
+          })
+        )
+      );
+    } catch (err) {
+      recordCloudError(err);
+      console.warn("Cloud sync error during master-to-cabinet sync:", err);
+    }
+  }
+
+  return updatedIds.length;
+}
+
 export async function updateMasterConsumable(
   id: string,
-  updates: Partial<MasterConsumable>
-): Promise<void> {
+  updates: Partial<MasterConsumable>,
+  syncToCabinets: boolean = true
+): Promise<{ updatedCabinetItemsCount: number }> {
   const list = getLocalMasterConsumables();
   const idx = list.findIndex(m => m.id === id);
+  const oldMaster = idx !== -1 ? { ...list[idx] } : null;
+
   if (idx !== -1) {
     list[idx] = { ...list[idx], ...updates, updatedAt: Timestamp.now() };
     setLocal("local_master_consumables", list);
@@ -2137,6 +2222,51 @@ export async function updateMasterConsumable(
       recordCloudError(err);
     }
   }
+
+  let updatedCabinetItemsCount = 0;
+  if (syncToCabinets) {
+    updatedCabinetItemsCount = await syncMasterItemToCabinetConsumables(
+      id,
+      oldMaster?.name,
+      {
+        name: updates.name,
+        imageUrl: updates.imageUrl,
+        unit: updates.unit,
+        category: updates.category
+      }
+    );
+  }
+
+  return { updatedCabinetItemsCount };
+}
+
+/**
+ * Scan all Master Consumables and sync their latest name and image
+ * to any existing cabinet consumables that match either by masterId or name.
+ */
+export async function syncAllMasterConsumablesToCabinets(): Promise<{ syncedMastersCount: number; affectedCabinetItemsCount: number }> {
+  const masters = getLocalMasterConsumables();
+  let affectedCabinetItemsCount = 0;
+  let syncedMastersCount = 0;
+
+  for (const master of masters) {
+    const count = await syncMasterItemToCabinetConsumables(
+      master.id,
+      master.name,
+      {
+        name: master.name,
+        imageUrl: master.imageUrl,
+        unit: master.unit,
+        category: master.category
+      }
+    );
+    if (count > 0) {
+      syncedMastersCount++;
+      affectedCabinetItemsCount += count;
+    }
+  }
+
+  return { syncedMastersCount, affectedCabinetItemsCount };
 }
 
 export async function deleteMasterConsumable(id: string): Promise<void> {
