@@ -613,58 +613,59 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
   if (loading) {
     return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 bg-slate-50">
-        <Loader2 className="h-8 w-8 text-indigo-650 animate-spin mb-4" />
-        <p className="text-sm font-medium text-slate-500">กำลังดึงข้อมูลแผงควบคุมแอดมิน...</p>
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6">
+        <Loader2 className="h-8 w-8 text-indigo-600 animate-spin mb-4" />
+        <p className="text-sm font-semibold text-slate-500">กำลังดึงข้อมูลแผงควบคุมแอดมิน...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 font-sans bg-slate-50 min-h-screen">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 font-sans min-h-screen">
       
-      {/* 1. TOP HERO BANNER & INTEGRATED STATS (VIEWER-STYLE ELEGANCE) */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 rounded-3xl p-5 sm:p-7 text-white shadow-xl relative overflow-hidden mb-6">
+      {/* 1. TOP HERO BANNER & INTEGRATED STATS (APPLE LIQUID GLASS DARK SLAB) */}
+      <div className="ios-glass-dark rounded-3xl p-5 sm:p-7 text-white shadow-2xl relative overflow-hidden mb-6 border border-white/20">
         {/* Soft background glow accents */}
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute right-1/3 -top-10 w-44 h-44 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-1/3 -top-10 w-52 h-52 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute left-10 -bottom-10 w-44 h-44 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           {/* Title & Info */}
           <div className="space-y-2 max-w-2xl">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-500/25 text-indigo-200 border border-indigo-400/30 backdrop-blur-xs">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-white/15 text-indigo-200 border border-white/20 backdrop-blur-md shadow-xs">
                 <ShieldCheck className="h-3.5 w-3.5 text-indigo-300" />
                 โหมดผู้ดูแลระบบ (ADMIN TERMINAL)
               </span>
               {isUserSuperAdmin && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/30">
-                  <Crown className="h-3 w-3 text-amber-300" />
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-400/20 text-amber-200 border border-amber-300/30 backdrop-blur-md shadow-xs">
+                  <Crown className="h-3.5 w-3.5 text-amber-300" />
                   Super Admin
                 </span>
               )}
               {getCloudSyncNotice().hasError ? (
                 <button
                   onClick={() => setShowCloudGuideModal(true)}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/30 cursor-pointer transition-colors shadow-2xs"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 cursor-pointer transition-colors backdrop-blur-md shadow-xs ios-press"
                   title="คลิกเพื่อดูวิธีเปิดสิทธิ์ Cloud Firestore (3 ขั้นตอน)"
                 >
-                  <AlertTriangle className="h-3 w-3 text-amber-300 animate-pulse" />
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-300 animate-pulse" />
                   <span>โหมด Local (คลิกเปิดสิทธิ์ Cloud)</span>
                 </button>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 backdrop-blur-md shadow-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
                   Cloud ซิงค์พร้อม
                 </span>
               )}
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-display">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white font-display">
               แดชบอร์ดบริหารตู้พัสดุและคลังสต็อกส่วนกลาง
             </h1>
-            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
-              ยินดีต้อนรับคุณ <b className="text-white">{userEmail}</b> • ตรวจสอบสต็อก, สั่งซื้ออัตโนมัติ, จัดการตู้ และออกป้าย QR Code ติดหน้าตู้
+            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-normal">
+              ยินดีต้อนรับคุณ <b className="text-white font-bold">{userEmail}</b> • ตรวจสอบสต็อก, สั่งซื้ออัตโนมัติ, จัดการตู้ และออกป้าย QR Code ติดหน้าตู้
             </p>
           </div>
 
@@ -673,14 +674,14 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             {/* Guide Toggle */}
             <button
               onClick={handleToggleOnboarding}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+              className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer border ios-press backdrop-blur-md ${
                 showOnboardingGuide
-                  ? "bg-amber-400 text-slate-950 border-amber-300 shadow-xs"
-                  : "bg-white/10 hover:bg-white/15 text-slate-200 border-white/15"
+                  ? "bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-400/20"
+                  : "bg-white/10 hover:bg-white/20 text-slate-100 border-white/20"
               }`}
               title="เปิด/ปิดคำแนะนำการใช้งานเริ่มต้น"
             >
-              <Lightbulb className={`h-4 w-4 ${showOnboardingGuide ? "text-slate-950" : "text-amber-400"}`} />
+              <Lightbulb className={`h-4 w-4 ${showOnboardingGuide ? "text-slate-950" : "text-amber-300"}`} />
               <span>{showOnboardingGuide ? "ซ่อนคำแนะนำ" : "แนะนำเริ่มต้น"}</span>
             </button>
 
@@ -688,7 +689,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             <button
               onClick={handleSyncToCloud}
               disabled={isSyncingCloud}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-75 text-white rounded-xl text-xs font-bold transition-all border border-emerald-400/30 cursor-pointer shadow-xs"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600/90 hover:bg-emerald-600 disabled:opacity-75 text-white rounded-2xl text-xs font-bold transition-all border border-emerald-400/40 cursor-pointer shadow-md shadow-emerald-600/20 backdrop-blur-md ios-press"
               title="ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Cloud Firestore"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncingCloud ? "animate-spin" : ""}`} />
@@ -702,7 +703,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                 setCabinetForm({ name: "", location: "", departments: [], photoUrl: CABINET_PRESETS[0] });
                 setShowCabinetModal(true);
               }}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-white/15 hover:bg-white/25 active:bg-white/30 text-white rounded-xl text-xs font-bold transition-all border border-white/20 cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-white/15 hover:bg-white/25 active:bg-white/30 text-white rounded-2xl text-xs font-bold transition-all border border-white/25 cursor-pointer backdrop-blur-md ios-press"
             >
               <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
               <span>เพิ่มตู้</span>
@@ -728,7 +729,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                 if (cabinets.length > 0) setSelectedCabinetId(cabinets[0].id);
                 setShowConsumableModal(true);
               }}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md cursor-pointer active:scale-98"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black rounded-2xl text-xs transition-all shadow-lg shadow-emerald-400/25 cursor-pointer active:scale-98 ios-press"
             >
               <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
               <span>เพิ่มพัสดุ</span>
@@ -738,7 +739,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             <div className="relative">
               <button
                 onClick={() => setShowMoreActions(!showMoreActions)}
-                className="p-2 bg-white/10 hover:bg-white/20 text-white border border-white/15 rounded-xl transition-colors cursor-pointer"
+                className="p-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-2xl transition-all cursor-pointer backdrop-blur-md ios-press"
                 title="ตัวเลือกเพิ่มเติม"
               >
                 <MoreHorizontal className="h-4 w-4" />
@@ -779,18 +780,18 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           </div>
         </div>
 
-        {/* QUICK STATS ROW INSIDE BANNER (VIEWER DASHBOARD STYLE) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-6 pt-5 border-t border-white/10">
+        {/* QUICK STATS ROW INSIDE BANNER (APPLE LIQUID GLASS TILES) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-6 pt-5 border-t border-white/15">
           {/* Card 1: Consumables */}
           <div 
             onClick={() => setActiveTab("department_consumables")}
-            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+            className={`cursor-pointer transition-all backdrop-blur-xl rounded-2xl p-3.5 sm:p-4 border ios-press ${
               activeTab === "department_consumables"
-                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
-                : "bg-white/10 hover:bg-white/15 border-white/10"
+                ? "bg-white/25 border-white/60 ring-2 ring-white/40 shadow-xl shadow-indigo-950/20"
+                : "bg-white/10 hover:bg-white/18 border-white/15"
             }`}
           >
-            <div className="flex items-center justify-between text-slate-300 text-[11px] font-bold">
+            <div className="flex items-center justify-between text-slate-200 text-[11px] font-bold">
               <span>พัสดุในคลัง</span>
               <Package className="h-4 w-4 text-emerald-300" />
             </div>
@@ -806,35 +807,35 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
               setSettingsSubTab("departments");
               setActiveTab("settings");
             }}
-            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+            className={`cursor-pointer transition-all backdrop-blur-xl rounded-2xl p-3.5 sm:p-4 border ios-press ${
               activeTab === "settings"
-                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
-                : "bg-white/10 hover:bg-white/15 border-white/10"
+                ? "bg-white/25 border-white/60 ring-2 ring-white/40 shadow-xl shadow-indigo-950/20"
+                : "bg-white/10 hover:bg-white/18 border-white/15"
             }`}
           >
             <div className="flex items-center justify-between text-indigo-200 text-[11px] font-bold">
               <span>แผนก & พัสดุมาตรฐาน</span>
               <Building2 className="h-4 w-4 text-indigo-300" />
             </div>
-            <div className="text-xl sm:text-2xl font-black text-indigo-200 mt-1 flex items-baseline gap-1">
+            <div className="text-xl sm:text-2xl font-black text-indigo-100 mt-1 flex items-baseline gap-1">
               <span>{departments.length}</span>
-              <span className="text-xs font-normal text-indigo-300/80 mr-1">แผนก</span>
-              <span className="text-xs font-normal text-indigo-300/50">•</span>
-              <span className="text-base font-bold text-indigo-200 ml-1">{masterConsumables.length}</span>
-              <span className="text-[11px] font-normal text-indigo-300/80">พัสดุกลาง</span>
+              <span className="text-xs font-normal text-indigo-200/80 mr-1">แผนก</span>
+              <span className="text-xs font-normal text-indigo-200/50">•</span>
+              <span className="text-base font-bold text-indigo-100 ml-1">{masterConsumables.length}</span>
+              <span className="text-[11px] font-normal text-indigo-200/80">พัสดุกลาง</span>
             </div>
           </div>
 
           {/* Card 3: Cabinets */}
           <div 
             onClick={() => setActiveTab("cabinets")}
-            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+            className={`cursor-pointer transition-all backdrop-blur-xl rounded-2xl p-3.5 sm:p-4 border ios-press ${
               activeTab === "cabinets"
-                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
-                : "bg-white/10 hover:bg-white/15 border-white/10"
+                ? "bg-white/25 border-white/60 ring-2 ring-white/40 shadow-xl shadow-indigo-950/20"
+                : "bg-white/10 hover:bg-white/18 border-white/15"
             }`}
           >
-            <div className="flex items-center justify-between text-slate-300 text-[11px] font-bold">
+            <div className="flex items-center justify-between text-slate-200 text-[11px] font-bold">
               <span>ตู้จัดเก็บ & QR</span>
               <Building2 className="h-4 w-4 text-blue-300" />
             </div>
@@ -847,19 +848,19 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {/* Card 4: Critical / Out of Stock -> PO */}
           <div 
             onClick={() => setActiveTab("purchase_orders")}
-            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+            className={`cursor-pointer transition-all backdrop-blur-xl rounded-2xl p-3.5 sm:p-4 border ios-press ${
               activeTab === "purchase_orders"
-                ? "bg-rose-500/30 border-rose-400/60 ring-2 ring-rose-400/40 shadow-md"
+                ? "bg-rose-500/35 border-rose-400/70 ring-2 ring-rose-400/50 shadow-xl shadow-rose-950/30"
                 : criticalItems.length > 0
-                ? "bg-rose-500/20 hover:bg-rose-500/30 border-rose-400/30"
-                : "bg-white/10 hover:bg-white/15 border-white/10"
+                ? "bg-rose-500/20 hover:bg-rose-500/30 border-rose-400/40"
+                : "bg-white/10 hover:bg-white/18 border-white/15"
             }`}
           >
             <div className="flex items-center justify-between text-rose-200 text-[11px] font-bold">
               <span>ขาด/ต้องสั่งเพิ่ม</span>
               <AlertTriangle className={`h-4 w-4 ${criticalItems.length > 0 ? "text-rose-400 animate-pulse" : "text-slate-300"}`} />
             </div>
-            <div className={`text-xl sm:text-2xl font-black mt-1 ${criticalItems.length > 0 ? "text-rose-300" : "text-white"}`}>
+            <div className={`text-xl sm:text-2xl font-black mt-1 ${criticalItems.length > 0 ? "text-rose-200" : "text-white"}`}>
               {criticalItems.length}
               <span className="text-xs font-normal text-rose-200/80 ml-1">ชนิด</span>
             </div>
@@ -868,10 +869,10 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {/* Card 5: QC Withdrawals */}
           <div 
             onClick={() => setActiveTab("qc")}
-            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+            className={`cursor-pointer transition-all backdrop-blur-xl rounded-2xl p-3.5 sm:p-4 border ios-press ${
               activeTab === "qc"
-                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
-                : "bg-white/10 hover:bg-white/15 border-white/10"
+                ? "bg-white/25 border-white/60 ring-2 ring-white/40 shadow-xl shadow-indigo-950/20"
+                : "bg-white/10 hover:bg-white/18 border-white/15"
             }`}
           >
             <div className="flex items-center justify-between text-purple-200 text-[11px] font-bold">
@@ -887,10 +888,10 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {/* Card 6: Audit History */}
           <div 
             onClick={() => setActiveTab("history")}
-            className={`cursor-pointer transition-all backdrop-blur-xs rounded-2xl p-3 sm:p-4 border ${
+            className={`cursor-pointer transition-all backdrop-blur-xl rounded-2xl p-3.5 sm:p-4 border ios-press ${
               activeTab === "history"
-                ? "bg-white/20 border-white/40 ring-2 ring-white/30 shadow-md"
-                : "bg-white/10 hover:bg-white/15 border-white/10"
+                ? "bg-white/25 border-white/60 ring-2 ring-white/40 shadow-xl shadow-indigo-950/20"
+                : "bg-white/10 hover:bg-white/18 border-white/15"
             }`}
           >
             <div className="flex items-center justify-between text-amber-200 text-[11px] font-bold">
@@ -1051,47 +1052,46 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         </div>
       )}
 
-      {/* 3. DIRECT, SINGLE-LEVEL TAB NAVIGATION (EXACT VIEWER DASHBOARD UX) */}
-      <div className="bg-white rounded-2xl p-2 sm:p-2.5 border border-slate-200 shadow-xs mb-6">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+      {/* 3. DIRECT, SINGLE-LEVEL TAB NAVIGATION (APPLE LIQUID GLASS SEGMENTED BAR) */}
+      <div className="ios-segmented rounded-2xl p-1.5 shadow-md shadow-slate-900/5 mb-6">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
           {/* Tab 1: Consumables & Stock */}
           <button
             onClick={() => setActiveTab("department_consumables")}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
               activeTab === "department_consumables"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
             }`}
           >
-            <Package className="h-4 w-4 text-emerald-400" />
+            <Package className="h-4 w-4 text-emerald-500" />
             <span>พัสดุ & สต็อกแผนก</span>
             {criticalItems.length > 0 ? (
               <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full animate-pulse">
                 ขาด {criticalItems.length}
               </span>
             ) : (
-              <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-                activeTab === "department_consumables" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+              <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                activeTab === "department_consumables" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
               }`}>
                 {consumables.length}
               </span>
             )}
           </button>
 
-
-          {/* Tab 3: Cabinets & QR */}
+          {/* Tab 2: Cabinets & QR */}
           <button
             onClick={() => setActiveTab("cabinets")}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
               activeTab === "cabinets"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
             }`}
           >
-            <Building2 className="h-4 w-4 text-blue-400" />
+            <Building2 className="h-4 w-4 text-blue-500" />
             <span>ตู้จัดเก็บ & QR</span>
-            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-              activeTab === "cabinets" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+              activeTab === "cabinets" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
             }`}>
               {cabinets.length}
             </span>
@@ -1100,13 +1100,13 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {/* Tab 3: Purchase Orders */}
           <button
             onClick={() => setActiveTab("purchase_orders")}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
               activeTab === "purchase_orders"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
             }`}
           >
-            <ShoppingCart className="h-4 w-4 text-amber-400" />
+            <ShoppingCart className="h-4 w-4 text-amber-500" />
             <span>ใบสั่งซื้อพัสดุ (Auto PO)</span>
             {criticalItems.length > 0 && (
               <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full animate-pulse">
@@ -1118,16 +1118,16 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {/* Tab 4: QC Withdrawals (ใครเบิกอะไรบ้าง) */}
           <button
             onClick={() => setActiveTab("qc")}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
               activeTab === "qc"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
             }`}
           >
-            <Activity className="h-4 w-4 text-purple-400" />
+            <Activity className="h-4 w-4 text-purple-500" />
             <span>ใครเบิกอะไรบ้าง</span>
-            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-              activeTab === "qc" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+              activeTab === "qc" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
             }`}>
               {qcLogs.length}
             </span>
@@ -1136,16 +1136,16 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {/* Tab 5: Count History */}
           <button
             onClick={() => setActiveTab("history")}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
               activeTab === "history"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
             }`}
           >
-            <Clock className="h-4 w-4 text-amber-400" />
+            <Clock className="h-4 w-4 text-amber-500" />
             <span>ประวัติตรวจนับ</span>
-            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-              activeTab === "history" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+              activeTab === "history" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
             }`}>
               {countLogs.length}
             </span>
@@ -1154,16 +1154,16 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {/* Tab 6: Department Settings & Master Catalog */}
           <button
             onClick={() => setActiveTab("settings")}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
               activeTab === "settings"
-                ? "bg-slate-950 text-white shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
             }`}
           >
-            <Settings className="h-4 w-4 text-slate-400" />
+            <Settings className="h-4 w-4 text-slate-500" />
             <span>จัดการแผนก & พัสดุมาตรฐาน</span>
-            <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-              activeTab === "settings" ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600"
+            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+              activeTab === "settings" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
             }`}>
               {departments.length} แผนก
             </span>
@@ -1173,16 +1173,16 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           {isUserSuperAdmin && (
             <button
               onClick={() => setActiveTab("users")}
-              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
                 activeTab === "users"
-                  ? "bg-amber-500 text-white shadow-xs"
-                  : "text-amber-900 hover:bg-amber-50"
+                  ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 border border-amber-400 font-extrabold"
+                  : "text-amber-800 hover:bg-amber-100/50"
               }`}
             >
               <Users className="h-4 w-4" />
               <span>จัดการสิทธิ์ผู้ใช้</span>
-              <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${
-                activeTab === "users" ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-900"
+              <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                activeTab === "users" ? "bg-amber-600 text-white" : "bg-amber-100/80 text-amber-900"
               }`}>
                 Admin
               </span>
@@ -1223,11 +1223,11 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                 const lowItemsCount = cabinetItems.filter(item => item.currentQty <= item.minThreshold).length;
 
                 return (
-                  <div key={cabinet.id} className="bg-white rounded-2xl overflow-hidden border-2 border-slate-100 hover:border-indigo-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+                  <div key={cabinet.id} className="ios-glass-card rounded-3xl overflow-hidden border border-white/80 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:border-indigo-300 transition-all duration-300 flex flex-col justify-between">
                     <div>
                       {/* Photo Header */}
                       <div 
-                        className="relative h-40 bg-slate-100 cursor-pointer group overflow-hidden"
+                        className="relative h-44 bg-slate-100/60 cursor-pointer group overflow-hidden"
                         onClick={() => setPreviewModalImage({ 
                           url: cabinet.photoUrl, 
                           title: cabinet.name, 
@@ -1241,21 +1241,21 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           referrerPolicy="no-referrer"
                         />
-                        <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="px-2.5 py-1 bg-white/90 rounded-full text-[10px] font-bold text-slate-900 shadow flex items-center gap-1">
-                            <Eye className="h-3 w-3" /> ดูรูปใหญ่
+                        <div className="absolute inset-0 bg-slate-950/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-xs">
+                          <span className="px-3 py-1.5 bg-white/90 backdrop-blur-md rounded-full text-[11px] font-bold text-slate-900 shadow-md flex items-center gap-1.5">
+                            <Eye className="h-3.5 w-3.5 text-indigo-600" /> ดูรูปใหญ่
                           </span>
                         </div>
-                        <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
                           {cabinet.departments.map(d => (
-                            <span key={d} className="bg-indigo-600/90 text-white font-bold text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider shadow">
+                            <span key={d} className="bg-indigo-600/85 backdrop-blur-md text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs border border-white/20">
                               {d}
                             </span>
                           ))}
                         </div>
                         {lowItemsCount > 0 && (
-                          <div className="absolute top-3 right-3 bg-rose-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-md animate-bounce">
-                            <AlertTriangle className="h-2 w-2" />
+                          <div className="absolute top-3 right-3 bg-rose-600 text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-md animate-pulse border border-white/20">
+                            <AlertTriangle className="h-3 w-3" />
                             วิกฤต {lowItemsCount}
                           </div>
                         )}
@@ -1263,19 +1263,22 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
                       {/* Info body */}
                       <div className="p-5">
-                        <h3 className="font-extrabold text-slate-900 text-base leading-snug mb-1">
+                        <h3 className="font-black text-slate-900 text-base leading-snug mb-1">
                           {cabinet.name}
                         </h3>
-                        <p className="text-xs text-slate-400 flex items-center gap-1 font-semibold mb-4">
-                          <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                          {cabinet.location}
+                        <p className="text-xs text-slate-500 flex items-center gap-1 font-medium mb-3.5">
+                          <MapPin className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                          <span>{cabinet.location}</span>
                         </p>
 
-                        {/* Items preview */}
-                        <div className="space-y-1.5 border-t border-slate-50 pt-3">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">สิ่งของในตู้นี้ ({cabinetItems.length} ชนิด):</span>
+                        {/* Items preview box */}
+                        <div className="bg-white/60 backdrop-blur-md rounded-2xl p-3 border border-white/80 space-y-1.5">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between pb-1 border-b border-slate-100">
+                            <span>พัสดุในตู้นี้</span>
+                            <span className="font-extrabold text-indigo-600">{cabinetItems.length} ชนิด</span>
+                          </div>
                           {cabinetItems.length === 0 ? (
-                            <span className="text-xs text-slate-400 block italic">ตู้ยังว่างเปล่า ไม่มีสินค้าถูกจัดสรร</span>
+                            <span className="text-xs text-slate-400 block italic py-1">ตู้ยังว่างเปล่า ไม่มีสินค้าจัดสรร</span>
                           ) : (
                             cabinetItems.slice(0, 3).map(item => (
                               <div key={item.id} className="flex justify-between text-xs font-semibold text-slate-600">
@@ -1287,7 +1290,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                             ))
                           )}
                           {cabinetItems.length > 3 && (
-                            <span className="text-[10px] text-indigo-600 font-bold block pt-1 cursor-pointer hover:underline" onClick={() => { setActiveTab("consumables"); setSearchTerm(cabinet.name); }}>
+                            <span className="text-[10px] text-indigo-600 font-bold block pt-1 cursor-pointer hover:underline" onClick={() => { setActiveTab("department_consumables"); }}>
                               ดูวัสดุสิ้นเปลืองอีก {cabinetItems.length - 3} ชนิด เพิ่มเติม...
                             </span>
                           )}
@@ -1296,13 +1299,13 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                     </div>
 
                     {/* Footer Operations */}
-                    <div className="bg-slate-50 border-t border-slate-100 p-3.5 flex items-center justify-between gap-1">
+                    <div className="bg-white/50 backdrop-blur-md border-t border-white/80 p-3.5 flex items-center justify-between gap-1">
                       <button
                         onClick={() => {
                           setQrCabinet(cabinet);
                           setShowQRModal(true);
                         }}
-                        className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-3 py-2 rounded-lg cursor-pointer transition-all"
+                        className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100/90 border border-indigo-200/80 px-3 py-1.5 rounded-xl cursor-pointer transition-all ios-press shadow-2xs"
                       >
                         <QrCode className="h-3.5 w-3.5" />
                         พิมพ์ QR ตู้
@@ -1311,14 +1314,14 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => handleEditCabinet(cabinet)}
-                          className="p-2 bg-white text-slate-500 hover:text-slate-800 border border-slate-200 hover:border-slate-300 rounded-lg cursor-pointer transition-all"
+                          className="p-2 bg-white/80 text-slate-600 hover:text-slate-900 border border-white/90 hover:border-indigo-200 rounded-xl cursor-pointer transition-all ios-press shadow-2xs"
                           title="แก้ไขรายละเอียดตู้"
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteCabinet(cabinet.id)}
-                          className="p-2 bg-white text-rose-500 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-lg cursor-pointer transition-all"
+                          className="p-2 bg-white/80 text-rose-500 hover:text-rose-700 border border-white/90 hover:border-rose-200 rounded-xl cursor-pointer transition-all ios-press shadow-2xs"
                           title="ลบตู้เก็บของ"
                         >
                           <Trash className="h-3.5 w-3.5" />

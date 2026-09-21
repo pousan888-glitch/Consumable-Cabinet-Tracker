@@ -168,146 +168,165 @@ export default function App() {
 
   // SIGNED IN -> render based on current state & role
 
+  // Background Ambient Fluid Glass Blobs
+  const ambientBackground = (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0" aria-hidden="true">
+      <div className="absolute -top-32 -left-32 w-[34rem] h-[34rem] bg-indigo-400/18 rounded-full blur-[100px] animate-ambient-float" />
+      <div className="absolute top-1/4 -right-32 w-[32rem] h-[32rem] bg-sky-400/18 rounded-full blur-[110px] animate-ambient-float" style={{ animationDelay: "-4s" }} />
+      <div className="absolute -bottom-32 left-1/3 w-[36rem] h-[36rem] bg-violet-400/14 rounded-full blur-[120px] animate-ambient-float" style={{ animationDelay: "-8s" }} />
+      <div className="absolute top-2/3 -left-20 w-[24rem] h-[24rem] bg-rose-400/10 rounded-full blur-[90px]" />
+    </div>
+  );
+
   // A. QR Redirect Routing: If cabinetId is present in URL (scanned cabinet)
   // We immediately bypass default dashboards and show the mobile counting / withdrawing screen!
   if (cabinetParam) {
     return (
-      <div className="bg-slate-50 min-h-screen">
-        <Header 
-          user={user} 
-          onChangeRole={handleChangeRole} 
-          onLogout={handleLogout} 
-          lowStockCount={lowStockCount} 
-        />
-        <HelperCountView 
-          userEmail={user.email} 
-          userName={user.name} 
-          selectedCabinetId={cabinetParam} 
-          initialMode={modeParam}
-          onBackToMainMenu={handleBackToMenu} 
-        />
+      <div className="relative min-h-screen text-slate-900 selection:bg-indigo-500/20">
+        {ambientBackground}
+        <div className="relative z-10">
+          <Header 
+            user={user} 
+            onChangeRole={handleChangeRole} 
+            onLogout={handleLogout} 
+            lowStockCount={lowStockCount} 
+          />
+          <HelperCountView 
+            userEmail={user.email} 
+            userName={user.name} 
+            selectedCabinetId={cabinetParam} 
+            initialMode={modeParam}
+            onBackToMainMenu={handleBackToMenu} 
+          />
+        </div>
       </div>
     );
   }
 
   // B. Default Role-based view routers
   return (
-    <div className="bg-slate-50 min-h-screen font-sans flex flex-col pb-8">
-      <Header 
-        user={user} 
-        onChangeRole={handleChangeRole} 
-        onLogout={handleLogout} 
-        lowStockCount={lowStockCount} 
-      />
+    <div className="relative min-h-screen font-sans flex flex-col pb-8 text-slate-900 selection:bg-indigo-500/20">
+      {ambientBackground}
 
-      <main className="flex-grow">
-        {user.role === "ADMIN" && (
-          <AdminDashboard 
-            userEmail={user.email} 
-            isSuperAdmin={user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com"} 
-          />
-        )}
-        {user.role === "HELPER" && (
-          <HelperCountView 
-            userEmail={user.email} 
-            userName={user.name} 
-            onBackToMainMenu={handleBackToMenu}
-          />
-        )}
-        {user.role === "QC" && (
-          <QCConsumeView 
-            userEmail={user.email} 
-            userName={user.name} 
-            onBackToMainMenu={handleBackToMenu}
-          />
-        )}
-        {user.role === "VIEWER" && (
-          <ViewerDashboard 
-            userEmail={user.email} 
-            userName={user.name} 
-          />
-        )}
-      </main>
+      <div className="relative z-10 flex flex-col flex-grow">
+        <Header 
+          user={user} 
+          onChangeRole={handleChangeRole} 
+          onLogout={handleLogout} 
+          lowStockCount={lowStockCount} 
+        />
 
-      {/* QUICK ACCESS TESTING BAR - FLOATING AND COLLAPSIBLE */}
+        <main className="flex-grow">
+          {user.role === "ADMIN" && (
+            <AdminDashboard 
+              userEmail={user.email} 
+              isSuperAdmin={user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com"} 
+            />
+          )}
+          {user.role === "HELPER" && (
+            <HelperCountView 
+              userEmail={user.email} 
+              userName={user.name} 
+              onBackToMainMenu={handleBackToMenu}
+            />
+          )}
+          {user.role === "QC" && (
+            <QCConsumeView 
+              userEmail={user.email} 
+              userName={user.name} 
+              onBackToMainMenu={handleBackToMenu}
+            />
+          )}
+          {user.role === "VIEWER" && (
+            <ViewerDashboard 
+              userEmail={user.email} 
+              userName={user.name} 
+            />
+          )}
+        </main>
+      </div>
+
+      {/* QUICK ACCESS TESTING BAR - FLOATING AND COLLAPSIBLE IN IOS LIQUID GLASS PILL */}
       {(user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com" || user.isSimulation) && (
-        <aside className="fixed bottom-3 right-3 z-40">
+        <aside className="fixed bottom-4 right-4 z-40">
           {!isTestingBarOpen ? (
             <button
               onClick={() => setIsTestingBarOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-slate-900/90 hover:bg-slate-900 text-white rounded-full shadow-lg backdrop-blur-xs text-xs font-bold transition-all cursor-pointer hover:scale-105 active:scale-95 border border-slate-700/50"
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full shadow-xl shadow-slate-900/20 backdrop-blur-2xl text-xs font-bold transition-all cursor-pointer hover:scale-105 active:scale-95 border border-white/20"
               title="เปิดเมนูสลับสิทธิ์ทดสอบ"
             >
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <Sparkles className="h-3.5 w-3.5 text-amber-300" />
               <span>สลับสิทธิ์</span>
-              <span className="px-1.5 py-0.2 bg-indigo-500 text-[10px] rounded-full uppercase">
+              <span className="px-2 py-0.5 bg-indigo-500/80 backdrop-blur-xs text-[10px] rounded-full uppercase tracking-wider font-extrabold border border-white/20">
                 {user.role}
               </span>
             </button>
           ) : (
-            <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 p-3 shadow-2xl space-y-2 max-w-xs animate-scale-up">
-              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
-                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+            <div className="ios-glass-card rounded-3xl p-4 shadow-2xl space-y-3 max-w-xs animate-scale-up border border-white/90">
+              <div className="flex items-center justify-between gap-2 border-b border-slate-200/50 pb-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-slate-900">
+                  <div className="p-1 rounded-lg bg-amber-100 text-amber-600">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </div>
                   <span>สลับดูหน้าจอ (Super Admin)</span>
                 </div>
                 <button
                   onClick={() => setIsTestingBarOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer text-xs"
+                  className="p-1 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors cursor-pointer text-xs"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
                     handleChangeRole("ADMIN");
                     setIsTestingBarOpen(false);
                   }}
-                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                  className={`py-2 px-2.5 rounded-2xl text-center font-bold text-xs border transition-all cursor-pointer ios-press ${
                     user.role === "ADMIN" 
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs" 
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/20" 
+                      : "ios-glass text-slate-700 hover:bg-white/90"
                   }`}
                 >
-                  Admin
+                  🛡️ Admin
                 </button>
                 <button
                   onClick={() => {
                     handleChangeRole("HELPER");
                     setIsTestingBarOpen(false);
                   }}
-                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                  className={`py-2 px-2.5 rounded-2xl text-center font-bold text-xs border transition-all cursor-pointer ios-press ${
                     user.role === "HELPER" 
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs" 
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/20" 
+                      : "ios-glass text-slate-700 hover:bg-white/90"
                   }`}
                 >
-                  Helper
+                  📋 Helper
                 </button>
                 <button
                   onClick={() => {
                     handleChangeRole("QC");
                     setIsTestingBarOpen(false);
                   }}
-                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                  className={`py-2 px-2.5 rounded-2xl text-center font-bold text-xs border transition-all cursor-pointer ios-press ${
                     user.role === "QC" 
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs" 
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/20" 
+                      : "ios-glass text-slate-700 hover:bg-white/90"
                   }`}
                 >
-                  QC
+                  🔬 QC
                 </button>
                 <button
                   onClick={() => {
                     handleChangeRole("VIEWER");
                     setIsTestingBarOpen(false);
                   }}
-                  className={`py-1.5 px-2 rounded-xl text-center font-bold text-xs border transition-all cursor-pointer ${
+                  className={`py-2 px-2.5 rounded-2xl text-center font-bold text-xs border transition-all cursor-pointer ios-press ${
                     user.role === "VIEWER" 
-                      ? "bg-blue-600 text-white border-blue-600 shadow-2xs" 
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? "bg-sky-600 text-white border-sky-500 shadow-md shadow-sky-600/20" 
+                      : "ios-glass text-slate-700 hover:bg-white/90"
                   }`}
                 >
                   👁️ Viewer

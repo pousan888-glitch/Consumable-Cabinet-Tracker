@@ -589,7 +589,7 @@ export default function DepartmentConsumablesView({
         </div>
 
         {/* Responsive Grid of Department Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
           {/* Card: รวมทุกแผนก */}
           {(() => {
             const isSelected = selectedDept === "ALL";
@@ -599,26 +599,26 @@ export default function DepartmentConsumablesView({
               <button
                 key="ALL"
                 onClick={() => setSelectedDept("ALL")}
-                className={`text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                className={`text-left p-3.5 sm:p-4 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ios-press ${
                   isSelected
-                    ? "bg-emerald-50/70 border-2 border-emerald-700 shadow-md ring-2 ring-emerald-700/20"
-                    : "bg-white border-2 border-slate-100 hover:border-slate-300 shadow-2xs hover:shadow-xs"
+                    ? "ios-glass border-2 border-indigo-400/80 ring-4 ring-indigo-500/10 shadow-lg shadow-indigo-100/50 bg-indigo-50/40 backdrop-blur-xl"
+                    : "ios-glass-card border border-white/80 hover:border-indigo-200 shadow-sm hover:shadow-md"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-0 right-0 w-3 h-3 bg-emerald-700 rounded-bl-lg" />
+                  <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-indigo-600 rounded-bl-xl" />
                 )}
-                <div className="flex items-start gap-2 sm:gap-3 mb-2 sm:mb-3">
-                  <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${
-                    isSelected ? "bg-emerald-700 text-white shadow-xs" : "bg-slate-100 text-slate-600"
+                <div className="flex items-start gap-2.5 sm:gap-3 mb-2.5 sm:mb-3">
+                  <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    isSelected ? "bg-indigo-600 text-white shadow-xs" : "bg-slate-100/90 text-slate-600"
                   }`}>
                     <Layers className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className={`font-black text-xs sm:text-sm truncate ${isSelected ? "text-emerald-950" : "text-slate-900"}`}>
+                    <h3 className="font-black text-xs sm:text-sm truncate text-slate-800">
                       รวมทุกแผนก
                     </h3>
-                    <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5">
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5 font-medium">
                       {cabinets.length} ตู้จัดเก็บ
                     </p>
                   </div>
@@ -655,28 +655,28 @@ export default function DepartmentConsumablesView({
               <button
                 key={dept}
                 onClick={() => setSelectedDept(dept)}
-                className={`text-left p-3 sm:p-4 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ${
+                className={`text-left p-3.5 sm:p-4 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ios-press ${
                   isSelected
-                    ? "bg-emerald-50/70 border-2 border-emerald-700 shadow-md ring-2 ring-emerald-700/20"
-                    : "bg-white border-2 border-slate-100 hover:border-slate-300 shadow-2xs hover:shadow-xs"
+                    ? "ios-glass border-2 border-indigo-400/80 ring-4 ring-indigo-500/10 shadow-lg shadow-indigo-100/50 bg-indigo-50/40 backdrop-blur-xl"
+                    : "ios-glass-card border border-white/80 hover:border-indigo-200 shadow-sm hover:shadow-md"
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute top-0 right-0 w-3 h-3 bg-emerald-700 rounded-bl-lg" />
+                  <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-indigo-600 rounded-bl-xl" />
                 )}
-                <div className="flex items-start gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <div className="flex items-start gap-2.5 sm:gap-3 mb-2.5 sm:mb-3">
                   <div 
-                    className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${
-                      isSelected ? "bg-emerald-700 text-white shadow-xs" : "bg-slate-100 text-slate-700"
+                    className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      isSelected ? "bg-indigo-600 text-white shadow-xs" : "bg-slate-100/90 text-slate-600"
                     }`}
                   >
                     <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className={`font-black text-xs sm:text-sm truncate uppercase ${isSelected ? "text-emerald-950" : "text-slate-900"}`}>
+                    <h3 className="font-black text-xs sm:text-sm truncate uppercase text-slate-800">
                       {dept}
                     </h3>
-                    <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5">
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5 font-medium">
                       {stats.totalItems} รายการ
                     </p>
                   </div>
@@ -705,16 +705,16 @@ export default function DepartmentConsumablesView({
       </div>
 
       {/* 2. SUBHEADER & FILTER CONTROLS (คล้ายแถบควบคุมในรูปแรก) */}
-      <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+      <div className="ios-glass-card p-3.5 sm:p-5 rounded-3xl border border-white/80 shadow-lg shadow-slate-200/40 space-y-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-slate-900 font-extrabold text-sm sm:text-lg">
               รายการพัสดุ:
             </span>
-            <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-slate-100 text-slate-800 font-black text-xs sm:text-sm rounded-lg border border-slate-200 uppercase">
+            <span className="px-3 py-1 bg-white/80 backdrop-blur-md text-slate-800 font-black text-xs sm:text-sm rounded-xl border border-white/90 shadow-2xs uppercase">
               {selectedDept === "ALL" ? "รวมทุกแผนก" : selectedDept}
             </span>
-            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-bold text-xs rounded-lg border border-emerald-200">
+            <span className="px-2.5 py-1 bg-emerald-50/80 backdrop-blur-xs text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200/80">
               มาตรฐาน {totalInCurrentDept} รายการ
             </span>
           </div>
@@ -885,10 +885,10 @@ export default function DepartmentConsumablesView({
       </div>
 
       {/* 3. CONSUMABLES VIEW: GRID OR TABLE */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="ios-glass-card rounded-3xl border border-white/80 shadow-xl shadow-slate-200/40 overflow-hidden">
         {viewLayout === "grid" ? (
           /* GRID VIEW (VISUAL CARDS) */
-          <div className="p-3.5 sm:p-5 bg-slate-50/60 min-h-[300px]">
+          <div className="p-3.5 sm:p-5 bg-white/30 backdrop-blur-sm min-h-[300px]">
             {filteredConsumables.length === 0 ? (
               <div className="py-16 text-center text-slate-400">
                 <Package className="h-10 w-10 text-slate-300 mx-auto mb-2 opacity-60" />
@@ -905,12 +905,12 @@ export default function DepartmentConsumablesView({
                   return (
                     <div
                       key={item.id}
-                      className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden flex flex-col justify-between shadow-2xs hover:shadow-md ${
+                      className={`ios-glass-card rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between shadow-md hover:shadow-xl ${
                         isOutOfStock
-                          ? "border-rose-300 ring-1 ring-rose-300/30"
+                          ? "border-rose-300/80 ring-2 ring-rose-400/20"
                           : isLow
-                          ? "border-amber-300 ring-1 ring-amber-300/30"
-                          : "border-slate-200/90 hover:border-slate-300"
+                          ? "border-amber-300/80 ring-2 ring-amber-400/20"
+                          : "border-white/80 hover:border-indigo-200"
                       }`}
                     >
                       <div>
@@ -986,7 +986,7 @@ export default function DepartmentConsumablesView({
                           </div>
 
                           {/* Stock Quantity Stats & Quick Adjust */}
-                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-2">
+                          <div className="bg-white/60 backdrop-blur-md p-3 rounded-2xl border border-white/80 space-y-2">
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-slate-500 text-[11px] font-semibold">จำนวนคงเหลือ</span>
                               <div className="flex items-baseline gap-1">
@@ -1000,26 +1000,26 @@ export default function DepartmentConsumablesView({
                             </div>
 
                             {/* Quick +/- Adjusters */}
-                            <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/60">
+                            <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-200/50">
                               <span className="text-[10px] text-slate-400 font-bold">ปรับยอด:</span>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <button
                                   onClick={() => onUpdateQty(item, Math.max(0, item.currentQty - 1))}
-                                  className="h-6.5 w-6.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs cursor-pointer active:scale-95 transition-all shadow-2xs"
+                                  className="h-7 w-7 rounded-xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 flex items-center justify-center font-bold text-xs cursor-pointer ios-press transition-all shadow-2xs"
                                   title="ลด 1"
                                 >
                                   -1
                                 </button>
                                 <button
                                   onClick={() => onUpdateQty(item, item.currentQty + 1)}
-                                  className="h-6.5 w-6.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 flex items-center justify-center font-bold text-xs cursor-pointer active:scale-95 transition-all shadow-2xs"
+                                  className="h-7 w-7 rounded-xl bg-emerald-50/90 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 flex items-center justify-center font-bold text-xs cursor-pointer ios-press transition-all shadow-2xs"
                                   title="เพิ่ม 1"
                                 >
                                   +1
                                 </button>
                                 <button
                                   onClick={() => onUpdateQty(item, item.currentQty + 5)}
-                                  className="h-6.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center font-bold text-[10px] cursor-pointer active:scale-95 transition-all shadow-2xs"
+                                  className="h-7 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center font-bold text-[10px] cursor-pointer ios-press transition-all shadow-2xs"
                                   title="เติม +5"
                                 >
                                   +5
@@ -1031,21 +1031,21 @@ export default function DepartmentConsumablesView({
                       </div>
 
                       {/* Bottom Card Actions */}
-                      <div className="p-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between">
+                      <div className="p-3 bg-white/50 backdrop-blur-md border-t border-white/80 flex items-center justify-between">
                         <span className="text-[10px] text-slate-400 truncate">
-                          หน่วย: <b className="text-slate-700">{item.unit}</b>
+                          หน่วย: <b className="text-slate-700 font-bold">{item.unit}</b>
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleRequestEdit(item)}
-                            className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                            className="p-1.5 bg-white/80 hover:bg-white text-slate-600 hover:text-slate-900 border border-white/90 rounded-xl cursor-pointer transition-colors shadow-2xs ios-press"
                             title="แก้ไขข้อมูลพัสดุ"
                           >
                             <Edit className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => handleRequestDelete(item)}
-                            className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                            className="p-1.5 bg-white/80 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-white/90 hover:border-rose-200 rounded-xl cursor-pointer transition-colors shadow-2xs ios-press"
                             title="ลบพัสดุนี้"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1246,8 +1246,8 @@ export default function DepartmentConsumablesView({
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
-                <th className="py-3.5 px-4 w-14 text-center">ลำดับ</th>
+              <tr className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
+                <th className="py-4 px-4 w-14 text-center">ลำดับ</th>
                 <th className="py-3.5 px-5">รายการพัสดุ (CONSUMABLE ITEM)</th>
                 <th className="py-3.5 px-4 text-center">เป้าหมายมาตรฐาน</th>
                 <th className="py-3.5 px-4 text-center">จำนวนที่มีจริง</th>
