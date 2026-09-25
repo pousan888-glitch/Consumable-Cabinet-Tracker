@@ -144,6 +144,7 @@ try {
   db = initializeFirestore(
     app,
     {
+      ignoreUndefinedProperties: true,
       experimentalAutoDetectLongPolling: true,
       // Force long-polling everywhere on mobile / iOS to eliminate WebKit stream hang issues
       experimentalForceLongPolling: true

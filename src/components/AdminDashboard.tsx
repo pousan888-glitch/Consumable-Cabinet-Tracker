@@ -19,6 +19,7 @@ import {
   getDepartments,
   getMasterConsumables,
   addMasterConsumable,
+  refreshAllDataFromCloud,
   CABINET_PRESETS,
   CONSUMABLE_PRESETS
 } from "../lib/dbService";
@@ -165,11 +166,35 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   const [showMoreActions, setShowMoreActions] = useState(false);
   const [copiedRule, setCopiedRule] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
   const [syncErrorMsg, setSyncErrorMsg] = useState<string | null>(null);
 
   const activeProjectId = getActiveFirebaseConfig().config.projectId || "warehouse-consumables-monitor";
   const firebaseRulesUrl = `https://console.firebase.google.com/project/${activeProjectId}/firestore/rules`;
+
+  // Fetch latest data from Cloud Firestore (Cabinets, Consumables, QR/QC Withdrawals, Count Audits)
+  const handleRefreshAllData = async () => {
+    setIsRefreshingData(true);
+    try {
+      const data = await refreshAllDataFromCloud();
+      const activeDepts = data.departments.filter(d => d.name.toLowerCase() !== "production");
+      setDepartments(activeDepts);
+      setCabinets(data.cabinets);
+      setConsumables(data.consumables);
+      setCountLogs(data.countLogs);
+      setQcLogs(data.qcLogs);
+      setMasterConsumables(data.masterConsumables);
+      setToastMessage(`ดึงข้อมูลล่าสุดเรียบร้อย: มีตู้ ${data.cabinets.length} ตู้, พัสดุ ${data.consumables.length} รายการ, ประวัติเบิก ${data.qcLogs.length} รายการ`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      console.error("Error refreshing data from cloud:", err);
+      setToastMessage("ไม่สามารถดึงข้อมูลล่าสุดได้ กรุณาลองใหม่อีกครั้ง");
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setIsRefreshingData(false);
+    }
+  };
 
   const handleSyncToCloud = async () => {
     setIsSyncingCloud(true);
@@ -304,6 +329,25 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     }
     loadAllData();
   }, [refreshTrigger]);
+
+  // Background auto-refresh polling every 20 seconds so withdrawals made by QR code appear in real-time
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const data = await refreshAllDataFromCloud();
+        const activeDepts = data.departments.filter(d => d.name.toLowerCase() !== "production");
+        setDepartments(activeDepts);
+        setCabinets(data.cabinets);
+        setConsumables(data.consumables);
+        setCountLogs(data.countLogs);
+        setQcLogs(data.qcLogs);
+        setMasterConsumables(data.masterConsumables);
+      } catch {
+        // Silent background sync
+      }
+    }, 20000);
+    return () => clearInterval(interval);
+  }, []);
 
   const triggerRefresh = () => setRefreshTrigger(p => p + 1);
 
@@ -685,14 +729,25 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
               <span>{showOnboardingGuide ? "ซ่อนคำแนะนำ" : "แนะนำเริ่มต้น"}</span>
             </button>
 
+            {/* Refresh / Pull Latest Data from Cloud Button (Requested by User) */}
+            <button
+              onClick={handleRefreshAllData}
+              disabled={isRefreshingData}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600/90 hover:bg-indigo-600 active:bg-indigo-700 disabled:opacity-75 text-white rounded-2xl text-xs font-bold transition-all border border-indigo-400/40 cursor-pointer shadow-md shadow-indigo-600/20 backdrop-blur-md ios-press"
+              title="ดึงข้อมูลล่าสุดจาก Cloud Firestore (อัปเดตยอดคงเหลือและประวัติการเบิกใหม่)"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingData ? "animate-spin" : ""}`} />
+              <span>{isRefreshingData ? "กำลังดึงข้อมูล..." : "รีเฟรชข้อมูล"}</span>
+            </button>
+
             {/* Cloud Sync Button */}
             <button
               onClick={handleSyncToCloud}
               disabled={isSyncingCloud}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600/90 hover:bg-emerald-600 disabled:opacity-75 text-white rounded-2xl text-xs font-bold transition-all border border-emerald-400/40 cursor-pointer shadow-md shadow-emerald-600/20 backdrop-blur-md ios-press"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600/85 hover:bg-emerald-600 disabled:opacity-75 text-white rounded-2xl text-xs font-bold transition-all border border-emerald-400/40 cursor-pointer shadow-md shadow-emerald-600/20 backdrop-blur-md ios-press"
               title="ซิงค์ข้อมูลจากเครื่องนี้ขึ้น Cloud Firestore"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${isSyncingCloud ? "animate-spin" : ""}`} />
+              <FolderSync className={`h-3.5 w-3.5 ${isSyncingCloud ? "animate-spin" : ""}`} />
               <span>{isSyncingCloud ? "กำลังซิงค์..." : "ซิงค์ Cloud"}</span>
             </button>
 
@@ -1349,6 +1404,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           onPreviewImage={(img) => setPreviewModalImage(img)}
           getCabinetName={getCabinetName}
           onToast={(msg) => setToastMessage(msg)}
+          onRefresh={handleRefreshAllData}
+          isRefreshing={isRefreshingData}
         />
       )}
 
@@ -1379,20 +1436,32 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                   {countLogs.length}
                 </span>
               </h3>
-              {countLogs.length > 0 && (
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setClearHistoryInitialType("COUNT");
-                    setShowClearHistoryModal(true);
-                  }}
-                  className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-rose-200"
-                  title="ล้างประวัติการตรวจนับสต็อกทั้งหมดหรือตามช่วงเวลา"
+                  onClick={handleRefreshAllData}
+                  disabled={isRefreshingData}
+                  className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-indigo-200 disabled:opacity-50"
+                  title="ดึงประวัติการนับสต็อกล่าสุดจาก Cloud Firestore"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>ล้างประวัตินับ</span>
+                  <RefreshCw className={`h-3 w-3 ${isRefreshingData ? "animate-spin" : ""}`} />
+                  <span>รีเฟรช</span>
                 </button>
-              )}
+                {countLogs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClearHistoryInitialType("COUNT");
+                      setShowClearHistoryModal(true);
+                    }}
+                    className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors cursor-pointer border border-rose-200"
+                    title="ล้างประวัติการตรวจนับสต็อกทั้งหมดหรือตามช่วงเวลา"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>ล้าง</span>
+                  </button>
+                )}
+              </div>
             </div>
             
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
@@ -1757,6 +1826,16 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
 
               {/* Actions */}
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRefreshAllData}
+                  disabled={isRefreshingData}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-xl cursor-pointer shadow-2xs transition-all disabled:opacity-50"
+                  title="ดึงประวัติการเบิกพัสดุล่าสุดจาก Cloud Firestore"
+                >
+                  <RefreshCw className={`h-4 w-4 text-indigo-600 ${isRefreshingData ? "animate-spin" : ""}`} />
+                  <span>{isRefreshingData ? "กำลังดึง..." : "รีเฟรชประวัติเบิก"}</span>
+                </button>
                 <button
                   onClick={handleExportCSV}
                   disabled={filteredLogs.length === 0}

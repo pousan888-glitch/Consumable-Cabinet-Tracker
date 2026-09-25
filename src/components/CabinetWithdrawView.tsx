@@ -111,7 +111,7 @@ export default function CabinetWithdrawView({
         name: item.name,
         qtyTaken: qty,
         unit: item.unit,
-        imageUrl: item.imageUrl
+        imageUrl: item.imageUrl || ""
       }));
 
       await saveCabinetWithdrawal(
@@ -120,7 +120,7 @@ export default function CabinetWithdrawView({
         selectedDept,
         withdrawnBy.trim(),
         itemsPayload,
-        note.trim() || undefined,
+        note.trim(),
         "CABINET_QR"
       );
 

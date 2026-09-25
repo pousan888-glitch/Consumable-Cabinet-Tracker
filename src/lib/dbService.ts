@@ -80,6 +80,75 @@ function convertToTimestamps<T>(obj: any): T {
   return newObj as T;
 }
 
+// Deeply sanitize objects so undefined values are never sent to Firestore
+export function sanitizeForFirestore<T>(obj: T): T {
+  if (obj === undefined) return null as any;
+  if (obj === null || typeof obj !== "object") return obj;
+  if (obj instanceof Timestamp) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item)) as any;
+  }
+  const clean: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      clean[key] = sanitizeForFirestore(value);
+    }
+  }
+  return clean;
+}
+
+// Offline pending log queues
+const PENDING_QC_LOGS_KEY = "cabinet_pending_qc_logs";
+const PENDING_COUNT_LOGS_KEY = "cabinet_pending_count_logs";
+
+export function queuePendingLog(type: "qc" | "count", log: any) {
+  if (typeof window === "undefined") return;
+  const key = type === "qc" ? PENDING_QC_LOGS_KEY : PENDING_COUNT_LOGS_KEY;
+  try {
+    const list = getLocal<any>(key);
+    if (!list.some(x => x.id === log.id)) {
+      list.push(log);
+      setLocal(key, list);
+    }
+  } catch (e) {
+    console.warn("Error queuing pending log:", e);
+  }
+}
+
+export function removePendingLog(type: "qc" | "count", id: string) {
+  if (typeof window === "undefined") return;
+  const key = type === "qc" ? PENDING_QC_LOGS_KEY : PENDING_COUNT_LOGS_KEY;
+  try {
+    const list = getLocal<any>(key).filter(x => x.id !== id);
+    setLocal(key, list);
+  } catch (e) {
+    console.warn("Error removing pending log:", e);
+  }
+}
+
+export async function syncPendingLogs(): Promise<void> {
+  if (isOfflineFallback || typeof window === "undefined") return;
+  const pendingQC = getLocal<QCConsumptionHistory>(PENDING_QC_LOGS_KEY);
+  for (const item of pendingQC) {
+    try {
+      await withTimeout(setDoc(doc(db, "qc_consumption_history", item.id), sanitizeForFirestore(item)), 4000);
+      removePendingLog("qc", item.id);
+    } catch {
+      // Retain for future try
+    }
+  }
+
+  const pendingCount = getLocal<CountHistory>(PENDING_COUNT_LOGS_KEY);
+  for (const item of pendingCount) {
+    try {
+      await withTimeout(setDoc(doc(db, "count_history", item.id), sanitizeForFirestore(item)), 4000);
+      removePendingLog("count", item.id);
+    } catch {
+      // Retain for future try
+    }
+  }
+}
+
 // Persistent tombstones to prevent deleted items from resurrecting/reappearing upon sync
 const DELETED_CONSUMABLES_KEY = "cabinet_deleted_consumables_tombstone";
 const DELETED_CABINETS_KEY = "cabinet_deleted_cabinets_tombstone";
@@ -1159,32 +1228,36 @@ export async function saveCountHistory(
 
   if (isOfflineFallback) return;
 
-  // 2. Sync to Cloud
+  // 2. Sync to Cloud with fallback queue
   try {
-    const batch = writeBatch(db);
-    batch.set(doc(db, "count_history", logId), countLog);
+    const cleanLog = sanitizeForFirestore(countLog);
+    await withTimeout(setDoc(doc(db, "count_history", logId), cleanLog), 5000);
 
-    itemCounts.forEach(item => {
-      const ref = doc(db, "consumables", item.consumableId);
-      batch.update(ref, {
-        currentQty: item.newQty,
-        lastUpdated: Timestamp.now(),
-        lastUpdatedBy: checkedBy
-      });
-    });
-
-    await batch.commit();
+    for (const item of itemCounts) {
+      try {
+        const ref = doc(db, "consumables", item.consumableId);
+        await updateDoc(ref, {
+          currentQty: item.newQty,
+          lastUpdated: Timestamp.now(),
+          lastUpdatedBy: checkedBy
+        });
+      } catch (itemErr) {
+        console.warn(`Could not update count for consumable ${item.consumableId}:`, itemErr);
+      }
+    }
+    removePendingLog("count", logId);
   } catch (err) {
     recordCloudError(err);
-    console.warn("Notice: Count audit saved locally, Cloud sync deferred:", err);
+    console.warn("Notice: Count audit saved locally, queued for Cloud sync:", err);
+    queuePendingLog("count", countLog);
   }
 }
 
-// Save QC / Cabinet Consumption History (Fault-Tolerant)
+// Save QC / Cabinet Consumption History (Fault-Tolerant & Realtime Cloud-Synced)
 export async function saveQCConsumption(
   department: string, 
   consumedBy: string, 
-  items: { consumableId: string; name: string; qtyTaken: number; unit: string; cabinetId: string; cabinetName: string; imageUrl?: string }[],
+  items: { consumableId: string; name: string; qtyTaken: number; unit: string; cabinetId?: string; cabinetName?: string; imageUrl?: string }[],
   extra?: {
     source?: "QC" | "CABINET_QR" | "HELPER" | "DIRECT";
     cabinetId?: string;
@@ -1193,28 +1266,39 @@ export async function saveQCConsumption(
   }
 ): Promise<void> {
   const logId = (extra?.source === "CABINET_QR" ? "wd-" : "qc-") + generateId();
+  
+  const cleanItems = items.map(item => ({
+    consumableId: item.consumableId || "",
+    name: item.name || "",
+    qtyTaken: Number(item.qtyTaken) || 0,
+    unit: item.unit || "ชิ้น",
+    cabinetId: item.cabinetId || extra?.cabinetId || "",
+    cabinetName: item.cabinetName || extra?.cabinetName || "",
+    imageUrl: item.imageUrl || ""
+  }));
+
   const qcLog: QCConsumptionHistory = {
     id: logId,
-    department,
+    department: department || "CMT",
     consumedAt: Timestamp.now(),
-    consumedBy,
-    items,
+    consumedBy: consumedBy || "ผู้ใช้งาน",
+    items: cleanItems,
     source: extra?.source || "QC",
-    cabinetId: extra?.cabinetId,
-    cabinetName: extra?.cabinetName,
-    note: extra?.note
+    cabinetId: extra?.cabinetId || "",
+    cabinetName: extra?.cabinetName || "",
+    note: extra?.note || ""
   };
 
-  // 1. Update locally
+  // 1. Update locally in browser cache
   const qcList = getLocalQCConsumptionHistory();
   qcList.unshift(qcLog);
   setLocal("local_qc_consumption_history", qcList);
 
   const consumables = getLocalConsumables();
-  items.forEach(item => {
+  cleanItems.forEach(item => {
     const idx = consumables.findIndex(c => c.id === item.consumableId);
     if (idx !== -1) {
-      const currentQty = consumables[idx].currentQty || 0;
+      const currentQty = consumables[idx].currentQty ?? 0;
       consumables[idx].currentQty = Math.max(0, currentQty - item.qtyTaken);
       consumables[idx].lastUpdated = Timestamp.now();
       consumables[idx].lastUpdatedBy = consumedBy;
@@ -1224,29 +1308,46 @@ export async function saveQCConsumption(
 
   if (isOfflineFallback) return;
 
-  // 2. Sync to Cloud
+  // 2. Sync directly to Cloud Firestore
   try {
-    const batch = writeBatch(db);
-    batch.set(doc(db, "qc_consumption_history", logId), qcLog);
+    const cleanLog = sanitizeForFirestore(qcLog);
 
-    for (const item of items) {
-      const consumableRef = doc(db, "consumables", item.consumableId);
-      const docSnap = await getDoc(consumableRef);
-      if (docSnap.exists()) {
-        const currentQty = docSnap.data().currentQty || 0;
-        const newQty = Math.max(0, currentQty - item.qtyTaken);
-        batch.update(consumableRef, {
-          currentQty: newQty,
-          lastUpdated: Timestamp.now(),
-          lastUpdatedBy: consumedBy
-        });
+    // Primary: Write withdrawal record document first so it immediately shows in Admin Dashboard
+    await withTimeout(
+      setDoc(doc(db, "qc_consumption_history", logId), cleanLog),
+      6000
+    );
+
+    // Secondary: Update each consumable stock in Cloud Firestore
+    for (const item of cleanItems) {
+      try {
+        const consumableRef = doc(db, "consumables", item.consumableId);
+        const docSnap = await withTimeout(getDoc(consumableRef), 4000);
+        if (docSnap.exists()) {
+          const cloudQty = docSnap.data().currentQty ?? 0;
+          const newQty = Math.max(0, cloudQty - item.qtyTaken);
+          await updateDoc(consumableRef, {
+            currentQty: newQty,
+            lastUpdated: Timestamp.now(),
+            lastUpdatedBy: consumedBy
+          });
+        } else {
+          // If consumable is not yet in cloud, upload it with deducted quantity
+          const localItem = consumables.find(c => c.id === item.consumableId);
+          if (localItem) {
+            await setDoc(consumableRef, sanitizeForFirestore(localItem));
+          }
+        }
+      } catch (itemErr) {
+        console.warn(`Could not update cloud qty for item ${item.consumableId}:`, itemErr);
       }
     }
 
-    await batch.commit();
+    removePendingLog("qc", logId);
   } catch (err) {
     recordCloudError(err);
-    console.warn("Notice: Consumption saved locally, Cloud sync deferred:", err);
+    console.warn("Notice: Consumption saved locally, queued for Cloud sync:", err);
+    queuePendingLog("qc", qcLog);
   }
 }
 
@@ -1261,65 +1362,143 @@ export async function saveCabinetWithdrawal(
   source: "CABINET_QR" | "HELPER" | "DIRECT" = "CABINET_QR"
 ): Promise<void> {
   const formattedItems = items.map(item => ({
-    consumableId: item.consumableId,
-    name: item.name,
-    qtyTaken: item.qtyTaken,
-    unit: item.unit,
-    cabinetId,
-    cabinetName,
-    imageUrl: item.imageUrl
+    consumableId: item.consumableId || "",
+    name: item.name || "",
+    qtyTaken: Number(item.qtyTaken) || 0,
+    unit: item.unit || "ชิ้น",
+    cabinetId: cabinetId || "",
+    cabinetName: cabinetName || "",
+    imageUrl: item.imageUrl || ""
   }));
 
-  return saveQCConsumption(department, withdrawnBy, formattedItems, {
+  return saveQCConsumption(department || "CMT", withdrawnBy || "ผู้เบิกพัสดุ", formattedItems, {
     source,
-    cabinetId,
-    cabinetName,
-    note
+    cabinetId: cabinetId || "",
+    cabinetName: cabinetName || "",
+    note: (note || "").trim()
   });
 }
 
-// Fetch Counting History Logs (Fault-Tolerant)
+// Fetch Counting History Logs (Fault-Tolerant & Index-Safe)
 export async function getCountHistory(): Promise<CountHistory[]> {
   const localList = getLocalCountHistory();
   if (isOfflineFallback) return localList;
 
+  // Sync any offline queued logs first
+  syncPendingLogs().catch(() => {});
+
   try {
-    const snap = await withTimeout(
-      getDocs(query(collection(db, "count_history"), orderBy("checkedAt", "desc"))),
-      4000
-    );
-    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CountHistory));
-    if (cloudList.length > 0) {
-      setLocal("local_count_history", cloudList);
-      return cloudList;
+    let snap;
+    try {
+      snap = await withTimeout(
+        getDocs(query(collection(db, "count_history"), orderBy("checkedAt", "desc"))),
+        5000
+      );
+    } catch (queryErr) {
+      console.warn("Retrying count_history query without orderBy:", queryErr);
+      snap = await withTimeout(
+        getDocs(collection(db, "count_history")),
+        5000
+      );
     }
-    return localList;
+
+    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CountHistory));
+
+    const mergedMap = new Map<string, CountHistory>();
+    cloudList.forEach(item => mergedMap.set(item.id, item));
+    localList.forEach(item => {
+      if (!mergedMap.has(item.id)) {
+        mergedMap.set(item.id, item);
+      }
+    });
+
+    const combined = Array.from(mergedMap.values());
+    combined.sort((a, b) => parseLogDateMs(b.checkedAt) - parseLogDateMs(a.checkedAt));
+
+    setLocal("local_count_history", combined);
+    return combined;
   } catch (err) {
     recordCloudError(err);
     return localList;
   }
 }
 
-// Fetch QC Consumption History Logs (Fault-Tolerant)
+// Fetch QC Consumption History Logs (Fault-Tolerant & Index-Safe)
 export async function getQCConsumptionHistory(): Promise<QCConsumptionHistory[]> {
   const localList = getLocalQCConsumptionHistory();
   if (isOfflineFallback) return localList;
 
+  // Sync any offline queued logs first
+  syncPendingLogs().catch(() => {});
+
   try {
-    const snap = await withTimeout(
-      getDocs(query(collection(db, "qc_consumption_history"), orderBy("consumedAt", "desc"))),
-      4000
-    );
-    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as QCConsumptionHistory));
-    if (cloudList.length > 0) {
-      setLocal("local_qc_consumption_history", cloudList);
-      return cloudList;
+    let snap;
+    try {
+      snap = await withTimeout(
+        getDocs(query(collection(db, "qc_consumption_history"), orderBy("consumedAt", "desc"))),
+        5000
+      );
+    } catch (queryErr) {
+      console.warn("Retrying qc_consumption_history query without orderBy:", queryErr);
+      snap = await withTimeout(
+        getDocs(collection(db, "qc_consumption_history")),
+        5000
+      );
     }
-    return localList;
+
+    const cloudList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as QCConsumptionHistory));
+
+    const mergedMap = new Map<string, QCConsumptionHistory>();
+    cloudList.forEach(item => mergedMap.set(item.id, item));
+    localList.forEach(item => {
+      if (!mergedMap.has(item.id)) {
+        mergedMap.set(item.id, item);
+      }
+    });
+
+    const combined = Array.from(mergedMap.values());
+    combined.sort((a, b) => parseLogDateMs(b.consumedAt) - parseLogDateMs(a.consumedAt));
+
+    setLocal("local_qc_consumption_history", combined);
+    return combined;
   } catch (err) {
     recordCloudError(err);
     return localList;
   }
+}
+
+// Comprehensive Refresh for Admin Dashboard and All Views
+export async function refreshAllDataFromCloud(): Promise<{
+  cabinets: Cabinet[];
+  consumables: Consumable[];
+  qcLogs: QCConsumptionHistory[];
+  countLogs: CountHistory[];
+  departments: DepartmentRecord[];
+  masterConsumables: MasterConsumable[];
+}> {
+  try {
+    await syncPendingLogs();
+  } catch (e) {
+    console.warn("syncPendingLogs during refreshAllDataFromCloud:", e);
+  }
+
+  const [departments, cabinets, consumables, qcLogs, countLogs, masterConsumables] = await Promise.all([
+    getDepartments(),
+    getCabinets(),
+    getConsumables(),
+    getQCConsumptionHistory(),
+    getCountHistory(),
+    getMasterConsumables()
+  ]);
+
+  return {
+    departments,
+    cabinets,
+    consumables,
+    qcLogs,
+    countLogs,
+    masterConsumables
+  };
 }
 
 // ==========================================

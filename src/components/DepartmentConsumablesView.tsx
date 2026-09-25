@@ -21,6 +21,7 @@ import {
   CheckCircle2, 
   Printer, 
   RotateCcw, 
+  RefreshCw,
   Eye, 
   Layers, 
   Minus, 
@@ -53,6 +54,8 @@ interface DepartmentConsumablesViewProps {
   onPreviewImage: (image: { url: string; title: string; subtitle?: string }) => void;
   getCabinetName: (id: string) => string;
   onToast: (msg: string) => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export default function DepartmentConsumablesView({
@@ -66,7 +69,9 @@ export default function DepartmentConsumablesView({
   onAddConsumableForDept,
   onPreviewImage,
   getCabinetName,
-  onToast
+  onToast,
+  onRefresh,
+  isRefreshing = false
 }: DepartmentConsumablesViewProps) {
   // Selected department state (default to "ALL" or first department)
   const [selectedDept, setSelectedDept] = useState<string>("ALL");
@@ -777,6 +782,18 @@ export default function DepartmentConsumablesView({
               <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
               <span>รีเซ็ต</span>
             </button>
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 cursor-pointer transition-colors shadow-2xs disabled:opacity-50"
+                title="ดึงยอดสต็อกพัสดุล่าสุดจาก Cloud Firestore"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-indigo-600 ${isRefreshing ? "animate-spin" : ""}`} />
+                <span>{isRefreshing ? "กำลังดึง..." : "รีเฟรชสต็อก"}</span>
+              </button>
+            )}
             <button
               onClick={handlePrintList}
               className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs rounded-xl border border-sky-200 cursor-pointer transition-colors shadow-2xs"
