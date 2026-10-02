@@ -309,29 +309,29 @@ export default function HelperCountView({
             </button>
 
             {/* Mode Switcher Tabs */}
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/70">
+            <div className="flex bg-slate-200/80 p-1 rounded-2xl border border-slate-300/80 gap-1 shadow-inner">
               <button
                 onClick={() => handleSwitchMode("count")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                   currentMode === "count"
-                    ? "bg-white text-indigo-600 shadow-xs border border-indigo-200/80"
-                    : "text-slate-500 hover:text-slate-800"
+                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
                 }`}
               >
                 <ClipboardCheck className="h-3.5 w-3.5" />
-                <span>ตรวจนับสต็อก</span>
+                <span>สแกนนับสต็อก</span>
               </button>
 
               <button
                 onClick={() => handleSwitchMode("withdraw")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                   currentMode === "withdraw"
-                    ? "bg-white text-orange-600 shadow-xs border border-orange-200/80"
-                    : "text-slate-500 hover:text-slate-800"
+                    ? "bg-orange-600 text-white shadow-sm shadow-orange-600/20"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
                 }`}
               >
                 <PackageMinus className="h-3.5 w-3.5" />
-                <span>เบิกพัสดุ</span>
+                <span>สแกนเบิกของ</span>
               </button>
             </div>
 
@@ -375,9 +375,9 @@ export default function HelperCountView({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent flex flex-col justify-end p-6">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="bg-indigo-600 text-white font-black text-[11px] px-3 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
-                      <ClipboardCheck className="h-3.5 w-3.5" />
-                      โหมดตรวจนับสต็อก (Stock Count)
+                    <span className="bg-indigo-600 text-white font-black text-xs px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5 border border-indigo-400">
+                      <ClipboardCheck className="h-4 w-4" />
+                      สแกนนับสต็อก (โหมดตรวจนับสำหรับ Helper)
                     </span>
                     <span className="text-[11px] text-white/80 bg-black/40 backdrop-blur-xs px-2.5 py-0.5 rounded-full">
                       {selectedCabinet.location}
@@ -709,8 +709,18 @@ export default function HelperCountView({
           ระบบตู้เก็บพัสดุและวัสดุสิ้นเปลือง
         </h1>
         <p className="text-slate-500 text-xs sm:text-sm mt-1.5 max-w-lg mx-auto leading-relaxed">
-          เลือกตู้เพื่อทำการ <strong>ตรวจนับสต็อก</strong> หรือ <strong>เบิกของไปใช้งาน</strong> หรือเปิดดู QR Code ประจำแต่ละตู้
+          เลือกตู้เพื่อทำการตรวจนับหรือเบิกพัสดุ หรือกดไอคอน QR Code เพื่อพิมพ์สติกเกอร์ติดตู้
         </p>
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+          <span className="inline-flex items-center gap-1.5 bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-black px-3 py-1 rounded-full shadow-2xs">
+            <ClipboardCheck className="h-3.5 w-3.5 text-indigo-700" />
+            <span>สแกนนับสต็อก (สำหรับ Helper ตรวจนับ)</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 bg-orange-100 text-orange-950 border border-orange-200 text-xs font-black px-3 py-1 rounded-full shadow-2xs">
+            <PackageMinus className="h-3.5 w-3.5 text-orange-700" />
+            <span>สแกนเบิกของ (สำหรับหยิบใช้และตัดสต็อก)</span>
+          </span>
+        </div>
       </div>
 
       {/* Department Filter Badges */}
@@ -828,21 +838,23 @@ export default function HelperCountView({
               </div>
 
               {/* Action Buttons Footer on Cabinet Card */}
-              <div className="bg-slate-50/80 p-3 border-t border-slate-100 grid grid-cols-2 gap-2">
+              <div className="bg-slate-50/90 p-3 border-t border-slate-200/80 grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleSelectCabinet(cabinet, "count")}
-                  className="py-2.5 px-3 bg-white hover:bg-indigo-50 text-indigo-700 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                  className="py-2.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-2 border-indigo-200 hover:border-indigo-400 rounded-xl text-xs font-black cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                  title="เข้าสู่โหมดตรวจนับสต็อกสำหรับ Helper"
                 >
-                  <ClipboardCheck className="h-3.5 w-3.5 text-indigo-600" />
-                  <span>ตรวจนับสต็อก</span>
+                  <ClipboardCheck className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <span>สแกนนับสต็อก</span>
                 </button>
 
                 <button
                   onClick={() => handleSelectCabinet(cabinet, "withdraw")}
-                  className="py-2.5 px-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-orange-600/20 active:scale-95"
+                  className="py-2.5 px-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-black cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-orange-600/25 active:scale-95"
+                  title="เข้าสู่โหมดเบิกพัสดุและตัดสต็อก"
                 >
-                  <PackageMinus className="h-3.5 w-3.5" />
-                  <span>เบิกของจากตู้นี้</span>
+                  <PackageMinus className="h-4 w-4 shrink-0" />
+                  <span>สแกนเบิกของ</span>
                 </button>
               </div>
             </div>

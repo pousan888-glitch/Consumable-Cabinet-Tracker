@@ -1360,10 +1360,11 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                           setQrCabinet(cabinet);
                           setShowQRModal(true);
                         }}
-                        className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50/80 hover:bg-indigo-100/90 border border-indigo-200/80 px-3 py-1.5 rounded-xl cursor-pointer transition-all ios-press shadow-2xs"
+                        className="flex items-center gap-1.5 text-xs font-black text-indigo-700 bg-indigo-50/90 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl cursor-pointer transition-all ios-press shadow-2xs"
+                        title="พิมพ์ QR Code ประจำตู้: สแกนนับสต็อก (Helper) & สแกนเบิกของ (พนักงาน)"
                       >
-                        <QrCode className="h-3.5 w-3.5" />
-                        พิมพ์ QR ตู้
+                        <QrCode className="h-3.5 w-3.5 text-indigo-600" />
+                        QR ประจำตู้ (นับ/เบิก)
                       </button>
 
                       <div className="flex gap-1.5">

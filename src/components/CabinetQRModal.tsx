@@ -9,7 +9,10 @@ import {
   QrCode, 
   PackageMinus, 
   ClipboardCheck, 
-  Layers 
+  Layers,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles
 } from "lucide-react";
 
 interface CabinetQRModalProps {
@@ -18,7 +21,7 @@ interface CabinetQRModalProps {
 }
 
 export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps) {
-  const [activeTab, setActiveTab] = useState<"withdraw" | "count" | "dual">("withdraw");
+  const [activeTab, setActiveTab] = useState<"withdraw" | "count" | "dual">("dual");
   const [copiedType, setCopiedType] = useState<string | null>(null);
 
   const getQRUrl = (mode: "count" | "withdraw") => {
@@ -48,60 +51,99 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
 
     const countUrl = getQRUrl("count");
     const withdrawUrl = getQRUrl("withdraw");
-    const countImg = getQRImageSrc("count", 300);
-    const withdrawImg = getQRImageSrc("withdraw", 300);
+    const countImg = getQRImageSrc("count", 320);
+    const withdrawImg = getQRImageSrc("withdraw", 320);
 
     let bodyHtml = "";
 
     if (activeTab === "withdraw") {
       bodyHtml = `
-        <div class="card withdraw-border">
-          <div class="tag withdraw-tag">QR รหัสเบิกพัสดุ (WITHDRAW TAG)</div>
+        <div class="card withdraw-card">
+          <div class="header-band withdraw-band">
+            <div class="tag-title">📦 สแกนเบิกของ (WITHDRAW)</div>
+            <div class="tag-subtitle">สำหรับพนักงาน / QC / ช่าง หยิบพัสดุไปใช้</div>
+          </div>
           <h2>${cabinet.name}</h2>
           <div class="loc">📍 ตำแหน่ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}</div>
-          <div class="img-box">
-            <img src="${withdrawImg}" alt="QR เบิกของ" />
+          <div class="img-box withdraw-img-box">
+            <img src="${withdrawImg}" alt="QR สแกนเบิกของ" />
           </div>
-          <div class="desc">สแกนด้วยกล้องสมาร์ทโฟน เพื่อเปิดระบบเบิกของและตัดยอดสต็อกทันที</div>
+          <div class="desc withdraw-desc">
+            ⚡ สแกนด้วยกล้องมือถือ เพื่อเปิดระบบเบิกของและตัดยอดสต็อกอัตโนมัติ
+          </div>
+          <div class="badge-notice withdraw-notice">
+            ⚠️ สำหรับการเบิกของไปใช้งานจริงเท่านั้น
+          </div>
           <div class="url">${withdrawUrl}</div>
         </div>
       `;
     } else if (activeTab === "count") {
       bodyHtml = `
-        <div class="card count-border">
-          <div class="tag count-tag">QR ตรวจนับสต็อก (COUNT TAG)</div>
+        <div class="card count-card">
+          <div class="header-band count-band">
+            <div class="tag-title">📋 สแกนนับสต็อก (STOCK COUNT)</div>
+            <div class="tag-subtitle">สำหรับทีมงาน Helper ตรวจเช็กจำนวนจริงบนชั้นวาง</div>
+          </div>
           <h2>${cabinet.name}</h2>
           <div class="loc">📍 ตำแหน่ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}</div>
-          <div class="img-box">
-            <img src="${countImg}" alt="QR ตรวจนับสต็อก" />
+          <div class="img-box count-img-box">
+            <img src="${countImg}" alt="QR สแกนนับสต็อก" />
           </div>
-          <div class="desc">สแกนด้วยกล้องสมาร์ทโฟน เพื่อเปิดระบบเช็กสต็อกและตรวจนับจำนวนพัสดุ</div>
+          <div class="desc count-desc">
+            🔍 สแกนด้วยกล้องมือถือ เพื่อตรวจนับและอัปเดตยอดคงเหลือจริง
+          </div>
+          <div class="badge-notice count-notice">
+            ℹ️ โหมดตรวจนับสต็อก (ไม่ตัดสต็อก / ไม่ออกใบเบิก)
+          </div>
           <div class="url">${countUrl}</div>
         </div>
       `;
     } else {
-      // Dual layout
+      // Dual layout - Ultra High Contrast & Distinction
       bodyHtml = `
         <div class="dual-container">
-          <div class="header-banner">
+          <div class="main-header">
             <h1>${cabinet.name}</h1>
-            <div class="loc">สถานที่: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}</div>
+            <div class="loc">📍 สถานที่ตั้ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}</div>
+            <div class="alert-strip">
+              ⚠️ คำแนะนำ: กรุณาเลือกสแกนให้ถูกต้องตามหน้าที่ (ทีมตรวจนับ สแกนฝั่งสีน้ำเงิน | ผู้เบิกของ สแกนฝั่งสีส้ม)
+            </div>
           </div>
+
           <div class="dual-cards">
-            <div class="card count-border">
-              <div class="tag count-tag">1. สแกนเพื่อตรวจนับสต็อก</div>
-              <div class="img-box">
-                <img src="${countImg}" alt="QR ตรวจนับ" />
+            <!-- Left: COUNT -->
+            <div class="card count-card">
+              <div class="header-band count-band">
+                <div class="tag-title">📋 1. สแกนนับสต็อก</div>
+                <div class="tag-subtitle">เฉพาะทีมงาน Helper (ตรวจนับยอดคงเหลือ)</div>
               </div>
-              <div class="desc">สำหรับทีม Helper / พนักงาน<br>ตรวจนับและอัปเดตจำนวนจริง</div>
+              <div class="img-box count-img-box">
+                <img src="${countImg}" alt="QR สแกนนับสต็อก" />
+              </div>
+              <div class="desc count-desc">
+                สำหรับ Helper ตรวจนับจำนวนพัสดุจริงบนชั้นวาง
+              </div>
+              <div class="badge-notice count-notice">
+                🔍 โหมดเช็กสต็อก • ไม่ตัดยอดออก
+              </div>
               <div class="url">${countUrl}</div>
             </div>
-            <div class="card withdraw-border">
-              <div class="tag withdraw-tag">2. สแกนเพื่อเบิกพัสดุไปใช้</div>
-              <div class="img-box">
-                <img src="${withdrawImg}" alt="QR เบิกของ" />
+
+            <!-- Right: WITHDRAW -->
+            <div class="card withdraw-card">
+              <div class="header-band withdraw-band">
+                <div class="tag-title">📦 2. สแกนเบิกของ</div>
+                <div class="tag-subtitle">พนักงาน / QC / ช่าง (หยิบพัสดุไปใช้)</div>
               </div>
-              <div class="desc">สำหรับพนักงาน / QC / ช่าง<br>สแกนเลือกของและตัดสต็อก</div>
+              <div class="img-box withdraw-img-box">
+                <img src="${withdrawImg}" alt="QR สแกนเบิกของ" />
+              </div>
+              <div class="desc withdraw-desc">
+                สำหรับผู้ใช้งานที่หยิบพัสดุออกจากตู้ไปใช้
+              </div>
+              <div class="badge-notice withdraw-notice">
+                ⚡ สแกนเพื่อตัดยอดสต็อกทันที
+              </div>
               <div class="url">${withdrawUrl}</div>
             </div>
           </div>
@@ -128,49 +170,139 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
             }
             .card { 
               text-align: center; 
-              padding: 30px; 
-              border-radius: 20px; 
-              max-width: 400px; 
+              padding: 24px; 
+              border-radius: 24px; 
+              max-width: 440px; 
               margin: 0 auto;
               background: #fff;
+              overflow: hidden;
             }
-            .withdraw-border { border: 3px solid #f97316; }
-            .count-border { border: 3px solid #4f46e5; }
-            .tag { 
-              display: inline-block; 
-              color: white; 
-              font-weight: 800; 
-              padding: 6px 16px; 
-              border-radius: 9999px; 
-              font-size: 13px; 
-              letter-spacing: 0.5px;
-            }
-            .withdraw-tag { background: #ea580c; }
-            .count-tag { background: #4f46e5; }
-            h1 { font-size: 26px; margin: 0 0 6px 0; font-weight: 900; color: #0f172a; }
-            h2 { font-size: 22px; margin: 16px 0 6px 0; font-weight: 900; color: #0f172a; }
-            .loc { color: #64748b; font-size: 13px; margin-bottom: 20px; font-weight: 600; }
-            .img-box {
-              background: #f8fafc;
-              padding: 16px;
-              border-radius: 16px;
-              display: inline-block;
-              margin-bottom: 16px;
-              border: 1px dashed #cbd5e1;
-            }
-            img { width: 240px; height: 240px; display: block; }
-            .desc { font-size: 13px; color: #334155; font-weight: 700; line-height: 1.5; margin-bottom: 12px; }
-            .url { font-size: 9px; color: #94a3b8; font-family: monospace; word-break: break-all; border-top: 1px solid #f1f5f9; padding-top: 10px; }
             
-            .dual-container { max-width: 820px; text-align: center; border: 3px solid #0f172a; border-radius: 24px; padding: 25px; }
-            .header-banner { border-bottom: 2px dashed #cbd5e1; padding-bottom: 15px; margin-bottom: 20px; }
-            .dual-cards { display: flex; gap: 20px; justify-content: center; }
-            .dual-cards .card { flex: 1; max-width: 370px; }
+            .count-card { 
+              border: 4px solid #4338ca; 
+              background: #fdfdfe;
+            }
+            .withdraw-card { 
+              border: 4px solid #ea580c; 
+              background: #fffdfa;
+            }
+
+            .header-band {
+              border-radius: 16px;
+              padding: 12px 14px;
+              margin-bottom: 16px;
+              color: white;
+            }
+            .count-band {
+              background: #312e81;
+            }
+            .withdraw-band {
+              background: #c2410c;
+            }
+
+            .tag-title {
+              font-size: 20px;
+              font-weight: 900;
+              letter-spacing: 0.5px;
+              line-height: 1.3;
+            }
+            .tag-subtitle {
+              font-size: 13px;
+              font-weight: 700;
+              opacity: 0.95;
+              margin-top: 4px;
+            }
+
+            h1 { font-size: 26px; margin: 0 0 4px 0; font-weight: 900; color: #0f172a; }
+            h2 { font-size: 22px; margin: 4px 0 4px 0; font-weight: 900; color: #0f172a; }
+            .loc { color: #475569; font-size: 13px; margin-bottom: 16px; font-weight: 600; }
+            
+            .alert-strip {
+              background: #fef3c7;
+              border: 2px solid #f59e0b;
+              color: #92400e;
+              padding: 8px 16px;
+              border-radius: 12px;
+              font-size: 13px;
+              font-weight: 800;
+              margin-bottom: 20px;
+              display: inline-block;
+            }
+
+            .img-box {
+              padding: 14px;
+              border-radius: 20px;
+              display: inline-block;
+              margin-bottom: 14px;
+              background: #ffffff;
+            }
+            .count-img-box {
+              border: 3px solid #c7d2fe;
+            }
+            .withdraw-img-box {
+              border: 3px solid #fed7aa;
+            }
+
+            img { width: 220px; height: 220px; display: block; }
+            
+            .desc { 
+              font-size: 14px; 
+              font-weight: 800; 
+              line-height: 1.4; 
+              margin-bottom: 10px; 
+            }
+            .count-desc { color: #312e81; }
+            .withdraw-desc { color: #9a3412; }
+
+            .badge-notice {
+              display: inline-block;
+              font-size: 12px;
+              font-weight: 800;
+              padding: 5px 12px;
+              border-radius: 9999px;
+              margin-bottom: 12px;
+            }
+            .count-notice {
+              background: #e0e7ff;
+              color: #3730a3;
+              border: 1px solid #c7d2fe;
+            }
+            .withdraw-notice {
+              background: #ffedd5;
+              color: #9a3412;
+              border: 1px solid #fed7aa;
+            }
+
+            .url { font-size: 9px; color: #94a3b8; font-family: monospace; word-break: break-all; border-top: 1px solid #f1f5f9; padding-top: 8px; }
+            
+            .dual-container { 
+              max-width: 880px; 
+              text-align: center; 
+              border: 4px solid #0f172a; 
+              border-radius: 28px; 
+              padding: 24px; 
+              background: #ffffff;
+            }
+            .main-header { 
+              border-bottom: 2px dashed #cbd5e1; 
+              padding-bottom: 14px; 
+              margin-bottom: 20px; 
+            }
+            .dual-cards { 
+              display: flex; 
+              gap: 20px; 
+              justify-content: center; 
+            }
+            .dual-cards .card { 
+              flex: 1; 
+              max-width: 400px; 
+              box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07);
+            }
             .dual-cards img { width: 200px; height: 200px; }
 
             @media print {
               body { padding: 0; min-height: 100vh; }
-              @page { margin: 1cm; size: auto; }
+              @page { margin: 0.8cm; size: auto; }
             }
           </style>
         </head>
@@ -192,10 +324,10 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
 
   return (
     <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden animate-scale-up flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-xl overflow-hidden animate-scale-up flex flex-col max-h-[92vh]">
         
         {/* Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/75">
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
               <QrCode className="h-5 w-5" />
@@ -217,55 +349,161 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
           </button>
         </div>
 
-        {/* Tab Selection */}
-        <div className="p-3 bg-slate-100/70 border-b border-slate-200/80 flex gap-1.5 sm:gap-2">
-          <button
-            onClick={() => setActiveTab("withdraw")}
-            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === "withdraw"
-                ? "bg-white text-orange-600 shadow-sm border border-orange-200/80"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-            }`}
-          >
-            <PackageMinus className="h-3.5 w-3.5" />
-            <span>QR เบิกของ (ใหม่)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("count")}
-            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-              activeTab === "count"
-                ? "bg-white text-indigo-600 shadow-sm border border-indigo-200/80"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
-            }`}
-          >
-            <ClipboardCheck className="h-3.5 w-3.5" />
-            <span>QR ตรวจนับสต็อก</span>
-          </button>
-
+        {/* High Visibility Tab Selection */}
+        <div className="p-3 bg-slate-100/80 border-b border-slate-200/90 grid grid-cols-3 gap-1.5 sm:gap-2">
+          {/* Dual Tab (Recommended for Cabinets) */}
           <button
             onClick={() => setActiveTab("dual")}
-            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === "dual"
-                ? "bg-white text-slate-900 shadow-sm border border-slate-300"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                ? "bg-slate-900 text-white shadow-md shadow-slate-900/20 scale-[1.02]"
+                : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
             }`}
           >
-            <Layers className="h-3.5 w-3.5" />
+            <Layers className="h-3.5 w-3.5 shrink-0" />
             <span>ป้ายพิมพ์คู่ (2 QR)</span>
+          </button>
+
+          {/* Withdraw Tab */}
+          <button
+            onClick={() => setActiveTab("withdraw")}
+            className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+              activeTab === "withdraw"
+                ? "bg-orange-600 text-white shadow-md shadow-orange-600/25 scale-[1.02]"
+                : "text-orange-700 bg-orange-50/70 hover:bg-orange-100/80 hover:text-orange-800"
+            }`}
+          >
+            <PackageMinus className="h-3.5 w-3.5 shrink-0" />
+            <span>สแกนเบิกของ</span>
+          </button>
+
+          {/* Count Tab */}
+          <button
+            onClick={() => setActiveTab("count")}
+            className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 ${
+              activeTab === "count"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/25 scale-[1.02]"
+                : "text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100/80 hover:text-indigo-800"
+            }`}
+          >
+            <ClipboardCheck className="h-3.5 w-3.5 shrink-0" />
+            <span>สแกนนับสต็อก</span>
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto flex-1 font-sans">
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 font-sans">
+          
+          {/* TAB: DUAL (RECOMMENDED FOR STICKERS) */}
+          {activeTab === "dual" && (
+            <div className="flex flex-col items-center text-center">
+              
+              {/* Distinct Instruction Banner */}
+              <div className="w-full bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-2.5 sm:p-3 mb-4 text-left shadow-2xs flex items-center gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <div className="text-xs text-amber-950 font-bold leading-snug">
+                  <span className="text-amber-700 font-black">แยก 2 รหัสชัดเจน:</span> ทีม Helper สแกนฝั่งสีน้ำเงินเพื่อ <span className="underline decoration-indigo-500 decoration-2">นับสต็อก</span> | พนักงานที่หยิบของสแกนฝั่งสีส้มเพื่อ <span className="underline decoration-orange-500 decoration-2">เบิกพัสดุ</span>
+                </div>
+              </div>
+
+              {/* Side-by-side Dual Cards */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 w-full mb-4">
+                
+                {/* 1. COUNT SIDE (INDIGO) */}
+                <div className="border-3 border-indigo-500 rounded-3xl p-3 sm:p-3.5 bg-gradient-to-b from-indigo-50/90 to-indigo-100/30 flex flex-col items-center shadow-sm relative overflow-hidden">
+                  
+                  {/* Huge Bold Title Banner */}
+                  <div className="w-full bg-indigo-600 text-white py-1.5 px-2 rounded-xl text-center shadow-xs mb-1.5 flex flex-col items-center justify-center">
+                    <div className="flex items-center gap-1 font-black text-xs sm:text-sm tracking-wide">
+                      <ClipboardCheck className="h-4 w-4 shrink-0 text-indigo-100" />
+                      <span>1. สแกนนับสต็อก</span>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-extrabold text-indigo-900 bg-white/95 border border-indigo-200/90 px-2.5 py-0.5 rounded-full mb-2 shadow-2xs">
+                    📋 สำหรับทีม Helper
+                  </span>
+
+                  {/* QR Box with High Contrast */}
+                  <div className="bg-white p-2.5 rounded-2xl shadow-xs border-2 border-indigo-200/80 mb-2">
+                    <img
+                      src={getQRImageSrc("count", 180)}
+                      alt="QR สแกนนับสต็อก"
+                      className="h-28 w-28 sm:h-36 sm:w-36 mix-blend-multiply"
+                    />
+                  </div>
+
+                  {/* Role description box */}
+                  <div className="w-full bg-white/95 border border-indigo-200 rounded-xl p-1.5 sm:p-2 text-center shadow-2xs">
+                    <div className="text-[11px] font-black text-indigo-950 flex items-center justify-center gap-1">
+                      <CheckCircle2 className="h-3 w-3 text-indigo-600" />
+                      ตรวจนับจำนวนจริง
+                    </div>
+                    <div className="text-[9px] sm:text-[10px] text-indigo-600 font-bold mt-0.5">
+                      ไม่ออกใบเบิก / ไม่ตัดยอด
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. WITHDRAW SIDE (ORANGE) */}
+                <div className="border-3 border-orange-500 rounded-3xl p-3 sm:p-3.5 bg-gradient-to-b from-orange-50/90 to-orange-100/30 flex flex-col items-center shadow-sm relative overflow-hidden">
+                  
+                  {/* Huge Bold Title Banner */}
+                  <div className="w-full bg-orange-600 text-white py-1.5 px-2 rounded-xl text-center shadow-xs mb-1.5 flex flex-col items-center justify-center">
+                    <div className="flex items-center gap-1 font-black text-xs sm:text-sm tracking-wide">
+                      <PackageMinus className="h-4 w-4 shrink-0 text-orange-100" />
+                      <span>2. สแกนเบิกของ</span>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-extrabold text-orange-950 bg-white/95 border border-orange-200/90 px-2.5 py-0.5 rounded-full mb-2 shadow-2xs">
+                    📦 สำหรับพนักงาน / QC
+                  </span>
+
+                  {/* QR Box with High Contrast */}
+                  <div className="bg-white p-2.5 rounded-2xl shadow-xs border-2 border-orange-200/80 mb-2">
+                    <img
+                      src={getQRImageSrc("withdraw", 180)}
+                      alt="QR สแกนเบิกของ"
+                      className="h-28 w-28 sm:h-36 sm:w-36 mix-blend-multiply"
+                    />
+                  </div>
+
+                  {/* Role description box */}
+                  <div className="w-full bg-white/95 border border-orange-200 rounded-xl p-1.5 sm:p-2 text-center shadow-2xs">
+                    <div className="text-[11px] font-black text-orange-950 flex items-center justify-center gap-1">
+                      <PackageMinus className="h-3 w-3 text-orange-600" />
+                      หยิบของออกจากตู้
+                    </div>
+                    <div className="text-[9px] sm:text-[10px] text-orange-600 font-bold mt-0.5">
+                      ตัดยอดสต็อกทันที
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                คลิกปุ่ม <strong className="text-slate-800">&quot;พิมพ์ภาพ QR ป้ายคู่&quot;</strong> ด้านล่างเพื่อพิมพ์แผ่นสติกเกอร์นำไปติดที่หน้าตู้เก็บจริง
+              </p>
+            </div>
+          )}
+
+          {/* TAB: WITHDRAW ONLY */}
           {activeTab === "withdraw" && (
             <div className="flex flex-col items-center text-center">
-              <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-800 text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider mb-2 border border-orange-200">
-                <PackageMinus className="h-3.5 w-3.5" />
-                QR สำหรับเบิกของออกจากตู้
+              
+              {/* Massive Header Badge */}
+              <div className="w-full bg-gradient-to-r from-orange-600 to-amber-600 text-white py-3 px-4 rounded-2xl shadow-sm mb-2 flex items-center justify-center gap-2">
+                <PackageMinus className="h-5 w-5" />
+                <span className="font-black text-sm sm:text-base tracking-wide">QR สแกนเบิกของ (WITHDRAW)</span>
+              </div>
+
+              <span className="inline-block bg-orange-100 text-orange-900 border border-orange-200 font-extrabold text-xs px-3.5 py-1 rounded-full mb-3">
+                👉 สำหรับพนักงาน / ช่าง / QC สแกนเลือกพัสดุและตัดสต็อก
               </span>
 
-              <h3 className="text-lg font-black text-slate-900 mt-1 mb-1">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 mb-0.5">
                 {cabinet.name}
               </h3>
               <p className="text-slate-500 text-xs font-semibold flex items-center gap-1 mb-4">
@@ -273,19 +511,19 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
                 {cabinet.location} • แผนก: {cabinet.departments.join(", ")}
               </p>
 
-              {/* QR Box */}
-              <div className="p-4 bg-orange-50/50 border-2 border-dashed border-orange-200 rounded-2xl mb-4 relative shadow-inner">
+              {/* QR Box with Orange Border */}
+              <div className="p-4 bg-orange-50/50 border-3 border-orange-400 rounded-3xl mb-4 relative shadow-md">
                 <img
                   src={getQRImageSrc("withdraw", 260)}
-                  alt="QR เบิกของ"
+                  alt="QR สแกนเบิกของ"
                   className="h-44 w-44 sm:h-52 sm:w-52 mx-auto mix-blend-multiply"
                 />
               </div>
 
-              <p className="text-slate-600 text-xs font-medium max-w-sm leading-relaxed mb-4">
-                สแกนแผ่น QR นี้ด้วยกล้องโทรศัพท์มือถือ เพื่อเข้าสู่หน้าจอ
-                <strong className="text-orange-600 font-bold"> &quot;เบิกพัสดุออกจากตู้นี้&quot; </strong> 
-                ตัดยอดสต็อกในระบบอัตโนมัติ และบันทึกลงประวัติ
+              <p className="text-slate-700 text-xs font-semibold max-w-sm leading-relaxed mb-4">
+                สแกนแผ่น QR นี้ด้วยกล้องโทรศัพท์มือถือ เพื่อเปิดหน้าจอ
+                <strong className="text-orange-600 font-black"> &quot;สแกนเบิกของ&quot; </strong> 
+                ระบบจะตัดยอดสต็อกในฐานข้อมูลทันทีเมื่อกดยืนยัน
               </p>
 
               {/* URL Snippet */}
@@ -311,14 +549,21 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
             </div>
           )}
 
+          {/* TAB: COUNT ONLY */}
           {activeTab === "count" && (
             <div className="flex flex-col items-center text-center">
-              <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider mb-2 border border-indigo-200">
-                <ClipboardCheck className="h-3.5 w-3.5" />
-                QR สำหรับตรวจนับสต็อก
+              
+              {/* Massive Header Badge */}
+              <div className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white py-3 px-4 rounded-2xl shadow-sm mb-2 flex items-center justify-center gap-2">
+                <ClipboardCheck className="h-5 w-5" />
+                <span className="font-black text-sm sm:text-base tracking-wide">QR สแกนนับสต็อก (STOCK COUNT)</span>
+              </div>
+
+              <span className="inline-block bg-indigo-100 text-indigo-900 border border-indigo-200 font-extrabold text-xs px-3.5 py-1 rounded-full mb-3">
+                👉 สำหรับทีม Helper สแกนเพื่อนับและอัปเดตจำนวนจริงบนชั้นวาง
               </span>
 
-              <h3 className="text-lg font-black text-slate-900 mt-1 mb-1">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 mb-0.5">
                 {cabinet.name}
               </h3>
               <p className="text-slate-500 text-xs font-semibold flex items-center gap-1 mb-4">
@@ -326,19 +571,19 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
                 {cabinet.location} • แผนก: {cabinet.departments.join(", ")}
               </p>
 
-              {/* QR Box */}
-              <div className="p-4 bg-indigo-50/50 border-2 border-dashed border-indigo-200 rounded-2xl mb-4 relative shadow-inner">
+              {/* QR Box with Indigo Border */}
+              <div className="p-4 bg-indigo-50/50 border-3 border-indigo-400 rounded-3xl mb-4 relative shadow-md">
                 <img
                   src={getQRImageSrc("count", 260)}
-                  alt="QR ตรวจนับสต็อก"
+                  alt="QR สแกนนับสต็อก"
                   className="h-44 w-44 sm:h-52 sm:w-52 mx-auto mix-blend-multiply"
                 />
               </div>
 
-              <p className="text-slate-600 text-xs font-medium max-w-sm leading-relaxed mb-4">
+              <p className="text-slate-700 text-xs font-semibold max-w-sm leading-relaxed mb-4">
                 สแกนแผ่น QR นี้เพื่อเข้าสู่หน้าจอ
-                <strong className="text-indigo-600 font-bold"> &quot;ตรวจนับสต็อกพัสดุ&quot; </strong> 
-                สำหรับทีมงาน Helper ตรวจนับจำนวนจริงบนชั้นวาง
+                <strong className="text-indigo-600 font-black"> &quot;สแกนนับสต็อก&quot; </strong> 
+                สำหรับทีมงาน Helper ตรวจนับจำนวนจริงและอัปเดตยอดคงเหลือ
               </p>
 
               {/* URL Snippet */}
@@ -364,60 +609,21 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
             </div>
           )}
 
-          {activeTab === "dual" && (
-            <div className="flex flex-col items-center text-center">
-              <div className="bg-slate-100 text-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl mb-4">
-                📄 ป้ายสติกเกอร์คู่: รวม QR นับสต็อก + QR เบิกของ ในแผ่นเดียว สำหรับติดหน้าตู้จริง
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 w-full mb-4">
-                {/* Count Side */}
-                <div className="border-2 border-indigo-200 rounded-2xl p-3 bg-indigo-50/30 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full mb-2">
-                    1. สแกนนับสต็อก
-                  </span>
-                  <img
-                    src={getQRImageSrc("count", 180)}
-                    alt="QR Count"
-                    className="h-28 w-28 sm:h-32 sm:w-32 mix-blend-multiply mb-2"
-                  />
-                  <span className="text-[10px] text-slate-500 font-semibold">Helper ตรวจนับของ</span>
-                </div>
-
-                {/* Withdraw Side */}
-                <div className="border-2 border-orange-200 rounded-2xl p-3 bg-orange-50/30 flex flex-col items-center">
-                  <span className="text-[10px] font-black text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full mb-2">
-                    2. สแกนเบิกของ
-                  </span>
-                  <img
-                    src={getQRImageSrc("withdraw", 180)}
-                    alt="QR Withdraw"
-                    className="h-28 w-28 sm:h-32 sm:w-32 mix-blend-multiply mb-2"
-                  />
-                  <span className="text-[10px] text-slate-500 font-semibold">พนักงาน/QC หยิบใช้</span>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-500 leading-relaxed">
-                คลิกปุ่ม &quot;พิมพ์ภาพ QR&quot; ด้านล่างเพื่อพิมพ์ป้ายสติกเกอร์คู่นี้ไปติดที่หน้าบานประตูตู้
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Footer actions */}
         <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-100 flex items-center gap-3">
           <button
             onClick={handlePrint}
-            className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md transition-all flex items-center justify-center gap-2"
+            className="flex-1 py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm rounded-xl cursor-pointer shadow-md transition-all flex items-center justify-center gap-2 active:scale-98"
           >
             <Printer className="h-4 w-4" />
-            <span>พิมพ์ภาพ QR ({activeTab === "dual" ? "ป้ายคู่" : activeTab === "withdraw" ? "QR เบิกของ" : "QR นับสต็อก"})</span>
+            <span>พิมพ์ภาพ QR ({activeTab === "dual" ? "ป้ายคู่ติดหน้าตู้" : activeTab === "withdraw" ? "สแกนเบิกของ" : "สแกนนับสต็อก"})</span>
           </button>
 
           <button
             onClick={onClose}
-            className="py-3 px-5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer transition-all"
+            className="py-3 px-5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition-all"
           >
             ปิด
           </button>

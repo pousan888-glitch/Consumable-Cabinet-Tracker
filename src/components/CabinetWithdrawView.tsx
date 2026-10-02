@@ -191,9 +191,9 @@ export default function CabinetWithdrawView({
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/50 to-transparent flex flex-col justify-end p-6">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="bg-orange-600 text-white font-black text-[11px] px-3 py-1 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1">
-                <PackageMinus className="h-3.5 w-3.5" />
-                โหมดเบิกพัสดุ (Withdrawal Mode)
+              <span className="bg-orange-600 text-white font-black text-xs px-3.5 py-1.5 rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5 border border-orange-400">
+                <PackageMinus className="h-4 w-4" />
+                สแกนเบิกของ (โหมดเบิกพัสดุออกจากตู้)
               </span>
               <span className="text-[11px] text-white/80 bg-black/40 backdrop-blur-xs px-2.5 py-0.5 rounded-full">
                 {cabinet.location}
