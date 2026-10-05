@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+.agents/
+.agent/
+.claude/
+.cursor/
+.continue/
+.devin/
+.windsurf/

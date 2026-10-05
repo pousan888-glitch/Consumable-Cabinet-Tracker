@@ -1,45 +1,371 @@
 rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model & Architecture
+// ===============================================================
+//
+// Application: Warehouse & Department Consumables Smart Cabinet Monitor
+//
+// Collection: /cabinets/{cabinetId}
+//   - name: string (1..100) - Cabinet display name
+//   - location: string (1..100) - Physical location inside factory
+//   - departments: list of strings (max 20) - Assigned departments
+//   - photoUrl: optional string (<= 2000) - Photo of cabinet
+//   - createdAt: optional string (<= 50) - Creation ISO timestamp
+//
+// Collection: /consumables/{consumableId}
+//   - cabinetId: string (1..128) - Parent cabinet reference ID
+//   - name: string (1..100) - Consumable item name
+//   - department: string (1..50) - Department ownership
+//   - currentQty: number (>= 0) - Real-time stock count
+//   - minThreshold: optional number (>= 0) - Safety minimum threshold
+//   - maxThreshold: optional number (>= 0) - Restock capacity
+//   - unit: optional string (<= 30) - Unit of measure (e.g., pcs, box)
+//   - imageUrl: optional string (<= 2000) - Item picture
+//   - lastUpdated: optional string (<= 50) - Timestamp of last update
+//   - lastUpdatedBy: optional string (<= 100) - Name/email of last updater
+//
+// Collection: /master_consumables/{masterId}
+//   - code: optional string (<= 50) - SKU or catalog code
+//   - name: string (1..100) - Standard master catalog item name
+//   - category: optional string (<= 50) - Item category
+//   - unit: string (1..30) - Unit of measure
+//   - imageUrl: optional string (<= 2000) - Reference photo
+//   - defaultMinThreshold: optional number (>= 0)
+//   - defaultMaxThreshold: optional number (>= 0)
+//   - description: optional string (<= 500)
+//   - createdAt: optional string (<= 50)
+//   - createdBy: optional string (<= 100)
+//
+// Collection: /count_history/{historyId}
+//   - cabinetId: string (1..128) - Cabinet ID audited
+//   - cabinetName: optional string (<= 100)
+//   - checkedAt: string (1..50) - Audit timestamp
+//   - checkedBy: string (1..100) - Auditor name / email
+//   - items: list of maps (max 200) - Recorded items and counts
+//
+// Collection: /qc_consumption_history/{historyId}
+//   - department: string (1..50) - Department withdrawing
+//   - consumedAt: string (1..50) - Withdrawal timestamp
+//   - consumedBy: string (1..100) - Withdrawer name / email
+//   - source: optional string (<= 50) - Source of withdrawal (e.g. QR, QC, Manual)
+//   - cabinetId: optional string (<= 128)
+//   - cabinetName: optional string (<= 100)
+//   - note: optional string (<= 500)
+//   - items: list of maps (max 200) - Withdrawn items & quantities
+//
+// Collection: /users/{userId}
+//   - email: string (3..150, valid email format)
+//   - name: string (1..100) - Full name
+//   - role: string ('ADMIN', 'QC', 'HELPER', 'VIEWER')
+//   - isSuperAdmin: optional bool
+//   - assignedBy: optional string (<= 100)
+//   - createdAt: optional string (<= 50)
+//   - updatedAt: optional string (<= 50)
+//   - profileCompleted: optional bool
+//
+// Collection: /departments/{deptId}
+//   - name: string (1..50) - Unique department name
+//   - description: optional string (<= 200)
+//   - color: optional string (<= 50)
+//   - createdAt: optional string (<= 50)
+//   - createdBy: optional string (<= 100)
+//
+// System Collections:
+//   - /_tombstones/{tombstoneId} - Deletion synchronization tombstones
+//   - /_metadata/{metaId} - Database sync metadata
+//   - /_sync_test/{testId} - Connection latency tests
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Enable reading and writing to support unauthenticated initial database seeding and client actions
+
+    // ===============================================================
+    // Global Helper & Authentication Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Dedicated Bootstrapped Super Admin verification
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+             request.auth.token.email != null &&
+             request.auth.token.email.lower() == 'pousan888@gmail.com' &&
+             request.auth.token.email_verified == true;
+    }
+
+    // Admin privileges check (Super Admin or verified admin)
+    function isAdmin() {
+      return isSuperAdmin() ||
+             (isAuthenticated() &&
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN');
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(val) {
+      return val is string &&
+             val.size() >= 3 &&
+             val.size() <= 150 &&
+             val.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string &&
+             val.size() >= minLen &&
+             val.size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, data, minLen, maxLen) {
+      return !(field in data) ||
+             (data[field] is string &&
+              data[field].size() >= minLen &&
+              data[field].size() <= maxLen);
+    }
+
+    function isValidNumber(val, minVal) {
+      return val is number && val >= minVal;
+    }
+
+    function isValidOptionalNumber(field, data, minVal) {
+      return !(field in data) ||
+             (data[field] is number && data[field] >= minVal);
+    }
+
+    function isValidList(val, maxSize) {
+      return val is list && val.size() <= maxSize;
+    }
+
+    // ===============================================================
+    // Domain Validator Functions (Validator Function Pattern)
+    // ===============================================================
+
+    function isValidCabinet(data) {
+      return data.keys().hasAll(['name', 'location']) &&
+             data.keys().hasOnly(['id', 'name', 'location', 'departments', 'photoUrl', 'createdAt']) &&
+             isValidString(data.name, 1, 100) &&
+             isValidString(data.location, 1, 100) &&
+             (!('departments' in data) || isValidList(data.departments, 20)) &&
+             isValidOptionalString('photoUrl', data, 0, 2000) &&
+             isValidOptionalString('createdAt', data, 0, 50);
+    }
+
+    function isValidConsumable(data) {
+      return data.keys().hasAll(['cabinetId', 'name', 'currentQty']) &&
+             data.keys().hasOnly([
+               'id', 'cabinetId', 'name', 'department', 'currentQty', 
+               'minThreshold', 'maxThreshold', 'unit', 'imageUrl', 
+               'lastUpdated', 'lastUpdatedBy'
+             ]) &&
+             isValidString(data.cabinetId, 1, 128) &&
+             isValidString(data.name, 1, 100) &&
+             (!('department' in data) || isValidString(data.department, 1, 50)) &&
+             isValidNumber(data.currentQty, 0) &&
+             isValidOptionalNumber('minThreshold', data, 0) &&
+             isValidOptionalNumber('maxThreshold', data, 0) &&
+             isValidOptionalString('unit', data, 0, 30) &&
+             isValidOptionalString('imageUrl', data, 0, 2000) &&
+             isValidOptionalString('lastUpdated', data, 0, 50) &&
+             isValidOptionalString('lastUpdatedBy', data, 0, 100);
+    }
+
+    function isValidMasterConsumable(data) {
+      return data.keys().hasAll(['name', 'unit']) &&
+             data.keys().hasOnly([
+               'id', 'code', 'name', 'category', 'unit', 'imageUrl',
+               'defaultMinThreshold', 'defaultMaxThreshold', 'description',
+               'createdAt', 'createdBy'
+             ]) &&
+             isValidString(data.name, 1, 100) &&
+             isValidString(data.unit, 1, 30) &&
+             isValidOptionalString('code', data, 0, 50) &&
+             isValidOptionalString('category', data, 0, 50) &&
+             isValidOptionalString('imageUrl', data, 0, 2000) &&
+             isValidOptionalNumber('defaultMinThreshold', data, 0) &&
+             isValidOptionalNumber('defaultMaxThreshold', data, 0) &&
+             isValidOptionalString('description', data, 0, 500) &&
+             isValidOptionalString('createdAt', data, 0, 50) &&
+             isValidOptionalString('createdBy', data, 0, 100);
+    }
+
+    function isValidCountHistory(data) {
+      return data.keys().hasAll(['cabinetId', 'checkedAt', 'checkedBy']) &&
+             data.keys().hasOnly(['id', 'cabinetId', 'cabinetName', 'checkedAt', 'checkedBy', 'items']) &&
+             isValidString(data.cabinetId, 1, 128) &&
+             isValidString(data.checkedAt, 1, 50) &&
+             isValidString(data.checkedBy, 1, 100) &&
+             isValidOptionalString('cabinetName', data, 0, 100) &&
+             (!('items' in data) || isValidList(data.items, 200));
+    }
+
+    function isValidQCConsumptionHistory(data) {
+      return data.keys().hasAll(['department', 'consumedAt', 'consumedBy']) &&
+             data.keys().hasOnly([
+               'id', 'department', 'consumedAt', 'consumedBy', 'source',
+               'cabinetId', 'cabinetName', 'note', 'items'
+             ]) &&
+             isValidString(data.department, 1, 50) &&
+             isValidString(data.consumedAt, 1, 50) &&
+             isValidString(data.consumedBy, 1, 100) &&
+             isValidOptionalString('source', data, 0, 50) &&
+             isValidOptionalString('cabinetId', data, 0, 128) &&
+             isValidOptionalString('cabinetName', data, 0, 100) &&
+             isValidOptionalString('note', data, 0, 500) &&
+             (!('items' in data) || isValidList(data.items, 200));
+    }
+
+    function isValidDepartment(data) {
+      return data.keys().hasAll(['name']) &&
+             data.keys().hasOnly(['id', 'name', 'description', 'color', 'createdAt', 'createdBy']) &&
+             isValidString(data.name, 1, 50) &&
+             isValidOptionalString('description', data, 0, 200) &&
+             isValidOptionalString('color', data, 0, 50) &&
+             isValidOptionalString('createdAt', data, 0, 50) &&
+             isValidOptionalString('createdBy', data, 0, 100);
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'name', 'role']) &&
+             data.keys().hasOnly([
+               'id', 'email', 'name', 'role', 'isSuperAdmin', 
+               'assignedBy', 'createdAt', 'updatedAt', 'profileCompleted'
+             ]) &&
+             isValidEmail(data.email) &&
+             isValidString(data.name, 1, 100) &&
+             data.role in ['ADMIN', 'QC', 'HELPER', 'VIEWER'] &&
+             (!('isSuperAdmin' in data) || data.isSuperAdmin is bool) &&
+             isValidOptionalString('assignedBy', data, 0, 100) &&
+             isValidOptionalString('createdAt', data, 0, 50) &&
+             isValidOptionalString('updatedAt', data, 0, 50) &&
+             (!('profileCompleted' in data) || data.profileCompleted is bool);
+    }
+
+    // ===============================================================
+    // Rules Specifications for Application Collections
+    // ===============================================================
+
+    // 1. Cabinets Collection
     match /cabinets/{cabinetId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidCabinet(request.resource.data);
+      allow update: if isAdmin() && isValidCabinet(request.resource.data);
+      allow delete: if isAdmin();
     }
-    
+
+    // 2. Consumables Inventory
     match /consumables/{consumableId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidConsumable(request.resource.data);
+      
+      // Admin can update all fields; Helpers/Workers can update inventory quantities & timestamps during withdrawal/audit
+      allow update: if isAuthenticated() && isValidConsumable(request.resource.data) && (
+        isAdmin() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentQty', 'lastUpdated', 'lastUpdatedBy'])
+      );
+      
+      allow delete: if isAdmin();
     }
-    
+
+    // 3. Master Consumables Catalog
     match /master_consumables/{masterId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidMasterConsumable(request.resource.data);
+      allow update: if isAdmin() && isValidMasterConsumable(request.resource.data);
+      allow delete: if isAdmin();
     }
-    
+
+    // 4. Inventory Count Session Logs
     match /count_history/{historyId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidCountHistory(request.resource.data);
+      allow update: if isAdmin() && isValidCountHistory(request.resource.data);
+      allow delete: if isAdmin();
     }
-    
+
+    // 5. QC & Parcel Consumption / Withdrawal Audit Logs
     match /qc_consumption_history/{historyId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidQCConsumptionHistory(request.resource.data);
+      allow update: if isAdmin() && isValidQCConsumptionHistory(request.resource.data);
+      allow delete: if isAdmin();
     }
-    
+
+    // 6. User Profiles & Role-Based Access Control (RBAC)
     match /users/{userId} {
-      allow read, write: if true;
+      // PII Protection: Users can read their own profile; Admin can list/audit all profiles
+      allow get: if isAuthenticated() && (
+        isOwner(userId) ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == resource.data.email.lower()) ||
+        isAdmin()
+      );
+      allow list: if isAdmin();
+
+      // Prevent Self-Escalation:
+      // Standard registration assigns HELPER or VIEWER; only Super Admin can self-provision ADMIN role
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isAdmin() ||
+        (
+          request.auth.token.email != null &&
+          request.auth.token.email.lower() == request.resource.data.email.lower() &&
+          (
+            (request.resource.data.role == 'HELPER' || request.resource.data.role == 'VIEWER') ||
+            (request.resource.data.role == 'ADMIN' && isSuperAdmin())
+          )
+        )
+      );
+
+      // Updates:
+      // Admins can update roles; Non-admins can only update their display name and profile status
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isAdmin() ||
+        (
+          (isOwner(userId) || (request.auth.token.email != null && request.auth.token.email.lower() == resource.data.email.lower())) &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'profileCompleted', 'updatedAt'])
+        )
+      );
+
+      // Only Admin can delete users (Super Admin record is protected)
+      allow delete: if isAdmin() &&
+                    resource.data.email.lower() != 'pousan888@gmail.com';
     }
-    
+
+    // 7. Departments
     match /departments/{deptId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidDepartment(request.resource.data);
+      allow update: if isAdmin() && isValidDepartment(request.resource.data);
+      allow delete: if isAdmin();
     }
-    
+
+    // 8. System Synchronization Support Collections
     match /_tombstones/{tombstoneId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() &&
+                               request.resource.data.keys().hasOnly(['id', 'type', 'deletedAt']) &&
+                               request.resource.data.id is string &&
+                               request.resource.data.id.size() <= 128;
+      allow delete: if isAdmin();
     }
 
     match /_metadata/{metaId} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated();
     }
 
     match /_sync_test/{testId} {
-      allow read, write: if true;
+      allow read, write: if isAuthenticated();
+    }
+
+    // ===============================================================
+    // Global Default Deny Safety Net
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
