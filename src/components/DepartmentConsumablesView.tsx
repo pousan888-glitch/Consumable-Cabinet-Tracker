@@ -39,7 +39,8 @@ import {
   List,
   FileSpreadsheet,
   Download,
-  Copy
+  Copy,
+  MoreVertical
 } from "lucide-react";
 
 interface DepartmentConsumablesViewProps {
@@ -47,6 +48,8 @@ interface DepartmentConsumablesViewProps {
   cabinets: Cabinet[];
   consumables: Consumable[];
   currentUserEmail?: string;
+  selectedDept?: string;
+  onSelectDept?: (dept: string) => void;
   onUpdateQty: (item: Consumable, newQty: number) => Promise<void>;
   onEditConsumable: (item: Consumable) => void;
   onDeleteConsumable: (id: string) => void;
@@ -63,6 +66,8 @@ export default function DepartmentConsumablesView({
   cabinets,
   consumables,
   currentUserEmail = "admin",
+  selectedDept: controlledSelectedDept,
+  onSelectDept,
   onUpdateQty,
   onEditConsumable,
   onDeleteConsumable,
@@ -73,13 +78,23 @@ export default function DepartmentConsumablesView({
   onRefresh,
   isRefreshing = false
 }: DepartmentConsumablesViewProps) {
-  // Selected department state (default to "ALL" or first department)
-  const [selectedDept, setSelectedDept] = useState<string>("ALL");
+  // Selected department state (controlled from parent when provided so Hero KPIs sync dynamically)
+  const [internalSelectedDept, setInternalSelectedDept] = useState<string>("ALL");
+  const selectedDept = controlledSelectedDept !== undefined ? controlledSelectedDept : internalSelectedDept;
+  const setSelectedDept = (dept: string) => {
+    if (onSelectDept) {
+      onSelectDept(dept);
+    } else {
+      setInternalSelectedDept(dept);
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OUT" | "LOW" | "OK">("ALL");
   const [onlyMultiCabinet, setOnlyMultiCabinet] = useState(false);
   const [sortBy, setSortBy] = useState<"DEFAULT" | "QTY_ASC" | "NAME">("DEFAULT");
   const [viewLayout, setViewLayout] = useState<"table" | "grid">("table");
+  const [showToolsDropdown, setShowToolsDropdown] = useState(false);
 
   // Aggregate view toggle: default to true when viewing a specific department or overall
   const [aggregateByDepartment, setAggregateByDepartment] = useState(true);
@@ -571,31 +586,31 @@ export default function DepartmentConsumablesView({
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. COMPACT DEPARTMENT HEADER + PILLS + 3 KPI SUMMARY CARDS */}
-      <div className="ios-glass-card p-5 sm:p-6 rounded-3xl border border-white/90 shadow-lg shadow-slate-200/40">
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="h-12 w-12 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
-              <Building2 className="h-6 w-6" />
+    <div className="space-y-4">
+      {/* 1. COMPACT DEPARTMENT SELECTOR BAR (NO DUPLICATE KPI CARDS — HERO BANNER UPDATES LIVE) */}
+      <div className="ios-glass-card px-4 py-3.5 sm:px-5 sm:py-4 rounded-3xl border border-white/90 shadow-md shadow-slate-200/40">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
+              <Building2 className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-xl font-black text-slate-900 leading-tight">
-                  สต็อกพัสดุแยกตามแผนก (Department Inventory)
+                <h2 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                  สต็อกพัสดุแยกตามแผนก
                 </h2>
                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 font-bold text-[10px] rounded-md uppercase">
-                  Stock Control
+                  Department Filter
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-1">
-                คลิกสลับแผนกเพื่อตรวจสอบยอดพัสดุคงเหลือ สถานะสต็อก และจัดการรายการในคลังได้ทันที
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
+                เลือกแผนกเพื่อดูรายการพัสดุและอัปเดตตัวเลขสรุปด้านบนตามแผนกทันที
               </p>
             </div>
           </div>
 
           {/* DEPARTMENT PILLS FILTER */}
-          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80 self-start xl:self-auto">
+          <div className="flex flex-wrap items-center gap-1 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 self-start xl:self-auto">
             <button
               type="button"
               onClick={() => setSelectedDept("ALL")}
@@ -632,216 +647,158 @@ export default function DepartmentConsumablesView({
             })}
           </div>
         </div>
-
-        {/* THREE SUMMARY KPI CARDS */}
-        {(() => {
-          const activeStats =
-            selectedDept === "ALL"
-              ? deptStats["ALL"] || { totalItems: 0, totalQty: 0, lowStockCount: 0, outOfStockCount: 0 }
-              : deptStats[
-                  allDeptNames.find(d => d.toLowerCase() === selectedDept.toLowerCase()) || selectedDept
-                ] || { totalItems: 0, totalQty: 0, lowStockCount: 0, outOfStockCount: 0 };
-          const shortageCount = outInCurrentDept + lowInCurrentDept;
-
-          return (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-5">
-              {/* Card 1: จำนวนรายการพัสดุ */}
-              <button
-                type="button"
-                onClick={() => setStatusFilter("ALL")}
-                className="text-left p-4 rounded-2xl bg-slate-50/90 hover:bg-slate-50 border border-slate-200/90 shadow-2xs flex items-center justify-between transition-colors cursor-pointer"
-              >
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                    จำนวนรายการพัสดุในคลัง
-                  </span>
-                  <div className="flex items-baseline gap-1.5 mt-1">
-                    <span className="text-2xl sm:text-3xl font-black text-slate-900">
-                      {totalInCurrentDept}
-                    </span>
-                    <span className="text-xs font-bold text-slate-600">รายการ</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    {aggregateByDepartment
-                      ? "รวมพัสดุชื่อเดียวกันแต่ละแผนกเป็น 1 รายการ"
-                      : `แสดงแยกย่อยทั้งหมด ${activeStats.totalItems} ช่องเก็บ`}
-                  </span>
-                </div>
-                <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
-                  <Layers className="h-5 w-5" />
-                </div>
-              </button>
-
-              {/* Card 2: ยอดคงเหลือรวม */}
-              <button
-                type="button"
-                onClick={() => setStatusFilter(prev => (prev === "OK" ? "ALL" : "OK"))}
-                className="text-left p-4 rounded-2xl bg-slate-50/90 hover:bg-slate-50 border border-slate-200/90 shadow-2xs flex items-center justify-between transition-colors cursor-pointer"
-              >
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                    ยอดพัสดุคงเหลือรวม ({selectedDept === "ALL" ? "ทุกแผนก" : selectedDept})
-                  </span>
-                  <div className="flex items-baseline gap-1.5 mt-1">
-                    <span className="text-2xl sm:text-3xl font-black text-emerald-800">
-                      {activeStats.totalQty.toLocaleString()}
-                    </span>
-                    <span className="text-xs font-bold text-slate-600">ชิ้น/หน่วย</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    สถานะครบเกณฑ์ปกติ {okInCurrentDept} รายการ
-                  </span>
-                </div>
-                <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0">
-                  <Package className="h-5 w-5" />
-                </div>
-              </button>
-
-              {/* Card 3: พัสดุใกล้หมด / หมดสต็อก */}
-              <button
-                type="button"
-                onClick={() => setStatusFilter(prev => (prev === "LOW" || prev === "OUT" ? "ALL" : outInCurrentDept > 0 ? "OUT" : "LOW"))}
-                className="text-left p-4 rounded-2xl bg-slate-50/90 hover:bg-slate-50 border border-slate-200/90 shadow-2xs flex items-center justify-between transition-colors cursor-pointer"
-              >
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                    พัสดุขาด / ต้องเติมสต็อก
-                  </span>
-                  <div className="flex items-baseline gap-1.5 mt-1">
-                    <span className={`text-2xl sm:text-3xl font-black ${shortageCount > 0 ? "text-rose-600" : "text-slate-900"}`}>
-                      {shortageCount}
-                    </span>
-                    <span className="text-xs font-bold text-slate-600">รายการ</span>
-                  </div>
-                  <span className={`text-[10px] font-semibold mt-0.5 block ${shortageCount > 0 ? "text-rose-500" : "text-emerald-600"}`}>
-                    {shortageCount > 0
-                      ? `หมดสต็อก ${outInCurrentDept} • ใกล้หมด ${lowInCurrentDept} รายการ`
-                      : "สต็อกทุกรายการอยู่ในเกณฑ์ปกติ"}
-                  </span>
-                </div>
-                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  shortageCount > 0 ? "bg-rose-50 text-rose-600 animate-pulse" : "bg-slate-100 text-slate-500"
-                }`}>
-                  <AlertTriangle className="h-5 w-5" />
-                </div>
-              </button>
-            </div>
-          );
-        })()}
       </div>
 
-      {/* 2. SUBHEADER & FILTER CONTROLS (คล้ายแถบควบคุมในรูปแรก) */}
-      <div className="ios-glass-card p-3.5 sm:p-5 rounded-3xl border border-white/80 shadow-lg shadow-slate-200/40 space-y-3.5">
+      {/* 2. SUBHEADER & STREAMLINED ACTION BAR */}
+      <div className="ios-glass-card p-3.5 sm:p-5 rounded-3xl border border-white/80 shadow-lg shadow-slate-200/40 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-slate-900 font-extrabold text-sm sm:text-lg">
+            <span className="text-slate-900 font-extrabold text-sm sm:text-base">
               รายการพัสดุ:
             </span>
-            <span className="px-3 py-1 bg-white/80 backdrop-blur-md text-slate-800 font-black text-xs sm:text-sm rounded-xl border border-white/90 shadow-2xs uppercase">
+            <span className="px-2.5 py-1 bg-slate-100 text-slate-800 font-black text-xs rounded-xl border border-slate-200/80 uppercase">
               {selectedDept === "ALL" ? "รวมทุกแผนก" : selectedDept}
             </span>
-            <span className="px-2.5 py-1 bg-emerald-50/80 backdrop-blur-xs text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200/80">
-              มาตรฐาน {totalInCurrentDept} รายการ
+            <span className="px-2.5 py-1 bg-emerald-50/80 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200/80">
+              {totalInCurrentDept} รายการ
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* View Aggregation Toggle: แสดงรวมยอดของแผนก หรือ แยกรายตู้ */}
-            <button
-              type="button"
-              onClick={() => setAggregateByDepartment(!aggregateByDepartment)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl font-bold text-xs border transition-all cursor-pointer shadow-2xs ${
-                aggregateByDepartment
-                  ? "bg-indigo-50 border-indigo-200 text-indigo-800 ring-1 ring-indigo-200"
-                  : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
-              }`}
-              title={aggregateByDepartment ? "กำลังแสดงรวมยอดสต็อกแต่ละแผนก (ไม่แยกตู้)" : "กำลังแสดงแยกตามตู้จัดเก็บ"}
-            >
-              <Layers className={`h-3.5 w-3.5 ${aggregateByDepartment ? "text-indigo-600" : "text-slate-400"}`} />
-              <span className="hidden sm:inline">
-                {aggregateByDepartment ? "แสดงรวมของแผนก (ไม่แยกตู้)" : "แสดงแยกตามตู้"}
-              </span>
-              <span className="sm:hidden">
-                {aggregateByDepartment ? "รวมแผนก" : "แยกตู้"}
-              </span>
-            </button>
-
-            {/* View Layout Toggle (Table vs Grid) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Compact Icon-only View Layout Toggle (Table vs Grid) */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
               <button
                 type="button"
                 onClick={() => setViewLayout("table")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                   viewLayout === "table"
                     ? "bg-white text-slate-950 shadow-2xs"
                     : "text-slate-500 hover:text-slate-800"
                 }`}
-                title="มุมมองตาราง (Compact Table)"
+                title="มุมมองตาราง"
+                aria-label="มุมมองตาราง"
               >
-                <List className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">ตาราง</span>
+                <List className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setViewLayout("grid")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                   viewLayout === "grid"
                     ? "bg-white text-slate-950 shadow-2xs"
                     : "text-slate-500 hover:text-slate-800"
                 }`}
-                title="มุมมองการ์ดรูปภาพ (Visual Grid)"
+                title="มุมมองการ์ดรูปภาพ"
+                aria-label="มุมมองการ์ดรูปภาพ"
               >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">การ์ดรูป</span>
+                <LayoutGrid className="h-4 w-4" />
               </button>
             </div>
 
+            {/* Primary Action: Add Consumable */}
             <button
-              onClick={handleResetFilters}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer transition-colors shadow-2xs"
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
-              <span>รีเซ็ต</span>
-            </button>
-            {onRefresh && (
-              <button
-                type="button"
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 cursor-pointer transition-colors shadow-2xs disabled:opacity-50"
-                title="ดึงยอดสต็อกพัสดุล่าสุดจาก Cloud Firestore"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 text-indigo-600 ${isRefreshing ? "animate-spin" : ""}`} />
-                <span>{isRefreshing ? "กำลังดึง..." : "รีเฟรชสต็อก"}</span>
-              </button>
-            )}
-            <button
-              onClick={handlePrintList}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs rounded-xl border border-sky-200 cursor-pointer transition-colors shadow-2xs"
-            >
-              <Printer className="h-3.5 w-3.5 text-sky-600" />
-              <span>พิมพ์รายการ</span>
-            </button>
-            <button
+              type="button"
               onClick={() => onAddConsumableForDept(selectedDept === "ALL" ? (allDeptNames[0] || "CMT") : selectedDept)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95 whitespace-nowrap"
               title="เพิ่มรายการพัสดุใหม่ในแผนกที่เลือก"
             >
               <Plus className="h-3.5 w-3.5 text-emerald-300" />
-              <span>เพิ่มพัสดุในแผนกนี้</span>
+              <span>เพิ่มพัสดุ</span>
             </button>
+
+            {/* Secondary Action: Export Excel */}
             <button
+              type="button"
               onClick={() => setShowExportModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95 whitespace-nowrap"
               title="ดึงข้อมูลพัสดุเป็นไฟล์ Excel (.csv) รองรับภาษาไทยสมบูรณ์"
             >
               <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-100" />
               <span>ส่งออก Excel</span>
             </button>
+
+            {/* Tools Dropdown Menu (Refresh, Print, Aggregate Toggle, Reset) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowToolsDropdown(prev => !prev)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer transition-colors whitespace-nowrap"
+                title="เครื่องมือจัดการเพิ่มเติม"
+              >
+                <MoreVertical className="h-3.5 w-3.5 text-slate-500" />
+                <span>เครื่องมือ</span>
+              </button>
+
+              {showToolsDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setShowToolsDropdown(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-1.5 z-30 text-xs animate-scale-up text-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAggregateByDepartment(!aggregateByDepartment);
+                        setShowToolsDropdown(false);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center justify-between gap-2 cursor-pointer font-semibold"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Layers className={`h-4 w-4 ${aggregateByDepartment ? "text-indigo-600" : "text-slate-400"}`} />
+                        <span>{aggregateByDepartment ? "แสดงรวมของแผนก (ไม่แยกตู้)" : "แสดงแยกตามตู้จัดเก็บ"}</span>
+                      </span>
+                      {aggregateByDepartment && <Check className="h-3.5 w-3.5 text-indigo-600 shrink-0" />}
+                    </button>
+
+                    {onRefresh && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowToolsDropdown(false);
+                          onRefresh();
+                        }}
+                        disabled={isRefreshing}
+                        className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-semibold disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-4 w-4 text-indigo-600 ${isRefreshing ? "animate-spin" : ""}`} />
+                        <span>{isRefreshing ? "กำลังดึงข้อมูล..." : "รีเฟรชสต็อกล่าสุด"}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowToolsDropdown(false);
+                        handlePrintList();
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 flex items-center gap-2 cursor-pointer font-semibold"
+                    >
+                      <Printer className="h-4 w-4 text-sky-600" />
+                      <span>พิมพ์รายการพัสดุ</span>
+                    </button>
+
+                    <div className="my-1 border-t border-slate-100" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowToolsDropdown(false);
+                        handleResetFilters();
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 text-slate-600 flex items-center gap-2 cursor-pointer font-semibold"
+                    >
+                      <RotateCcw className="h-4 w-4 text-slate-400" />
+                      <span>รีเซ็ตตัวกรองทั้งหมด</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Search, Status Filters, and Sorter */}
+        {/* Search, Soft Status Filters, and Sorter */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
           {/* Search bar */}
           <div className="relative w-full lg:max-w-xs">
@@ -855,61 +812,72 @@ export default function DepartmentConsumablesView({
             />
           </div>
 
-          {/* Status Tabs and Sorter */}
+          {/* Soft Status Tabs (neutral gray default + colored dot, highlight active only) and Sorter */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
-            {/* Horizontal Scrollable Status Chips on mobile */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-full shrink-0">
               <button
+                type="button"
                 onClick={() => setStatusFilter("ALL")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
                   statusFilter === "ALL"
-                    ? "bg-slate-900 text-white shadow-xs"
-                    : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                    ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                    : "bg-slate-100/80 hover:bg-slate-200/70 text-slate-600 border-slate-200/80"
                 }`}
               >
-                ทั้งหมด ({totalInCurrentDept})
-              </button>
-              <button
-                onClick={() => setStatusFilter("OUT")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  statusFilter === "OUT"
-                    ? "bg-rose-600 text-white shadow-xs"
-                    : "bg-rose-50 hover:bg-rose-100 text-rose-700"
-                }`}
-              >
-                หมดสต็อก ({outInCurrentDept})
-              </button>
-              <button
-                onClick={() => setStatusFilter("LOW")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  statusFilter === "LOW"
-                    ? "bg-amber-500 text-white shadow-xs"
-                    : "bg-amber-50 hover:bg-amber-100 text-amber-700"
-                }`}
-              >
-                ใกล้หมด ({lowInCurrentDept})
-              </button>
-              <button
-                onClick={() => setStatusFilter("OK")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                  statusFilter === "OK"
-                    ? "bg-emerald-600 text-white shadow-xs"
-                    : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                สต็อกปกติ ({okInCurrentDept})
+                <span className={`h-1.5 w-1.5 rounded-full ${statusFilter === "ALL" ? "bg-white" : "bg-slate-400"}`} />
+                <span>ทั้งหมด ({totalInCurrentDept})</span>
               </button>
 
               <button
+                type="button"
+                onClick={() => setStatusFilter("OUT")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
+                  statusFilter === "OUT"
+                    ? "bg-rose-50 text-rose-700 border-rose-300 ring-1 ring-rose-200 shadow-2xs"
+                    : "bg-slate-100/80 hover:bg-slate-200/70 text-slate-600 border-slate-200/80"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                <span>หมดสต็อก ({outInCurrentDept})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter("LOW")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
+                  statusFilter === "LOW"
+                    ? "bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200 shadow-2xs"
+                    : "bg-slate-100/80 hover:bg-slate-200/70 text-slate-600 border-slate-200/80"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                <span>ใกล้หมด ({lowInCurrentDept})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter("OK")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
+                  statusFilter === "OK"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-200 shadow-2xs"
+                    : "bg-slate-100/80 hover:bg-slate-200/70 text-slate-600 border-slate-200/80"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span>สต็อกปกติ ({okInCurrentDept})</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setOnlyMultiCabinet(!onlyMultiCabinet)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 border ${
                   onlyMultiCabinet
-                    ? "bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300"
-                    : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+                    ? "bg-indigo-50 text-indigo-800 border-indigo-300 ring-1 ring-indigo-200 shadow-2xs"
+                    : "bg-slate-100/80 hover:bg-slate-200/70 text-slate-600 border-slate-200/80"
                 }`}
                 title="กรองเฉพาะพัสดุที่มีสต็อกกระจายในหลายตู้ (เช่น เก็บทั้งในตู้ CMT และตู้ QA/QC)"
               >
-                <Layers className="h-3.5 w-3.5" />
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                 <span>มีในหลายตู้ ({multiCabinetInCurrentDept})</span>
               </button>
             </div>
