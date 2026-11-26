@@ -572,141 +572,162 @@ export default function DepartmentConsumablesView({
 
   return (
     <div className="space-y-6">
-      {/* 1. TOP DEPARTMENT BOXES (BOX ของแผนก - คล้ายรูปแรก) */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-emerald-700" />
-            <h2 className="text-sm sm:text-base font-extrabold text-slate-900">
-              เลือกดูตามแผนก (Department Units)
-            </h2>
-            <span className="text-xs text-slate-500 font-medium hidden sm:inline">
-              — คลิกที่กล่องแผนกเพื่อดูและปรับสต็อกพัสดุด้านล่าง
-            </span>
+      {/* 1. COMPACT DEPARTMENT HEADER + PILLS + 3 KPI SUMMARY CARDS */}
+      <div className="ios-glass-card p-5 sm:p-6 rounded-3xl border border-white/90 shadow-lg shadow-slate-200/40">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="h-12 w-12 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
+              <Building2 className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-xl font-black text-slate-900 leading-tight">
+                  สต็อกพัสดุแยกตามแผนก (Department Inventory)
+                </h2>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 font-bold text-[10px] rounded-md uppercase">
+                  Stock Control
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                คลิกสลับแผนกเพื่อตรวจสอบยอดพัสดุคงเหลือ สถานะสต็อก และจัดการรายการในคลังได้ทันที
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => onAddConsumableForDept(selectedDept === "ALL" ? (allDeptNames[0] || "CMT") : selectedDept)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>เพิ่มพัสดุในแผนกนี้</span>
-          </button>
+
+          {/* DEPARTMENT PILLS FILTER */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80 self-start xl:self-auto">
+            <button
+              type="button"
+              onClick={() => setSelectedDept("ALL")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                selectedDept === "ALL"
+                  ? "bg-emerald-700 text-white shadow-xs"
+                  : "bg-transparent text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              รวมทุกแผนก ({cabinets.length} ตู้)
+            </button>
+
+            {allDeptNames.map(dept => {
+              const isSelected = selectedDept.toLowerCase() === dept.toLowerCase();
+              const stats = deptStats[dept] || { totalItems: 0, totalQty: 0, lowStockCount: 0, outOfStockCount: 0 };
+              const hasShortage = (stats.lowStockCount + stats.outOfStockCount) > 0;
+              return (
+                <button
+                  key={dept}
+                  type="button"
+                  onClick={() => setSelectedDept(dept)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer uppercase inline-flex items-center gap-1.5 ${
+                    isSelected
+                      ? "bg-emerald-700 text-white shadow-xs"
+                      : "bg-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <span>{dept}</span>
+                  {hasShortage && !isSelected && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0" title="มีรายการต่ำกว่าเกณฑ์" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Responsive Grid of Department Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
-          {/* Card: รวมทุกแผนก */}
-          {(() => {
-            const isSelected = selectedDept === "ALL";
-            const stats = deptStats["ALL"] || { totalItems: 0, totalQty: 0, lowStockCount: 0, outOfStockCount: 0 };
-            const hasShortage = (stats.lowStockCount + stats.outOfStockCount) > 0;
-            return (
-              <button
-                key="ALL"
-                onClick={() => setSelectedDept("ALL")}
-                className={`text-left p-3.5 sm:p-4 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ios-press ${
-                  isSelected
-                    ? "ios-glass border-2 border-indigo-400/80 ring-4 ring-indigo-500/10 shadow-lg shadow-indigo-100/50 bg-indigo-50/40 backdrop-blur-xl"
-                    : "ios-glass-card border border-white/80 hover:border-indigo-200 shadow-sm hover:shadow-md"
-                }`}
-              >
-                {isSelected && (
-                  <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-indigo-600 rounded-bl-xl" />
-                )}
-                <div className="flex items-start gap-2.5 sm:gap-3 mb-2.5 sm:mb-3">
-                  <div className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${
-                    isSelected ? "bg-indigo-600 text-white shadow-xs" : "bg-slate-100/90 text-slate-600"
-                  }`}>
-                    <Layers className="h-4 w-4 sm:h-5 sm:w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-black text-xs sm:text-sm truncate text-slate-800">
-                      รวมทุกแผนก
-                    </h3>
-                    <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5 font-medium">
-                      {cabinets.length} ตู้จัดเก็บ
-                    </p>
-                  </div>
-                </div>
+        {/* THREE SUMMARY KPI CARDS */}
+        {(() => {
+          const activeStats =
+            selectedDept === "ALL"
+              ? deptStats["ALL"] || { totalItems: 0, totalQty: 0, lowStockCount: 0, outOfStockCount: 0 }
+              : deptStats[
+                  allDeptNames.find(d => d.toLowerCase() === selectedDept.toLowerCase()) || selectedDept
+                ] || { totalItems: 0, totalQty: 0, lowStockCount: 0, outOfStockCount: 0 };
+          const shortageCount = outInCurrentDept + lowInCurrentDept;
 
-                <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-100/80 text-[10px] sm:text-[11px]">
-                  <div>
-                    <span className="text-slate-400 block text-[9px] sm:text-[10px] font-semibold">คงเหลือ</span>
-                    <span className="font-extrabold text-slate-900">{stats.totalQty} ชิ้น</span>
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-5">
+              {/* Card 1: จำนวนรายการพัสดุ */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ALL")}
+                className="text-left p-4 rounded-2xl bg-slate-50/90 hover:bg-slate-50 border border-slate-200/90 shadow-2xs flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    จำนวนรายการพัสดุในคลัง
+                  </span>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-2xl sm:text-3xl font-black text-slate-900">
+                      {totalInCurrentDept}
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">รายการ</span>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[9px] sm:text-[10px] font-semibold">ต้องเติม</span>
-                    {hasShortage ? (
-                      <span className="font-extrabold text-rose-600 truncate block">
-                        ขาด {stats.lowStockCount + stats.outOfStockCount}
-                      </span>
-                    ) : (
-                      <span className="font-bold text-emerald-600 truncate block">ครบเกณฑ์</span>
-                    )}
-                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    {aggregateByDepartment
+                      ? "รวมพัสดุชื่อเดียวกันแต่ละแผนกเป็น 1 รายการ"
+                      : `แสดงแยกย่อยทั้งหมด ${activeStats.totalItems} ช่องเก็บ`}
+                  </span>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+                  <Layers className="h-5 w-5" />
                 </div>
               </button>
-            );
-          })()}
 
-          {/* Cards for each Department */}
-          {allDeptNames.map(dept => {
-            const isSelected = selectedDept.toLowerCase() === dept.toLowerCase();
-            const stats = deptStats[dept] || { totalItems: 0, totalQty: 0, lowStockCount: 0, outOfStockCount: 0 };
-            const deptRecord = departments.find(d => d.name.toLowerCase() === dept.toLowerCase());
-            const hasShortage = (stats.lowStockCount + stats.outOfStockCount) > 0;
-
-            return (
+              {/* Card 2: ยอดคงเหลือรวม */}
               <button
-                key={dept}
-                onClick={() => setSelectedDept(dept)}
-                className={`text-left p-3.5 sm:p-4 rounded-2xl transition-all duration-200 cursor-pointer flex flex-col justify-between relative overflow-hidden ios-press ${
-                  isSelected
-                    ? "ios-glass border-2 border-indigo-400/80 ring-4 ring-indigo-500/10 shadow-lg shadow-indigo-100/50 bg-indigo-50/40 backdrop-blur-xl"
-                    : "ios-glass-card border border-white/80 hover:border-indigo-200 shadow-sm hover:shadow-md"
-                }`}
+                type="button"
+                onClick={() => setStatusFilter(prev => (prev === "OK" ? "ALL" : "OK"))}
+                className="text-left p-4 rounded-2xl bg-slate-50/90 hover:bg-slate-50 border border-slate-200/90 shadow-2xs flex items-center justify-between transition-colors cursor-pointer"
               >
-                {isSelected && (
-                  <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-indigo-600 rounded-bl-xl" />
-                )}
-                <div className="flex items-start gap-2.5 sm:gap-3 mb-2.5 sm:mb-3">
-                  <div 
-                    className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${
-                      isSelected ? "bg-indigo-600 text-white shadow-xs" : "bg-slate-100/90 text-slate-600"
-                    }`}
-                  >
-                    <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    ยอดพัสดุคงเหลือรวม ({selectedDept === "ALL" ? "ทุกแผนก" : selectedDept})
+                  </span>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-2xl sm:text-3xl font-black text-emerald-800">
+                      {activeStats.totalQty.toLocaleString()}
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">ชิ้น/หน่วย</span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-black text-xs sm:text-sm truncate uppercase text-slate-800">
-                      {dept}
-                    </h3>
-                    <p className="text-[10px] sm:text-[11px] text-slate-400 truncate mt-0.5 font-medium">
-                      {stats.totalItems} รายการ
-                    </p>
-                  </div>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                    สถานะครบเกณฑ์ปกติ {okInCurrentDept} รายการ
+                  </span>
                 </div>
-
-                <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-100/80 text-[10px] sm:text-[11px]">
-                  <div>
-                    <span className="text-slate-400 block text-[9px] sm:text-[10px] font-semibold">คงเหลือ</span>
-                    <span className="font-extrabold text-slate-900">{stats.totalQty} ชิ้น</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[9px] sm:text-[10px] font-semibold">สถานะ</span>
-                    {hasShortage ? (
-                      <span className="font-extrabold text-rose-600 truncate block">
-                        ขาด {stats.lowStockCount + stats.outOfStockCount}
-                      </span>
-                    ) : (
-                      <span className="font-bold text-emerald-600 truncate block">ครบเกณฑ์</span>
-                    )}
-                  </div>
+                <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0">
+                  <Package className="h-5 w-5" />
                 </div>
               </button>
-            );
-          })}
-        </div>
+
+              {/* Card 3: พัสดุใกล้หมด / หมดสต็อก */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(prev => (prev === "LOW" || prev === "OUT" ? "ALL" : outInCurrentDept > 0 ? "OUT" : "LOW"))}
+                className="text-left p-4 rounded-2xl bg-slate-50/90 hover:bg-slate-50 border border-slate-200/90 shadow-2xs flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    พัสดุขาด / ต้องเติมสต็อก
+                  </span>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className={`text-2xl sm:text-3xl font-black ${shortageCount > 0 ? "text-rose-600" : "text-slate-900"}`}>
+                      {shortageCount}
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">รายการ</span>
+                  </div>
+                  <span className={`text-[10px] font-semibold mt-0.5 block ${shortageCount > 0 ? "text-rose-500" : "text-emerald-600"}`}>
+                    {shortageCount > 0
+                      ? `หมดสต็อก ${outInCurrentDept} • ใกล้หมด ${lowInCurrentDept} รายการ`
+                      : "สต็อกทุกรายการอยู่ในเกณฑ์ปกติ"}
+                  </span>
+                </div>
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  shortageCount > 0 ? "bg-rose-50 text-rose-600 animate-pulse" : "bg-slate-100 text-slate-500"
+                }`}>
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* 2. SUBHEADER & FILTER CONTROLS (คล้ายแถบควบคุมในรูปแรก) */}
@@ -800,6 +821,14 @@ export default function DepartmentConsumablesView({
             >
               <Printer className="h-3.5 w-3.5 text-sky-600" />
               <span>พิมพ์รายการ</span>
+            </button>
+            <button
+              onClick={() => onAddConsumableForDept(selectedDept === "ALL" ? (allDeptNames[0] || "CMT") : selectedDept)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-all active:scale-95"
+              title="เพิ่มรายการพัสดุใหม่ในแผนกที่เลือก"
+            >
+              <Plus className="h-3.5 w-3.5 text-emerald-300" />
+              <span>เพิ่มพัสดุในแผนกนี้</span>
             </button>
             <button
               onClick={() => setShowExportModal(true)}
