@@ -78,7 +78,12 @@ import {
   ArrowRight,
   BookOpen,
   HelpCircle,
-  Layers
+  Layers,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
+  PinOff,
+  Menu
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -100,10 +105,19 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   // Loading & View States
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings">("department_consumables");
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => typeof window !== "undefined" ? window.innerWidth >= 1024 : true);
+  const [isSidebarPinned, setIsSidebarPinned] = useState<boolean>(false);
   const [settingsSubTab, setSettingsSubTab] = useState<"departments" | "master_catalog">("departments");
   const [searchTerm, setSearchTerm] = useState("");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [previewModalImage, setPreviewModalImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
+
+  const handleSelectMenuTab = (tab: "department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings") => {
+    setActiveTab(tab);
+    if (!isSidebarPinned) {
+      setIsSidebarOpen(false);
+    }
+  };
 
   // Cabinet Modals / Form
   const [showCabinetModal, setShowCabinetModal] = useState(false);
@@ -664,6 +678,158 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
     );
   }
 
+  const navItems: {
+    id: "department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings";
+    label: string;
+    icon: React.ReactNode;
+    badge?: string;
+    badgeUrgent?: boolean;
+    isAdminSpecial?: boolean;
+  }[] = [
+    {
+      id: "department_consumables",
+      label: "พัสดุ & สต็อกแผนก",
+      icon: <Package className="h-4 w-4 text-emerald-500 shrink-0" />,
+      badge: criticalItems.length > 0 ? `ขาด ${criticalItems.length}` : String(consumables.length),
+      badgeUrgent: criticalItems.length > 0
+    },
+    {
+      id: "cabinets",
+      label: "ตู้จัดเก็บ & QR",
+      icon: <Building2 className="h-4 w-4 text-blue-500 shrink-0" />,
+      badge: String(cabinets.length)
+    },
+    {
+      id: "purchase_orders",
+      label: "ใบสั่งซื้อพัสดุ (Auto PO)",
+      icon: <ShoppingCart className="h-4 w-4 text-amber-500 shrink-0" />,
+      badge: criticalItems.length > 0 ? `ขาด ${criticalItems.length}` : undefined,
+      badgeUrgent: criticalItems.length > 0
+    },
+    {
+      id: "qc",
+      label: "ใครเบิกอะไรบ้าง",
+      icon: <Activity className="h-4 w-4 text-purple-500 shrink-0" />,
+      badge: String(qcLogs.length)
+    },
+    {
+      id: "history",
+      label: "ประวัติตรวจนับ",
+      icon: <Clock className="h-4 w-4 text-amber-500 shrink-0" />,
+      badge: String(countLogs.length)
+    },
+    {
+      id: "settings",
+      label: "จัดการแผนก & พัสดุมาตรฐาน",
+      icon: <Settings className="h-4 w-4 text-slate-500 shrink-0" />,
+      badge: `${departments.length} แผนก`
+    },
+    ...(isUserSuperAdmin
+      ? [
+          {
+            id: "users" as const,
+            label: "จัดการสิทธิ์ผู้ใช้",
+            icon: <Users className="h-4 w-4 shrink-0" />,
+            badge: "Admin",
+            isAdminSpecial: true
+          }
+        ]
+      : [])
+  ];
+
+  const activeNav = navItems.find(item => item.id === activeTab) || navItems[0];
+
+  const renderSidebarContent = () => (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between gap-2 px-2 pb-3 mb-2 border-b border-slate-200/70">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-7 w-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <Menu className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-xs font-black text-slate-900 truncate">
+            เมนูจัดการระบบ
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsSidebarPinned(!isSidebarPinned)}
+            className={`hidden lg:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer ${
+              isSidebarPinned
+                ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+            }`}
+            title={isSidebarPinned ? "ปักหมุดเมนูค้างไว้ (คลิกเพื่อเปลี่ยนเป็นซ่อนอัตโนมัติหลังเลือก)" : "ซ่อนอัตโนมัติหลังเลือก (คลิกเพื่อปักหมุดค้างไว้)"}
+          >
+            {isSidebarPinned ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
+            <span>{isSidebarPinned ? "ปักหมุด" : "ซ่อนอัตโนมัติ"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(false)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            title="ซ่อนแถบเมนูด้านซ้าย"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+            <span className="lg:hidden">ปิด</span>
+          </button>
+        </div>
+      </div>
+
+      <nav className="space-y-1.5 flex-1">
+        {navItems.map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleSelectMenuTab(item.id)}
+              className={`w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-2xl text-xs transition-all cursor-pointer text-left ios-press ${
+                item.isAdminSpecial
+                  ? isActive
+                    ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 border border-amber-400 font-extrabold"
+                    : "text-amber-800 hover:bg-amber-100/60 font-bold"
+                  : isActive
+                  ? "bg-white text-slate-900 shadow-md shadow-slate-300/40 border border-indigo-100 ring-1 ring-indigo-500/15 font-extrabold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60 font-bold"
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {item.icon}
+                <span className="leading-snug">{item.label}</span>
+              </div>
+
+              {item.badge && (
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full shrink-0 ${
+                    item.badgeUrgent
+                      ? "bg-rose-500 text-white animate-pulse"
+                      : item.isAdminSpecial
+                      ? isActive
+                        ? "bg-amber-600 text-white"
+                        : "bg-amber-100 text-amber-900"
+                      : isActive
+                      ? "bg-indigo-50 text-indigo-700"
+                      : "bg-white/80 text-slate-500"
+                  }`}
+                >
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="mt-3 pt-3 border-t border-slate-200/70 px-2 text-[11px] text-slate-400 font-medium leading-relaxed">
+        {isSidebarPinned
+          ? "ปักหมุดเมนูด้านซ้ายอยู่ กดซ่อนได้จากปุ่มด้านบน"
+          : "กดเลือกเมนูเพื่อเข้าดูข้อมูล ระบบจะซ่อนแถบเมนูให้อัตโนมัติ"}
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 font-sans min-h-screen">
       
@@ -1107,144 +1273,61 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         </div>
       )}
 
-      {/* 3. DIRECT, SINGLE-LEVEL TAB NAVIGATION (APPLE LIQUID GLASS SEGMENTED BAR) */}
-      <div className="ios-segmented rounded-2xl p-1.5 shadow-md shadow-slate-900/5 mb-6">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-          {/* Tab 1: Consumables & Stock */}
-          <button
-            onClick={() => setActiveTab("department_consumables")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
-              activeTab === "department_consumables"
-                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
-            }`}
-          >
-            <Package className="h-4 w-4 text-emerald-500" />
-            <span>พัสดุ & สต็อกแผนก</span>
-            {criticalItems.length > 0 ? (
-              <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full animate-pulse">
-                ขาด {criticalItems.length}
-              </span>
-            ) : (
-              <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-                activeTab === "department_consumables" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
-              }`}>
-                {consumables.length}
-              </span>
-            )}
-          </button>
-
-          {/* Tab 2: Cabinets & QR */}
-          <button
-            onClick={() => setActiveTab("cabinets")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
-              activeTab === "cabinets"
-                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
-            }`}
-          >
-            <Building2 className="h-4 w-4 text-blue-500" />
-            <span>ตู้จัดเก็บ & QR</span>
-            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-              activeTab === "cabinets" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
-            }`}>
-              {cabinets.length}
-            </span>
-          </button>
-
-          {/* Tab 3: Purchase Orders */}
-          <button
-            onClick={() => setActiveTab("purchase_orders")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
-              activeTab === "purchase_orders"
-                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
-            }`}
-          >
-            <ShoppingCart className="h-4 w-4 text-amber-500" />
-            <span>ใบสั่งซื้อพัสดุ (Auto PO)</span>
-            {criticalItems.length > 0 && (
-              <span className="px-1.5 py-0.2 text-[9px] font-black bg-rose-500 text-white rounded-full animate-pulse">
-                ขาด {criticalItems.length}
-              </span>
-            )}
-          </button>
-
-          {/* Tab 4: QC Withdrawals (ใครเบิกอะไรบ้าง) */}
-          <button
-            onClick={() => setActiveTab("qc")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
-              activeTab === "qc"
-                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
-            }`}
-          >
-            <Activity className="h-4 w-4 text-purple-500" />
-            <span>ใครเบิกอะไรบ้าง</span>
-            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-              activeTab === "qc" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
-            }`}>
-              {qcLogs.length}
-            </span>
-          </button>
-
-          {/* Tab 5: Count History */}
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
-              activeTab === "history"
-                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
-            }`}
-          >
-            <Clock className="h-4 w-4 text-amber-500" />
-            <span>ประวัติตรวจนับ</span>
-            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-              activeTab === "history" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
-            }`}>
-              {countLogs.length}
-            </span>
-          </button>
-
-          {/* Tab 6: Department Settings & Master Catalog */}
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
-              activeTab === "settings"
-                ? "bg-white/95 text-slate-900 shadow-md shadow-slate-300/40 border border-white font-extrabold"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
-            }`}
-          >
-            <Settings className="h-4 w-4 text-slate-500" />
-            <span>จัดการแผนก & พัสดุมาตรฐาน</span>
-            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-              activeTab === "settings" ? "bg-slate-100 text-slate-700" : "bg-white/60 text-slate-500"
-            }`}>
-              {departments.length} แผนก
-            </span>
-          </button>
-
-          {/* Tab 7: User Management (Super Admin only) */}
-          {isUserSuperAdmin && (
-            <button
-              onClick={() => setActiveTab("users")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ios-press ${
-                activeTab === "users"
-                  ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 border border-amber-400 font-extrabold"
-                  : "text-amber-800 hover:bg-amber-100/50"
-              }`}
-            >
-              <Users className="h-4 w-4" />
-              <span>จัดการสิทธิ์ผู้ใช้</span>
-              <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-                activeTab === "users" ? "bg-amber-600 text-white" : "bg-amber-100/80 text-amber-900"
-              }`}>
-                Admin
-              </span>
-            </button>
-          )}
+      {/* 3. LEFT SIDEBAR NAVIGATION + MAIN WORKSPACE */}
+      {/* Mobile Left Drawer */}
+      {isSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex animate-fade-in">
+          <div
+            className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white/95 backdrop-blur-2xl shadow-2xl border-r border-white p-4 overflow-y-auto">
+            {renderSidebarContent()}
+          </aside>
         </div>
-      </div>
+      )}
+
+      {/* Top Left Bar when Sidebar is Hidden */}
+      {!isSidebarOpen && (
+        <div className="mb-5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 ios-glass-card hover:bg-white text-slate-900 rounded-2xl text-xs font-extrabold border border-white/90 shadow-md shadow-slate-900/5 transition-all cursor-pointer ios-press"
+            >
+              <PanelLeftOpen className="h-4 w-4 text-indigo-600" />
+              <span>แสดงเมนูด้านซ้าย</span>
+            </button>
+
+            <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 text-xs font-bold text-slate-700 shadow-2xs">
+              {activeNav.icon}
+              <span>{activeNav.label}</span>
+              {activeNav.badge && (
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                    activeNav.badgeUrgent
+                      ? "bg-rose-500 text-white"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {activeNav.badge}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Layout Container: Desktop Left Sidebar + Right Content */}
+      <div className="flex flex-col lg:flex-row gap-5 items-start">
+        {isSidebarOpen && (
+          <aside className="hidden lg:block w-72 shrink-0 ios-glass-card rounded-3xl p-3.5 border border-white/90 shadow-xl shadow-slate-900/5 sticky top-20 animate-fade-in">
+            {renderSidebarContent()}
+          </aside>
+        )}
+
+        <div className="flex-1 min-w-0 w-full">
 
       {/* SEARCH CONTROLS FOR CABINETS TAB */}
       {activeTab === "cabinets" && (
@@ -2096,6 +2179,8 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           }}
         />
       )}
+        </div>
+      </div>
 
       {/* ========================================================================= */}
       {/* MODALS SECTION */}
