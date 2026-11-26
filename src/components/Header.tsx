@@ -1,15 +1,26 @@
 import React from "react";
 import { UserProfile, UserRole } from "../types";
-import { LogOut, Shield, User, ClipboardList, Settings, Sparkles, RefreshCw } from "lucide-react";
+import { LogOut, Shield, User, ClipboardList, Settings, Sparkles, RefreshCw, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 interface HeaderProps {
   user: UserProfile;
   onChangeRole?: (role: UserRole) => void;
   onLogout: () => void;
   lowStockCount: number;
+  showMenuToggle?: boolean;
+  isMenuOpen?: boolean;
+  onToggleMenu?: () => void;
 }
 
-export default function Header({ user, onChangeRole, onLogout, lowStockCount }: HeaderProps) {
+export default function Header({
+  user,
+  onChangeRole,
+  onLogout,
+  lowStockCount,
+  showMenuToggle = false,
+  isMenuOpen = false,
+  onToggleMenu
+}: HeaderProps) {
   const getRoleLabel = (role: UserRole, isSuperAdmin?: boolean) => {
     if (isSuperAdmin) {
       return { text: "👑 ผู้ดูแลระบบสูงสุด", bg: "bg-amber-50 text-amber-800 border-amber-300 font-bold" };
@@ -32,10 +43,29 @@ export default function Header({ user, onChangeRole, onLogout, lowStockCount }: 
 
   return (
     <header className="ios-glass-header sticky top-0 z-50 font-sans transition-all">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex justify-between h-14 sm:h-16 items-center gap-2">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+          {/* Logo, Sidebar Toggle & Brand */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {showMenuToggle && onToggleMenu && (
+              <button
+                type="button"
+                onClick={onToggleMenu}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-2xl text-xs font-extrabold border transition-all cursor-pointer shrink-0 ios-press ${
+                  isMenuOpen
+                    ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/25"
+                    : "bg-white/85 hover:bg-white text-slate-700 border-slate-200/80 shadow-xs"
+                }`}
+                title={isMenuOpen ? "ซ่อนเมนูจัดการระบบด้านซ้าย" : "เปิดเมนูจัดการระบบด้านซ้าย"}
+              >
+                {isMenuOpen ? (
+                  <PanelLeftClose className="h-4 w-4 shrink-0" />
+                ) : (
+                  <PanelLeftOpen className="h-4 w-4 text-indigo-600 shrink-0" />
+                )}
+                <span className="hidden sm:inline">{isMenuOpen ? "ซ่อนเมนู" : "เมนู"}</span>
+              </button>
+            )}
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 rounded-2xl flex items-center justify-center text-white font-black text-base sm:text-lg shadow-md shadow-indigo-500/25 border border-white/40 shrink-0 ios-press">
               C
             </div>

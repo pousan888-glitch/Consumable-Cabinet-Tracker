@@ -69,6 +69,9 @@ export default function App() {
   const [cabinetParam, setCabinetParam] = useState<string | null>(initialParams.cabinetId);
   const [modeParam, setModeParam] = useState<"count" | "withdraw">(initialParams.mode);
   const [isTestingBarOpen, setIsTestingBarOpen] = useState(false);
+  const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 1024 : true
+  );
 
   // Auto-seed database and finish startup cleanly
   useEffect(() => {
@@ -241,14 +244,19 @@ export default function App() {
           user={user} 
           onChangeRole={handleChangeRole} 
           onLogout={handleLogout} 
-          lowStockCount={lowStockCount} 
+          lowStockCount={lowStockCount}
+          showMenuToggle={user.role === "ADMIN"}
+          isMenuOpen={isAdminSidebarOpen}
+          onToggleMenu={() => setIsAdminSidebarOpen(prev => !prev)}
         />
 
         <main className="flex-grow">
           {user.role === "ADMIN" && (
             <AdminDashboard 
               userEmail={user.email} 
-              isSuperAdmin={user.isSuperAdmin || (user.email || "").toLowerCase() === "pousan888@gmail.com"} 
+              isSuperAdmin={user.isSuperAdmin || (user.email || "").toLowerCase() === "pousan888@gmail.com"}
+              isSidebarOpen={isAdminSidebarOpen}
+              onSidebarOpenChange={setIsAdminSidebarOpen}
             />
           )}
           {user.role === "HELPER" && (

@@ -89,9 +89,16 @@ import {
 interface AdminDashboardProps {
   userEmail: string;
   isSuperAdmin?: boolean;
+  isSidebarOpen?: boolean;
+  onSidebarOpenChange?: (open: boolean) => void;
 }
 
-export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboardProps) {
+export default function AdminDashboard({
+  userEmail,
+  isSuperAdmin,
+  isSidebarOpen: controlledSidebarOpen,
+  onSidebarOpenChange
+}: AdminDashboardProps) {
   const isUserSuperAdmin = isSuperAdmin || userEmail.toLowerCase() === "pousan888@gmail.com";
 
   // Database States
@@ -105,7 +112,15 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   // Loading & View States
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings">("department_consumables");
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => typeof window !== "undefined" ? window.innerWidth >= 1024 : true);
+  const [internalSidebarOpen, setInternalSidebarOpen] = useState<boolean>(() => typeof window !== "undefined" ? window.innerWidth >= 1024 : true);
+  const effectiveSidebarOpen = controlledSidebarOpen !== undefined ? controlledSidebarOpen : internalSidebarOpen;
+  const setSidebarOpen = (open: boolean) => {
+    if (onSidebarOpenChange) {
+      onSidebarOpenChange(open);
+    } else {
+      setInternalSidebarOpen(open);
+    }
+  };
   const [isSidebarPinned, setIsSidebarPinned] = useState<boolean>(false);
   const [settingsSubTab, setSettingsSubTab] = useState<"departments" | "master_catalog">("departments");
   const [searchTerm, setSearchTerm] = useState("");
@@ -115,7 +130,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   const handleSelectMenuTab = (tab: "department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings") => {
     setActiveTab(tab);
     if (!isSidebarPinned) {
-      setIsSidebarOpen(false);
+      setSidebarOpen(false);
     }
   };
 
@@ -767,7 +782,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           </button>
           <button
             type="button"
-            onClick={() => setIsSidebarOpen(false)}
+            onClick={() => setSidebarOpen(false)}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
             title="ซ่อนแถบเมนูด้านซ้าย"
           >
@@ -831,18 +846,72 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 font-sans min-h-screen">
-      
-      {/* 1. TOP HERO BANNER & INTEGRATED STATS (APPLE LIQUID GLASS DARK SLAB) */}
-      <div className="ios-glass-dark rounded-3xl p-5 sm:p-7 text-white shadow-2xl relative overflow-hidden mb-6 border border-white/20">
+    <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 font-sans min-h-screen">
+
+      {/* Mobile Left Drawer */}
+      {effectiveSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex animate-fade-in">
+          <div
+            className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white/95 backdrop-blur-2xl shadow-2xl border-r border-white p-4 overflow-y-auto">
+            {renderSidebarContent()}
+          </aside>
+        </div>
+      )}
+
+      {/* Main Layout Container: Top-Left Sidebar + Right Workspace (Hero + Content) */}
+      <div className="flex flex-col lg:flex-row gap-5 items-start">
+        {effectiveSidebarOpen && (
+          <aside className="hidden lg:block w-64 xl:w-72 shrink-0 ios-glass-card rounded-3xl p-3.5 border border-white/90 shadow-xl shadow-slate-900/5 sticky top-20 animate-fade-in">
+            {renderSidebarContent()}
+          </aside>
+        )}
+
+        <div className="flex-1 min-w-0 w-full">
+          {/* Compact Top Bar when Sidebar is Collapsed */}
+          {!effectiveSidebarOpen && (
+            <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 ios-glass-card hover:bg-white text-slate-900 rounded-2xl text-xs font-extrabold border border-white/90 shadow-md shadow-slate-900/5 transition-all cursor-pointer ios-press"
+                >
+                  <PanelLeftOpen className="h-4 w-4 text-indigo-600" />
+                  <span>แสดงเมนูด้านซ้าย</span>
+                </button>
+
+                <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 text-xs font-bold text-slate-700 shadow-2xs">
+                  {activeNav.icon}
+                  <span>{activeNav.label}</span>
+                  {activeNav.badge && (
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                        activeNav.badgeUrgent
+                          ? "bg-rose-500 text-white"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {activeNav.badge}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 1. TOP HERO BANNER & INTEGRATED STATS (APPLE LIQUID GLASS DARK SLAB) */}
+          <div className="ios-glass-dark rounded-3xl p-5 sm:p-6 text-white shadow-2xl relative overflow-hidden mb-6 border border-white/20">
         {/* Soft background glow accents */}
         <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute right-1/3 -top-10 w-52 h-52 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute left-10 -bottom-10 w-44 h-44 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           {/* Title & Info */}
-          <div className="space-y-2 max-w-2xl">
+          <div className="space-y-2 max-w-2xl min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-white/15 text-indigo-200 border border-white/20 backdrop-blur-md shadow-xs">
                 <ShieldCheck className="h-3.5 w-3.5 text-indigo-300" />
@@ -880,7 +949,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
           </div>
 
           {/* Quick Action Controls */}
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
             {/* Guide Toggle */}
             <button
               onClick={handleToggleOnboarding}
@@ -1002,7 +1071,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         </div>
 
         {/* QUICK STATS ROW INSIDE BANNER (APPLE LIQUID GLASS TILES) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-6 pt-5 border-t border-white/15">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3 mt-6 pt-5 border-t border-white/15">
           {/* Card 1: Consumables */}
           <div 
             onClick={() => setActiveTab("department_consumables")}
@@ -1273,61 +1342,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
         </div>
       )}
 
-      {/* 3. LEFT SIDEBAR NAVIGATION + MAIN WORKSPACE */}
-      {/* Mobile Left Drawer */}
-      {isSidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex animate-fade-in">
-          <div
-            className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white/95 backdrop-blur-2xl shadow-2xl border-r border-white p-4 overflow-y-auto">
-            {renderSidebarContent()}
-          </aside>
-        </div>
-      )}
-
-      {/* Top Left Bar when Sidebar is Hidden */}
-      {!isSidebarOpen && (
-        <div className="mb-5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 ios-glass-card hover:bg-white text-slate-900 rounded-2xl text-xs font-extrabold border border-white/90 shadow-md shadow-slate-900/5 transition-all cursor-pointer ios-press"
-            >
-              <PanelLeftOpen className="h-4 w-4 text-indigo-600" />
-              <span>แสดงเมนูด้านซ้าย</span>
-            </button>
-
-            <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 text-xs font-bold text-slate-700 shadow-2xs">
-              {activeNav.icon}
-              <span>{activeNav.label}</span>
-              {activeNav.badge && (
-                <span
-                  className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-                    activeNav.badgeUrgent
-                      ? "bg-rose-500 text-white"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {activeNav.badge}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Layout Container: Desktop Left Sidebar + Right Content */}
-      <div className="flex flex-col lg:flex-row gap-5 items-start">
-        {isSidebarOpen && (
-          <aside className="hidden lg:block w-72 shrink-0 ios-glass-card rounded-3xl p-3.5 border border-white/90 shadow-xl shadow-slate-900/5 sticky top-20 animate-fade-in">
-            {renderSidebarContent()}
-          </aside>
-        )}
-
-        <div className="flex-1 min-w-0 w-full">
+      {/* TAB CONTENT WORKSPACE */}
 
       {/* SEARCH CONTROLS FOR CABINETS TAB */}
       {activeTab === "cabinets" && (
