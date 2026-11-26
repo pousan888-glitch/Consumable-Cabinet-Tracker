@@ -23,10 +23,12 @@ export default function Header({ user, onChangeRole, onLogout, lowStockCount }: 
         return { text: "🔬 เบิกใช้ QC", bg: "bg-purple-50 text-purple-700 border-purple-200" };
       case "VIEWER":
         return { text: "👁️ ผู้เข้าชม (Viewer)", bg: "bg-blue-50 text-blue-700 border-blue-200 font-bold" };
+      default:
+        return { text: "👤 ผู้ใช้งานระบบ", bg: "bg-slate-100 text-slate-700 border-slate-200" };
     }
   };
 
-  const roleStyle = getRoleLabel(user.role, user.isSuperAdmin);
+  const roleStyle = getRoleLabel(user?.role, user?.isSuperAdmin);
 
   return (
     <header className="ios-glass-header sticky top-0 z-50 font-sans transition-all">
@@ -59,11 +61,11 @@ export default function Header({ user, onChangeRole, onLogout, lowStockCount }: 
 
             {/* Profile Summary */}
             <div className="flex flex-col text-right max-w-[120px] sm:max-w-[200px]">
-              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight truncate" title={user.name}>
-                {user.name}
+              <span className="text-[11px] sm:text-xs font-bold text-slate-800 leading-tight truncate" title={user?.name || user?.email}>
+                {user?.name || user?.email || "ผู้ใช้งาน"}
               </span>
               <span className="text-[9px] sm:text-[10px] text-slate-400 truncate hidden sm:block font-medium">
-                {user.email}
+                {user?.email || ""}
               </span>
             </div>
 

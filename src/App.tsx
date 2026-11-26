@@ -21,53 +21,69 @@ import {
   LogOut 
 } from "lucide-react";
 
+const VALID_ROLES: UserRole[] = ["ADMIN", "HELPER", "QC", "VIEWER"];
+
+function getInitialUrlParams(): { cabinetId: string | null; mode: "count" | "withdraw" } {
+  if (typeof window === "undefined") return { cabinetId: null, mode: "count" };
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const cabId = urlParams.get("cabinetId")?.trim() || null;
+    const rawMode = urlParams.get("mode");
+    const mode: "count" | "withdraw" = rawMode === "withdraw" ? "withdraw" : "count";
+    return { cabinetId: cabId, mode };
+  } catch {
+    return { cabinetId: null, mode: "count" };
+  }
+}
+
+function getSafeSavedUser(): UserProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("cabinet_tracker_user");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || typeof parsed.email !== "string" || !parsed.email.trim()) {
+      localStorage.removeItem("cabinet_tracker_user");
+      return null;
+    }
+    const normalizedRole = String(parsed.role || "").toUpperCase() as UserRole;
+    const safeRole: UserRole = VALID_ROLES.includes(normalizedRole) ? normalizedRole : "HELPER";
+    return {
+      email: parsed.email.trim(),
+      name: typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : parsed.email.trim(),
+      role: safeRole,
+      isSuperAdmin: Boolean(parsed.isSuperAdmin),
+      isSimulation: Boolean(parsed.isSimulation)
+    };
+  } catch (e) {
+    console.warn("Could not read saved user session:", e);
+    return null;
+  }
+}
+
 export default function App() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const initialParams = getInitialUrlParams();
+  const [user, setUser] = useState<UserProfile | null>(() => getSafeSavedUser());
   const [loading, setLoading] = useState(true);
   const [lowStockCount, setLowStockCount] = useState(0);
-  const [cabinetParam, setCabinetParam] = useState<string | null>(null);
-  const [modeParam, setModeParam] = useState<"count" | "withdraw">("count");
+  const [cabinetParam, setCabinetParam] = useState<string | null>(initialParams.cabinetId);
+  const [modeParam, setModeParam] = useState<"count" | "withdraw">(initialParams.mode);
   const [isTestingBarOpen, setIsTestingBarOpen] = useState(false);
 
-  // Auto-seed database and restore session on startup
+  // Auto-seed database and finish startup cleanly
   useEffect(() => {
     let active = true;
-    
-    // Safety timeout: If initialization takes too long (e.g. 3.5 seconds), proceed to the screen anyway
+
     const safetyTimeout = setTimeout(() => {
       if (active) {
         console.warn("Database initialization taking longer than expected. Proceeding to main screen...");
         setLoading(false);
       }
-    }, 3500);
+    }, 3000);
 
     async function initializeApp() {
       try {
-        // 1. Seed database with rich mock data if empty
         await seedDatabaseIfEmpty();
-
-        if (!active) return;
-
-        // 2. Load and restore session if present
-        try {
-          const savedUser = localStorage.getItem("cabinet_tracker_user");
-          if (savedUser) {
-            setUser(JSON.parse(savedUser));
-          }
-        } catch (e) {
-          console.warn("Could not read saved user session:", e);
-        }
-
-        // 3. Check for QR code URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const cabId = urlParams.get("cabinetId");
-        const mode = urlParams.get("mode") as "count" | "withdraw" | null;
-        if (cabId) {
-          setCabinetParam(cabId);
-          if (mode === "withdraw" || mode === "count") {
-            setModeParam(mode);
-          }
-        }
       } catch (err) {
         console.error("Initialization error:", err);
       } finally {
@@ -85,8 +101,13 @@ export default function App() {
     };
   }, []);
 
-  // Fetch critical safety stock warnings in real-time
+  // Fetch critical safety stock warnings in real-time (only when signed in)
   useEffect(() => {
+    if (!user) {
+      setLowStockCount(0);
+      return;
+    }
+
     async function checkLowStock() {
       try {
         const items = await getConsumables();
@@ -96,8 +117,7 @@ export default function App() {
         console.error("Failed to check low stock items:", err);
       }
     }
-    
-    // Check initially and poll every 30 seconds to keep counts in header accurate
+
     checkLowStock();
     const interval = setInterval(checkLowStock, 30000);
     return () => clearInterval(interval);
@@ -125,10 +145,14 @@ export default function App() {
       console.warn("Could not remove session from localStorage:", e);
     }
     // Clean up query param on logout
-    const url = new URL(window.location.href);
-    url.searchParams.delete("cabinetId");
-    url.searchParams.delete("mode");
-    window.history.pushState({}, "", url.toString());
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("cabinetId");
+      url.searchParams.delete("mode");
+      window.history.pushState({}, "", url.toString());
+    } catch (e) {
+      console.warn("History pushState error:", e);
+    }
     setCabinetParam(null);
   };
 
@@ -146,10 +170,14 @@ export default function App() {
   const handleBackToMenu = () => {
     setCabinetParam(null);
     // Clean up browser URL
-    const url = new URL(window.location.href);
-    url.searchParams.delete("cabinetId");
-    url.searchParams.delete("mode");
-    window.history.pushState({}, "", url.toString());
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("cabinetId");
+      url.searchParams.delete("mode");
+      window.history.pushState({}, "", url.toString());
+    } catch (e) {
+      console.warn("History pushState error:", e);
+    }
   };
 
   if (loading) {
@@ -220,7 +248,7 @@ export default function App() {
           {user.role === "ADMIN" && (
             <AdminDashboard 
               userEmail={user.email} 
-              isSuperAdmin={user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com"} 
+              isSuperAdmin={user.isSuperAdmin || (user.email || "").toLowerCase() === "pousan888@gmail.com"} 
             />
           )}
           {user.role === "HELPER" && (
@@ -247,7 +275,7 @@ export default function App() {
       </div>
 
       {/* QUICK ACCESS TESTING BAR - FLOATING AND COLLAPSIBLE IN IOS LIQUID GLASS PILL */}
-      {(user.isSuperAdmin || user.email.toLowerCase() === "pousan888@gmail.com" || user.isSimulation) && (
+      {(user.isSuperAdmin || (user.email || "").toLowerCase() === "pousan888@gmail.com" || user.isSimulation) && (
         <aside className="fixed bottom-4 right-4 z-40">
           {!isTestingBarOpen ? (
             <button

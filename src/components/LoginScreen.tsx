@@ -14,7 +14,9 @@ import {
   Mail,
   UserCheck,
   Check,
-  ShieldCheck
+  ShieldCheck,
+  Copy,
+  ExternalLink
 } from "lucide-react";
 
 interface LoginScreenProps {
@@ -38,8 +40,22 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const currentHostname = typeof window !== "undefined" ? window.location.hostname : "";
+  const isInAppBrowser =
+    typeof navigator !== "undefined" &&
+    /Line\/|FBAN|FBAV|Instagram|MicroMessenger|wv\)/i.test(navigator.userAgent || "");
+
+  const handleCopyCurrentUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch {
+      setCopiedLink(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -254,6 +270,27 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 </span>
               </div>
             </div>
+
+            {/* In-App Browser (LINE / FB / WebView) Warning */}
+            {isInAppBrowser && (
+              <div className="bg-amber-50 border border-amber-300 text-amber-950 p-3.5 rounded-xl text-xs leading-relaxed space-y-2">
+                <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                  <ExternalLink className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>ตรวจพบการเปิดผ่านเบราว์เซอร์ในแอป (เช่น LINE)</span>
+                </div>
+                <p className="text-amber-800">
+                  การล็อกอิน Google ในแอปอาจแสดงหน้าขาว กรุณากดเมนู <b>⋮</b> หรือปุ่มแชร์ แล้วเลือก <b>&quot;เปิดใน Safari / Chrome&quot;</b> หรือคัดลอกลิงก์ไปเปิดในเบราว์เซอร์ปกติ
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCopyCurrentUrl}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[11px] cursor-pointer transition-colors"
+                >
+                  {copiedLink ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiedLink ? "คัดลอกลิงก์แล้ว!" : "คัดลอกลิงก์นี้ไปเปิดใน Chrome / Safari"}</span>
+                </button>
+              </div>
+            )}
 
             {/* Error Alert if any */}
             {error && (

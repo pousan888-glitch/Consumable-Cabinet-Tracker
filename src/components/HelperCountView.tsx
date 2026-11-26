@@ -7,6 +7,7 @@ import {
   getDepartments 
 } from "../lib/dbService";
 import { isItemLowStock } from "../lib/stockUtils";
+import { FALLBACK_CABINET_IMAGE, FALLBACK_ITEM_IMAGE } from "../lib/imageUtils";
 import ImagePreviewModal from "./ImagePreviewModal";
 import CabinetQRModal from "./CabinetQRModal";
 import CabinetWithdrawView from "./CabinetWithdrawView";
@@ -27,7 +28,8 @@ import {
   PackageMinus,
   ClipboardCheck,
   Building2,
-  Inbox
+  Inbox,
+  RefreshCw
 } from "lucide-react";
 
 interface HelperCountViewProps {
@@ -58,42 +60,68 @@ export default function HelperCountView({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [missingScannedCabinetId, setMissingScannedCabinetId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; subtitle?: string } | null>(null);
   const [qrModalCabinet, setQrModalCabinet] = useState<Cabinet | null>(null);
 
+  const safeUpdateUrlParams = (cabId?: string | null, mode?: "count" | "withdraw") => {
+    try {
+      const url = new URL(window.location.href);
+      if (cabId) {
+        url.searchParams.set("cabinetId", cabId);
+        if (mode) url.searchParams.set("mode", mode);
+      } else {
+        url.searchParams.delete("cabinetId");
+        url.searchParams.delete("mode");
+      }
+      window.history.pushState({}, "", url.toString());
+    } catch {
+      // Ignore history API restrictions in embedded WebViews
+    }
+  };
+
+  const loadData = async () => {
+    setLoading(true);
+    setLoadError(null);
+    setMissingScannedCabinetId(null);
+    try {
+      const [cabs, depts] = await Promise.all([
+        getCabinets(),
+        getDepartments()
+      ]);
+      const safeCabs = Array.isArray(cabs) ? cabs : [];
+      const safeDepts = Array.isArray(depts) ? depts : [];
+      setCabinets(safeCabs);
+      setDepartments(safeDepts);
+
+      // If cabinetId is pre-selected (via QR query param)
+      const urlParams = new URLSearchParams(window.location.search);
+      const activeId = selectedCabinetId || urlParams.get("cabinetId");
+      const urlMode = (urlParams.get("mode") as "count" | "withdraw") || initialMode;
+      if (urlMode === "withdraw" || urlMode === "count") {
+        setCurrentMode(urlMode);
+      }
+
+      if (activeId) {
+        const matched = safeCabs.find(c => c.id === activeId);
+        if (matched) {
+          setSelectedCabinet(matched);
+          await loadConsumablesForCabinet(matched.id);
+        } else {
+          setMissingScannedCabinetId(activeId);
+        }
+      }
+    } catch (err: any) {
+      console.error("Error loading cabinets for helper:", err);
+      setLoadError(err?.message || "ไม่สามารถโหลดข้อมูลตู้พัสดุจากฐานข้อมูลได้");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Load cabinets and departments initially
   useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const [cabs, depts] = await Promise.all([
-          getCabinets(),
-          getDepartments()
-        ]);
-        setCabinets(cabs);
-        setDepartments(depts);
-
-        // If cabinetId is pre-selected (via QR query param)
-        const urlParams = new URLSearchParams(window.location.search);
-        const activeId = selectedCabinetId || urlParams.get("cabinetId");
-        const urlMode = (urlParams.get("mode") as "count" | "withdraw") || initialMode;
-        if (urlMode === "withdraw" || urlMode === "count") {
-          setCurrentMode(urlMode);
-        }
-
-        if (activeId) {
-          const matched = cabs.find(c => c.id === activeId);
-          if (matched) {
-            setSelectedCabinet(matched);
-            await loadConsumablesForCabinet(matched.id);
-          }
-        }
-      } catch (err) {
-        console.error("Error loading cabinets for helper:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
   }, [selectedCabinetId, initialMode]);
 
@@ -101,16 +129,18 @@ export default function HelperCountView({
   const loadConsumablesForCabinet = async (cabId: string) => {
     try {
       const items = await getConsumables(cabId);
-      setConsumables(items);
+      const safeItems = Array.isArray(items) ? items : [];
+      setConsumables(safeItems);
       
       // Initialize counts with currentQty
       const initialCounts: Record<string, number> = {};
-      items.forEach(item => {
-        initialCounts[item.id] = item.currentQty;
+      safeItems.forEach(item => {
+        initialCounts[item.id] = Number(item.currentQty) || 0;
       });
       setCounts(initialCounts);
     } catch (err) {
       console.error("Error loading cabinet items:", err);
+      setConsumables([]);
     }
   };
 
@@ -120,12 +150,9 @@ export default function HelperCountView({
     setCurrentMode(mode);
     setCabinetDeptFilter("ALL");
     setConsumableSearchTerm("");
+    setMissingScannedCabinetId(null);
     
-    // Update URL query parameter in the browser without reloading to mimic real QR scanning
-    const url = new URL(window.location.href);
-    url.searchParams.set("cabinetId", cabinet.id);
-    url.searchParams.set("mode", mode);
-    window.history.pushState({}, "", url.toString());
+    safeUpdateUrlParams(cabinet.id, mode);
     
     await loadConsumablesForCabinet(cabinet.id);
     setLoading(false);
@@ -133,9 +160,9 @@ export default function HelperCountView({
 
   const handleSwitchMode = (mode: "count" | "withdraw") => {
     setCurrentMode(mode);
-    const url = new URL(window.location.href);
-    url.searchParams.set("mode", mode);
-    window.history.pushState({}, "", url.toString());
+    if (selectedCabinet) {
+      safeUpdateUrlParams(selectedCabinet.id, mode);
+    }
   };
 
   const handleBackToCabinets = () => {
@@ -144,13 +171,10 @@ export default function HelperCountView({
     setCounts({});
     setCabinetDeptFilter("ALL");
     setConsumableSearchTerm("");
+    setMissingScannedCabinetId(null);
     setSuccess(false);
 
-    // Clean up URL parameters
-    const url = new URL(window.location.href);
-    url.searchParams.delete("cabinetId");
-    url.searchParams.delete("mode");
-    window.history.pushState({}, "", url.toString());
+    safeUpdateUrlParams(null);
   };
 
   const handleCountChange = (id: string, val: number) => {
@@ -199,23 +223,25 @@ export default function HelperCountView({
       );
 
       setSuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save count checks:", err);
-      alert("เกิดข้อผิดพลาดขณะบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง");
+      setLoadError(err?.message || "เกิดข้อผิดพลาดขณะบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง");
     } finally {
       setSaving(false);
     }
   };
 
   const filteredCabinets = cabinets.filter(c => {
+    const cabDepts = Array.isArray(c?.departments) ? c.departments : [];
+    const term = searchTerm.toLowerCase();
     const matchesSearch = 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.departments.some(d => d.toLowerCase().includes(searchTerm.toLowerCase()));
+      (c?.name || "").toLowerCase().includes(term) ||
+      (c?.location || "").toLowerCase().includes(term) ||
+      cabDepts.some(d => String(d || "").toLowerCase().includes(term));
 
     const matchesDept = 
       selectedDeptFilter === "ALL" || 
-      c.departments.includes(selectedDeptFilter);
+      cabDepts.includes(selectedDeptFilter);
 
     return matchesSearch && matchesDept;
   });
@@ -368,10 +394,13 @@ export default function HelperCountView({
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden mb-6">
               <div className="relative h-44 sm:h-52 bg-slate-900">
                 <img 
-                  src={selectedCabinet.photoUrl} 
-                  alt={selectedCabinet.name} 
+                  src={selectedCabinet.photoUrl || FALLBACK_CABINET_IMAGE} 
+                  alt={selectedCabinet.name || "ตู้เก็บพัสดุ"} 
                   className="w-full h-full object-cover opacity-85"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = FALLBACK_CABINET_IMAGE;
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent flex flex-col justify-end p-6">
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -380,17 +409,17 @@ export default function HelperCountView({
                       สแกนนับสต็อก (โหมดตรวจนับสำหรับ Helper)
                     </span>
                     <span className="text-[11px] text-white/80 bg-black/40 backdrop-blur-xs px-2.5 py-0.5 rounded-full">
-                      {selectedCabinet.location}
+                      {selectedCabinet.location || "ไม่ระบุตำแหน่ง"}
                     </span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight font-display">
-                    {selectedCabinet.name}
+                    {selectedCabinet.name || "ตู้เก็บพัสดุ"}
                   </h1>
                   <p className="text-white/80 text-xs mt-1 flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>{selectedCabinet.location}</span>
+                    <span>{selectedCabinet.location || "ไม่ระบุตำแหน่ง"}</span>
                     <span className="text-white/40">•</span>
-                    <span>แผนก: {selectedCabinet.departments.join(", ")}</span>
+                    <span>แผนก: {Array.isArray(selectedCabinet.departments) && selectedCabinet.departments.length > 0 ? selectedCabinet.departments.join(", ") : "ทุกแผนก"}</span>
                   </p>
                 </div>
               </div>
@@ -470,7 +499,7 @@ export default function HelperCountView({
               const displayedConsumables = consumables.filter(item => {
                 const matchesDept = cabinetDeptFilter === "ALL" || item.department === cabinetDeptFilter;
                 const matchesSearch = !term ||
-                  item.name.toLowerCase().includes(term) ||
+                  (item.name || "").toLowerCase().includes(term) ||
                   (item.department && item.department.toLowerCase().includes(term)) ||
                   (item.unit && item.unit.toLowerCase().includes(term)) ||
                   (item.notes && item.notes.toLowerCase().includes(term));
@@ -570,18 +599,21 @@ export default function HelperCountView({
                               <button
                                 type="button"
                                 onClick={() => setPreviewImage({
-                                  url: item.imageUrl,
-                                  title: item.name,
-                                  subtitle: `แผนก: ${item.department} | หน่วยนับ: ${item.unit} | เกณฑ์ Min: ${item.minThreshold}${item.maxThreshold ? ` / Max: ${item.maxThreshold}` : ""}`
+                                  url: item.imageUrl || FALLBACK_ITEM_IMAGE,
+                                  title: item.name || "พัสดุ",
+                                  subtitle: `แผนก: ${item.department || "-"} | หน่วยนับ: ${item.unit || "ชิ้น"} | เกณฑ์ Min: ${item.minThreshold ?? 0}${item.maxThreshold ? ` / Max: ${item.maxThreshold}` : ""}`
                                 })}
                                 className="relative h-16 w-16 rounded-2xl bg-slate-100 overflow-hidden border-2 border-slate-200/80 shrink-0 cursor-pointer group shadow-sm active:scale-95 transition-all text-left"
                                 title="แตะเพื่อดูรูปภาพของจริงขนาดใหญ่"
                               >
                                 <img 
-                                  src={item.imageUrl} 
-                                  alt={item.name} 
+                                  src={item.imageUrl || FALLBACK_ITEM_IMAGE} 
+                                  alt={item.name || "พัสดุ"} 
                                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                                   referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = FALLBACK_ITEM_IMAGE;
+                                  }}
                                 />
                                 <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                                   <Eye className="h-4 w-4 drop-shadow" />
@@ -703,6 +735,35 @@ export default function HelperCountView({
   // DIRECTORY OF CABINETS (HOME SCREEN FOR HELPERS & WORKERS)
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 font-sans bg-slate-50 min-h-screen">
+      {/* Missing Scanned QR Cabinet / Load Error Banner */}
+      {(missingScannedCabinetId || loadError) && (
+        <div className="mb-6 bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl shrink-0">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="text-xs sm:text-sm text-amber-950 space-y-1">
+              <div className="font-black">
+                {missingScannedCabinetId
+                  ? `ไม่พบตู้พัสดุรหัส "${missingScannedCabinetId}" จาก QR ที่สแกน`
+                  : "ไม่สามารถดึงข้อมูลตู้พัสดุได้"}
+              </div>
+              <p className="text-amber-800 text-xs leading-relaxed">
+                {loadError || "ตู้อาจถูกลบ/เปลี่ยนรหัส หรือการเชื่อมต่ออินเทอร์เน็ตช้าขณะเปิดหน้านี้ สามารถกดรีเฟรชเพื่อโหลดใหม่ หรือเลือกตู้ด้านล่างแทนได้"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadData}
+            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>ลองโหลดใหม่</span>
+          </button>
+        </div>
+      )}
+
       {/* Intro section */}
       <div className="text-center mb-6">
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight font-display">
@@ -736,7 +797,7 @@ export default function HelperCountView({
           ทุกแผนก ({cabinets.length})
         </button>
         {departments.map(dept => {
-          const count = cabinets.filter(c => c.departments.includes(dept.name)).length;
+          const count = cabinets.filter(c => Array.isArray(c?.departments) && c.departments.includes(dept.name)).length;
           return (
             <button
               key={dept.id}
@@ -787,18 +848,21 @@ export default function HelperCountView({
                 <button
                   type="button"
                   onClick={() => setPreviewImage({
-                    url: cabinet.photoUrl,
-                    title: cabinet.name,
-                    subtitle: `สถานที่: ${cabinet.location} • แผนก: ${cabinet.departments.join(", ")}`
+                    url: cabinet.photoUrl || FALLBACK_CABINET_IMAGE,
+                    title: cabinet.name || "ตู้เก็บพัสดุ",
+                    subtitle: `สถานที่: ${cabinet.location || "-"} • แผนก: ${Array.isArray(cabinet.departments) && cabinet.departments.length > 0 ? cabinet.departments.join(", ") : "ทุกแผนก"}`
                   })}
                   className="w-24 sm:w-28 h-24 bg-slate-100 rounded-2xl overflow-hidden shrink-0 border border-slate-200 relative group/img cursor-pointer text-left"
                   title="แตะเพื่อดูรูปตู้ขนาดใหญ่"
                 >
                   <img 
-                    src={cabinet.photoUrl} 
-                    alt={cabinet.name} 
+                    src={cabinet.photoUrl || FALLBACK_CABINET_IMAGE} 
+                    alt={cabinet.name || "ตู้เก็บพัสดุ"} 
                     className="w-full h-full object-cover group-hover/img:scale-105 transition-all duration-300"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = FALLBACK_CABINET_IMAGE;
+                    }}
                   />
                   <span className="absolute bottom-0 inset-x-0 bg-slate-950/70 text-white text-[8px] font-bold text-center py-0.5">
                     แตะดูรูปตู้
@@ -809,18 +873,18 @@ export default function HelperCountView({
                 <div className="flex flex-col justify-between overflow-hidden flex-1">
                   <div>
                     <div className="flex gap-1 mb-1 max-w-full overflow-x-auto no-scrollbar">
-                      {cabinet.departments.map(dept => (
+                      {(Array.isArray(cabinet.departments) ? cabinet.departments : []).map(dept => (
                         <span key={dept} className="bg-indigo-50 text-indigo-600 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase">
                           {dept}
                         </span>
                       ))}
                     </div>
                     <h3 className="font-extrabold text-slate-900 text-sm leading-tight group-hover:text-indigo-600 transition-colors truncate">
-                      {cabinet.name}
+                      {cabinet.name || "ตู้เก็บพัสดุ"}
                     </h3>
                     <p className="text-[11px] text-slate-400 mt-1 flex items-center gap-1 font-medium truncate">
                       <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
-                      {cabinet.location}
+                      {cabinet.location || "ไม่ระบุตำแหน่ง"}
                     </p>
                   </div>
 

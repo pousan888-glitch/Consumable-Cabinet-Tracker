@@ -13,7 +13,9 @@ import {
   deleteDoc, 
   Timestamp,
   writeBatch,
-  isOfflineFallback
+  isOfflineFallback,
+  OperationType,
+  buildFirestoreErrorInfo
 } from "./firebase";
 import { Cabinet, Consumable, MasterConsumable, CountHistory, QCConsumptionHistory, AppUserRecord, UserRole, DepartmentRecord } from "../types";
 
@@ -39,12 +41,32 @@ export const CONSUMABLE_PRESETS: Record<string, string> = {
   "tubes": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&q=80&w=400"    // lab test tubes / bottles
 };
 
-// Local storage helper functions with Safari/iOS Private Browsing safety
+// Local storage helper functions with Safari/iOS Private Browsing & Quota safety
+const safeGetItem = (key: string): string | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn(`Safe localStorage getItem warning for "${key}":`, e);
+    return null;
+  }
+};
+
+const safeSetItem = (key: string, value: string): void => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn(`Safe localStorage setItem warning for "${key}":`, e);
+  }
+};
+
 const getLocal = <T>(key: string): T[] => {
   if (typeof window === "undefined") return [];
   try {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
+    const data = safeGetItem(key);
+    const parsed = data ? JSON.parse(data) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
     console.warn(`Safe getLocal warning for "${key}":`, e);
     return [];
@@ -59,6 +81,45 @@ const setLocal = <T>(key: string, data: T[]) => {
     console.warn(`Safe setLocal warning for "${key}" (iOS Safari private mode or quota):`, e);
   }
 };
+
+const normalizeCabinet = (raw: any): Cabinet => ({
+  id: String(raw?.id || ""),
+  name: typeof raw?.name === "string" && raw.name.trim() ? raw.name : "ตู้เก็บพัสดุ",
+  location: typeof raw?.location === "string" ? raw.location : "",
+  departments: Array.isArray(raw?.departments)
+    ? raw.departments.filter((d: any): d is string => typeof d === "string" && d.trim().length > 0)
+    : [],
+  photoUrl: typeof raw?.photoUrl === "string" && raw.photoUrl ? raw.photoUrl : CABINET_PRESETS[0],
+  createdAt: raw?.createdAt
+});
+
+const normalizeConsumable = (raw: any): Consumable => {
+  const qty = Number(raw?.currentQty);
+  const minT = Number(raw?.minThreshold);
+  const maxT = raw?.maxThreshold !== undefined && raw?.maxThreshold !== null ? Number(raw.maxThreshold) : undefined;
+  return {
+    ...(raw || {}),
+    id: String(raw?.id || ""),
+    cabinetId: String(raw?.cabinetId || ""),
+    name: typeof raw?.name === "string" && raw.name.trim() ? raw.name : "รายการพัสดุ",
+    department: typeof raw?.department === "string" && raw.department.trim() ? raw.department : "CMT",
+    currentQty: Number.isFinite(qty) && qty >= 0 ? qty : 0,
+    minThreshold: Number.isFinite(minT) && minT >= 0 ? minT : 0,
+    maxThreshold: maxT !== undefined && Number.isFinite(maxT) && maxT >= 0 ? maxT : undefined,
+    unit: typeof raw?.unit === "string" && raw.unit.trim() ? raw.unit : "ชิ้น",
+    imageUrl: typeof raw?.imageUrl === "string" ? raw.imageUrl : "",
+    lastUpdated: raw?.lastUpdated,
+    lastUpdatedBy: typeof raw?.lastUpdatedBy === "string" ? raw.lastUpdatedBy : ""
+  };
+};
+
+const normalizeDepartment = (raw: any): DepartmentRecord => ({
+  ...(raw || {}),
+  id: String(raw?.id || ""),
+  name: typeof raw?.name === "string" ? raw.name : "",
+  description: typeof raw?.description === "string" ? raw.description : "",
+  color: typeof raw?.color === "string" && raw.color ? raw.color : "#4f46e5"
+});
 
 // Deeply search an object to convert serialized `{ seconds, nanoseconds }` back to real Firestore Timestamps
 function convertToTimestamps<T>(obj: any): T {
@@ -157,7 +218,7 @@ const DATABASE_SEEDED_KEY = "cabinet_database_seeded_flag";
 export const getDeletedConsumableIds = (): string[] => {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(DELETED_CONSUMABLES_KEY);
+    const raw = safeGetItem(DELETED_CONSUMABLES_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
@@ -174,20 +235,20 @@ export const recordDeletedConsumableId = (id: string) => {
   const current = getDeletedConsumableIds();
   if (!current.includes(id)) {
     current.push(id);
-    localStorage.setItem(DELETED_CONSUMABLES_KEY, JSON.stringify(current));
+    safeSetItem(DELETED_CONSUMABLES_KEY, JSON.stringify(current));
   }
 };
 
 export const unrecordDeletedConsumableId = (id: string) => {
   if (!id || typeof window === "undefined") return;
   const current = getDeletedConsumableIds().filter(x => x !== id);
-  localStorage.setItem(DELETED_CONSUMABLES_KEY, JSON.stringify(current));
+  safeSetItem(DELETED_CONSUMABLES_KEY, JSON.stringify(current));
 };
 
 export const getDeletedCabinetIds = (): string[] => {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(DELETED_CABINETS_KEY);
+    const raw = safeGetItem(DELETED_CABINETS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
@@ -204,14 +265,14 @@ export const recordDeletedCabinetId = (id: string) => {
   const current = getDeletedCabinetIds();
   if (!current.includes(id)) {
     current.push(id);
-    localStorage.setItem(DELETED_CABINETS_KEY, JSON.stringify(current));
+    safeSetItem(DELETED_CABINETS_KEY, JSON.stringify(current));
   }
 };
 
 export const unrecordDeletedCabinetId = (id: string) => {
   if (!id || typeof window === "undefined") return;
   const current = getDeletedCabinetIds().filter(x => x !== id);
-  localStorage.setItem(DELETED_CABINETS_KEY, JSON.stringify(current));
+  safeSetItem(DELETED_CABINETS_KEY, JSON.stringify(current));
 };
 
 // Sync deletion tombstones with Cloud Firestore so deletions are shared across all devices and never bounce back
@@ -255,6 +316,7 @@ export async function syncCloudTombstones(): Promise<{ deletedCabIds: string[]; 
     for (const id of localCabIds) {
       if (!cloudCabIds.includes(id)) {
         setDoc(doc(db, "_tombstones", id), {
+          id,
           type: "cabinet",
           deletedAt: Timestamp.now()
         }).catch(() => {});
@@ -263,6 +325,7 @@ export async function syncCloudTombstones(): Promise<{ deletedCabIds: string[]; 
     for (const id of localConsIds) {
       if (!cloudConsIds.includes(id)) {
         setDoc(doc(db, "_tombstones", id), {
+          id,
           type: "consumable",
           deletedAt: Timestamp.now()
         }).catch(() => {});
@@ -282,8 +345,8 @@ const getLocalCabinets = (): Cabinet[] => {
   const deletedCabIds = getDeletedCabinetIds();
   const list = getLocal<any>("local_cabinets");
   return list
-    .map(item => convertToTimestamps<Cabinet>(item))
-    .filter(item => !deletedCabIds.includes(item.id));
+    .map(item => normalizeCabinet(convertToTimestamps<Cabinet>(item)))
+    .filter(item => item.id && !deletedCabIds.includes(item.id));
 };
 
 const getLocalConsumables = (): Consumable[] => {
@@ -291,8 +354,8 @@ const getLocalConsumables = (): Consumable[] => {
   const deletedCabIds = getDeletedCabinetIds();
   const list = getLocal<any>("local_consumables");
   return list
-    .map(item => convertToTimestamps<Consumable>(item))
-    .filter(item => !deletedIds.includes(item.id) && !deletedCabIds.includes(item.cabinetId));
+    .map(item => normalizeConsumable(convertToTimestamps<Consumable>(item)))
+    .filter(item => item.id && !deletedIds.includes(item.id) && !deletedCabIds.includes(item.cabinetId));
 };
 
 const getLocalCountHistory = (): CountHistory[] => {
@@ -338,8 +401,8 @@ export const getLocalDepartments = (): DepartmentRecord[] => {
   }
   // Filter out any departments that were deleted or named "Production"
   return list
-    .map(item => convertToTimestamps<DepartmentRecord>(item))
-    .filter(d => !deletedIds.includes(d.id) && d.name?.toLowerCase() !== "production");
+    .map(item => normalizeDepartment(convertToTimestamps<DepartmentRecord>(item)))
+    .filter(d => d.id && !deletedIds.includes(d.id) && d.name?.toLowerCase() !== "production");
 };
 
 // Global Cloud Sync Status tracking to inform the user if Firestore Rules need attention
@@ -353,11 +416,17 @@ export function resetCloudSyncNotice() {
   cloudSyncNotice = { hasError: false };
 }
 
-function recordCloudError(err: any) {
+function recordCloudError(
+  err: any,
+  operationType: OperationType = OperationType.WRITE,
+  path: string | null = null
+) {
   const code = err?.code || "";
   const msg = err?.message || "";
   console.warn("[Cloud Firestore Sync Alert]:", code, msg);
   if (code === "permission-denied" || code.includes("permission")) {
+    const errInfo = buildFirestoreErrorInfo(err, operationType, path);
+    console.error("Firestore Error: ", JSON.stringify(errInfo));
     cloudSyncNotice = {
       hasError: true,
       code: "permission-denied",
@@ -470,13 +539,13 @@ export async function testAndSyncAllToCloud(): Promise<{
       syncedConsumables: localCons.length
     };
   } catch (err: any) {
-    recordCloudError(err);
+    recordCloudError(err, OperationType.WRITE, "cloud_sync");
     const code = err?.code || "";
     if (code === "permission-denied" || code.includes("permission")) {
       return {
         success: false,
         code: "permission-denied",
-        message: "ยังติดสิทธิ์ Permission Denied: กรุณาเข้าไปที่ Firebase Console > Firestore Database > Rules และตั้งค่าให้อนุญาต (allow read, write: if true;) แล้วกด Publish ก่อนกดปุ่มนี้อีกครั้ง",
+        message: "ยังติดสิทธิ์ Permission Denied: กรุณาตรวจสอบว่าบัญชีที่ใช้งานมีสิทธิ์ Admin และได้เผยแพร่กฎจากไฟล์ firestore.rules ใน Firebase Console แล้ว",
         syncedCabinets: 0,
         syncedConsumables: 0
       };
@@ -493,7 +562,7 @@ export async function testAndSyncAllToCloud(): Promise<{
 
 // Seed initial data if database is empty (Handles both Cloud Firestore and local fallback)
 export async function seedDatabaseIfEmpty() {
-  const isAlreadySeeded = localStorage.getItem(DATABASE_SEEDED_KEY) === "true";
+  const isAlreadySeeded = safeGetItem(DATABASE_SEEDED_KEY) === "true";
   if (isAlreadySeeded) {
     return false;
   }
@@ -508,7 +577,7 @@ export async function seedDatabaseIfEmpty() {
   const deletedCons = getDeletedConsumableIds();
   const deletedCabs = getDeletedCabinetIds();
   if (deletedCons.length > 0 || deletedCabs.length > 0) {
-    localStorage.setItem(DATABASE_SEEDED_KEY, "true");
+    safeSetItem(DATABASE_SEEDED_KEY, "true");
     return false;
   }
 
@@ -516,7 +585,7 @@ export async function seedDatabaseIfEmpty() {
     const existingCabs = getLocalCabinets();
     if (existingCabs.length > 0) {
       console.log("[Offline Mode]: Database already has data. Skipping seed.");
-      localStorage.setItem(DATABASE_SEEDED_KEY, "true");
+      safeSetItem(DATABASE_SEEDED_KEY, "true");
       return false;
     }
 
@@ -662,7 +731,7 @@ export async function seedDatabaseIfEmpty() {
     setLocal("local_consumables", localConsumables);
     setLocal("local_count_history", [initialHistory]);
     setLocal("local_qc_consumption_history", []);
-    localStorage.setItem(DATABASE_SEEDED_KEY, "true");
+    safeSetItem(DATABASE_SEEDED_KEY, "true");
     return true;
   }
 
@@ -672,7 +741,7 @@ export async function seedDatabaseIfEmpty() {
     const tombSnap = await withTimeout(getDocs(collection(db, "_tombstones")), 2000).catch(() => null);
     if (!cabinetSnap.empty || (tombSnap && !tombSnap.empty)) {
       console.log("Database already has data or tombstones. Skipping seed.");
-      localStorage.setItem(DATABASE_SEEDED_KEY, "true");
+      safeSetItem(DATABASE_SEEDED_KEY, "true");
       return false;
     }
 
@@ -789,7 +858,7 @@ export async function seedDatabaseIfEmpty() {
 
     consumables1.forEach(c => batch.set(doc(db, "consumables", c.id), c));
     consumables2.forEach(c => batch.set(doc(db, "consumables", c.id), c));
-    localStorage.setItem(DATABASE_SEEDED_KEY, "true");
+    safeSetItem(DATABASE_SEEDED_KEY, "true");
 
     const historyId = "log-001";
     const initialHistory: CountHistory = {
@@ -868,7 +937,7 @@ export async function getCabinets(): Promise<Cabinet[]> {
 
     const cloudList = snap.docs
       .filter(doc => !deletedCabIds.includes(doc.id))
-      .map(doc => ({ id: doc.id, ...doc.data() } as Cabinet));
+      .map(doc => normalizeCabinet({ id: doc.id, ...doc.data() }));
     
     // Sort in memory by createdAt descending
     cloudList.sort((a, b) => {
@@ -910,7 +979,7 @@ export async function getCabinets(): Promise<Cabinet[]> {
     setLocal("local_cabinets", combined);
     return combined;
   } catch (err) {
-    recordCloudError(err);
+    recordCloudError(err, OperationType.LIST, "cabinets");
     console.warn("Could not fetch cabinets from Cloud, serving from local cache:", err);
     return localList;
   }
@@ -1050,7 +1119,7 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
 
     const cloudList = snap.docs
       .filter(doc => !deletedIds.includes(doc.id) && !deletedCabIds.includes(doc.data().cabinetId))
-      .map(doc => ({ id: doc.id, ...doc.data() } as Consumable));
+      .map(doc => normalizeConsumable({ id: doc.id, ...doc.data() }));
 
     // Cloud connection is healthy!
     cloudSyncNotice = { hasError: false };
@@ -1083,7 +1152,9 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
         }
       }
 
-      setLocal("local_consumables", combined);
+      if (!cabinetId) {
+        setLocal("local_consumables", combined);
+      }
       return cabinetId ? combined.filter(c => c.cabinetId === cabinetId) : combined;
     }
 
@@ -1102,7 +1173,7 @@ export async function getConsumables(cabinetId?: string): Promise<Consumable[]> 
 
     return [];
   } catch (err) {
-    recordCloudError(err);
+    recordCloudError(err, OperationType.LIST, "consumables");
     console.warn("Could not fetch consumables from Cloud, serving from local cache:", err);
     return cabinetId ? localList.filter(c => c.cabinetId === cabinetId) : localList;
   }
@@ -1752,8 +1823,18 @@ export async function saveAppUserRole(
 
   try {
     await setDoc(doc(db, "users", userRecord.id), userRecord, { merge: true });
+    // Sync user_roles lookup doc so non-Super-Admin admins can verify permissions via Firestore Rules
+    if (finalRole === "ADMIN") {
+      await setDoc(
+        doc(db, "user_roles", emailClean),
+        { email: emailClean, role: "ADMIN", updatedAt: now },
+        { merge: true }
+      ).catch(() => {});
+    } else if (existingIdx !== -1 && localUsers[existingIdx]?.role !== "ADMIN") {
+      await deleteDoc(doc(db, "user_roles", emailClean)).catch(() => {});
+    }
   } catch (err) {
-    recordCloudError(err);
+    recordCloudError(err, OperationType.WRITE, `users/${userRecord.id}`);
     console.warn("Notice: User role saved locally, Cloud sync deferred:", err);
   }
 
@@ -1775,8 +1856,11 @@ export async function deleteAppUser(userId: string): Promise<void> {
 
   try {
     await deleteDoc(doc(db, "users", userId));
+    if (targetUser?.email) {
+      await deleteDoc(doc(db, "user_roles", targetUser.email.toLowerCase())).catch(() => {});
+    }
   } catch (err) {
-    recordCloudError(err);
+    recordCloudError(err, OperationType.DELETE, `users/${userId}`);
     console.warn("Notice: User deleted locally, Cloud sync deferred:", err);
   }
 }
@@ -1808,15 +1892,41 @@ export async function fetchOrRegisterUser(
     return { role: "ADMIN", isSuperAdmin: true, name: finalName, profileCompleted };
   }
 
-  // Lookup in existing users
-  const users = await getAppUsers();
-  const matched = users.find(u => u.email.toLowerCase() === emailClean);
+  // First query the signed-in user's own profile via filtered query (compatible with strict PII list rules)
+  let matched: AppUserRecord | undefined;
+  if (!isOfflineFallback) {
+    try {
+      const userSnap = await withTimeout(
+        getDocs(query(collection(db, "users"), where("email", "==", emailClean))),
+        4000
+      );
+      if (!userSnap.empty) {
+        const firstDoc = userSnap.docs[0];
+        matched = convertToTimestamps<AppUserRecord>({ id: firstDoc.id, ...firstDoc.data() });
+        const localUsers = getLocalUsers();
+        const idx = localUsers.findIndex(u => u.id === matched!.id || u.email.toLowerCase() === emailClean);
+        if (idx !== -1) {
+          localUsers[idx] = matched;
+        } else {
+          localUsers.push(matched);
+        }
+        setLocal("local_users", localUsers);
+      }
+    } catch (err) {
+      recordCloudError(err, OperationType.LIST, "users");
+    }
+  }
+
+  // Fallback to local cache if cloud query failed or was empty
+  if (!matched) {
+    const localUsers = getLocalUsers();
+    matched = localUsers.find(u => (u.email || "").toLowerCase() === emailClean);
+  }
 
   if (matched) {
-    // If user already registered and has completed profile setup previously
     const hasCompleted = matched.profileCompleted === true;
     return { 
-      role: matched.role, 
+      role: matched.role || "HELPER", 
       isSuperAdmin: false, 
       name: matched.name || displayName || emailClean.split("@")[0],
       profileCompleted: hasCompleted
@@ -1900,11 +2010,11 @@ export async function getDepartments(): Promise<DepartmentRecord[]> {
 
     const cloudList = snapshot.docs
       .filter(doc => !deletedIds.includes(doc.id) && doc.data().name?.toLowerCase() !== "production")
-      .map(doc => ({ id: doc.id, ...doc.data() } as DepartmentRecord));
+      .map(doc => normalizeDepartment({ id: doc.id, ...doc.data() }));
     setLocal("local_departments", cloudList);
     return cloudList;
   } catch (err) {
-    recordCloudError(err);
+    recordCloudError(err, OperationType.LIST, "departments");
     return localList;
   }
 }
@@ -2175,7 +2285,7 @@ const DELETED_MASTER_CONSUMABLES_KEY = "cabinet_deleted_master_consumables_tombs
 export const getDeletedMasterConsumableIds = (): string[] => {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(DELETED_MASTER_CONSUMABLES_KEY);
+    const raw = safeGetItem(DELETED_MASTER_CONSUMABLES_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
@@ -2192,7 +2302,7 @@ export const addDeletedMasterConsumableId = (id: string) => {
   const current = getDeletedMasterConsumableIds();
   if (!current.includes(id)) {
     current.push(id);
-    localStorage.setItem(DELETED_MASTER_CONSUMABLES_KEY, JSON.stringify(current));
+    safeSetItem(DELETED_MASTER_CONSUMABLES_KEY, JSON.stringify(current));
   }
 };
 

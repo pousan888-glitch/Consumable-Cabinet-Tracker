@@ -409,10 +409,10 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
   const handleEditCabinet = (cab: Cabinet) => {
     setEditingCabinet(cab);
     setCabinetForm({
-      name: cab.name,
-      location: cab.location,
-      departments: cab.departments,
-      photoUrl: cab.photoUrl
+      name: cab.name || "",
+      location: cab.location || "",
+      departments: Array.isArray(cab.departments) ? cab.departments : [],
+      photoUrl: cab.photoUrl || ""
     });
     setCabinetError(null);
     setShowCabinetModal(true);
@@ -1271,11 +1271,12 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
             </div>
           ) : (
             cabinets
-              .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.location.toLowerCase().includes(searchTerm.toLowerCase()))
+              .filter(c => (c.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || (c.location || "").toLowerCase().includes(searchTerm.toLowerCase()))
               .map(cabinet => {
                 // Count items inside this cabinet
                 const cabinetItems = consumables.filter(item => item.cabinetId === cabinet.id);
                 const lowItemsCount = cabinetItems.filter(item => item.currentQty <= item.minThreshold).length;
+                const cabDepartments = Array.isArray(cabinet.departments) ? cabinet.departments : [];
 
                 return (
                   <div key={cabinet.id} className="ios-glass-card rounded-3xl overflow-hidden border border-white/80 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:border-indigo-300 transition-all duration-300 flex flex-col justify-between">
@@ -1286,7 +1287,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                         onClick={() => setPreviewModalImage({ 
                           url: cabinet.photoUrl, 
                           title: cabinet.name, 
-                          subtitle: `ที่ตั้ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}` 
+                          subtitle: `ที่ตั้ง: ${cabinet.location || "-"} | แผนก: ${cabDepartments.join(", ") || "-"}` 
                         })}
                         title="คลิกเพื่อดูรูปภาพขนาดใหญ่"
                       >
@@ -1302,7 +1303,7 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                           </span>
                         </div>
                         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                          {cabinet.departments.map(d => (
+                          {cabDepartments.map(d => (
                             <span key={d} className="bg-indigo-600/85 backdrop-blur-md text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs border border-white/20">
                               {d}
                             </span>
@@ -2691,40 +2692,13 @@ export default function AdminDashboard({ userEmail, isSuperAdmin }: AdminDashboa
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
                     <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-black text-xs flex items-center justify-center">1</span>
-                    <span className="font-bold text-slate-900 text-sm">คัดลอกโค้ด Firestore Rules</span>
+                    <span className="font-bold text-slate-900 text-sm">ตรวจสอบสิทธิ์การล็อกอินและ Firestore Rules</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
-                      navigator.clipboard.writeText(rules);
-                      setCopiedRule(true);
-                      setTimeout(() => setCopiedRule(false), 3500);
-                    }}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs text-xs"
-                  >
-                    {copiedRule ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        <span>คัดลอกสำเร็จแล้ว!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>คัดลอกโค้ด Rules</span>
-                      </>
-                    )}
-                  </button>
                 </div>
-                <pre className="bg-slate-900 text-amber-200 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
-{`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}`}
-                </pre>
+                <div className="p-3 bg-white border border-slate-200 rounded-lg text-slate-700 text-[11px] space-y-1.5 leading-relaxed">
+                  <div>• ระบบใช้ <b>Firebase Security Rules (RBAC)</b> ที่กำหนดไว้ในไฟล์ <code>firestore.rules</code> เพื่อป้องกันการเข้าถึงข้อมูลโดยไม่ได้รับอนุญาต</div>
+                  <div>• <b>ผู้ดูแลระบบ / ผู้เบิกของ / Helper</b> ต้องลงชื่อเข้าใช้ด้วย Google Account ที่ยืนยันอีเมลแล้ว และต้องไม่เปิดกฎแบบสาธารณะ (<code>if true</code>)</div>
+                </div>
               </div>
 
               {/* Step 2 */}
@@ -2745,9 +2719,8 @@ service cloud.firestore {
                   </a>
                 </div>
                 <div className="p-3 bg-white border border-slate-200 rounded-lg text-slate-700 text-[11px] space-y-1.5 leading-relaxed">
-                  <div className="font-semibold text-rose-600">⚠️ ต้องเป็น &quot;Firestore Database&quot; เท่านั้น:</div>
-                  <div>• <b>ถ้าเห็นปุ่ม &quot;Create database&quot;:</b> ให้กดปุ่มนี้ &gt; เลือก <b>&quot;Start in test mode&quot;</b> &gt; กด Next &gt; กด Enable ได้เลย (ระบบจะเปิดสิทธิ์ให้อัตโนมัติทันที)</div>
-                  <div>• <b>ถ้ามีฐานข้อมูลแล้ว:</b> คลิกที่แท็บ <b>Rules (กฎ)</b> ด้านบนจอ นำโค้ดที่คัดลอกไปวางทับ แล้วกดปุ่มสีฟ้า <b>Publish (เผยแพร่)</b></div>
+                  <div className="font-semibold text-indigo-700">🔒 คำแนะนำสำหรับโปรเจกต์ภายนอก:</div>
+                  <div>• หากใช้งานบนโปรเจกต์ <b>{activeProjectId}</b> และพบข้อผิดพลาด Permission Denied ให้ตรวจสอบว่าได้นำเนื้อหาจากไฟล์ <code>firestore.rules</code> ล่าสุดไปกด <b>Publish (เผยแพร่)</b> ในแท็บ Rules ของ Firebase Console แล้ว</div>
                 </div>
               </div>
 

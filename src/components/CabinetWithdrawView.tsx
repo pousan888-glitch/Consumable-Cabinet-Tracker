@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Cabinet, Consumable, DepartmentRecord } from "../types";
 import { saveCabinetWithdrawal } from "../lib/dbService";
+import { FALLBACK_CABINET_IMAGE, FALLBACK_ITEM_IMAGE } from "../lib/imageUtils";
 import { 
   PackageMinus, 
   Check, 
@@ -42,10 +43,24 @@ export default function CabinetWithdrawView({
   onCancel,
   onPreviewImage
 }: CabinetWithdrawViewProps) {
-  const [withdrawnBy, setWithdrawnBy] = useState(userName || userEmail);
-  const [selectedDept, setSelectedDept] = useState(
-    cabinet.departments[0] || (departments.find(d => d.name.toLowerCase() === "cmt")?.name || departments[0]?.name || "CMT")
-  );
+  const cabinetDepts = Array.isArray(cabinet?.departments)
+    ? cabinet.departments.filter((d): d is string => typeof d === "string" && d.trim().length > 0)
+    : [];
+  const safeDepartments = Array.isArray(departments)
+    ? departments.filter((d) => d && typeof d.name === "string" && d.name.trim().length > 0)
+    : [];
+  const safeConsumables = Array.isArray(consumables)
+    ? consumables.filter((item) => item && typeof item.id === "string")
+    : [];
+
+  const defaultDept =
+    cabinetDepts[0] ||
+    safeDepartments.find((d) => d.name.toLowerCase() === "cmt")?.name ||
+    safeDepartments[0]?.name ||
+    "CMT";
+
+  const [withdrawnBy, setWithdrawnBy] = useState(userName || userEmail || "ผู้เบิกพัสดุ");
+  const [selectedDept, setSelectedDept] = useState(defaultDept);
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [cabinetDeptFilter, setCabinetDeptFilter] = useState<string>("ALL");
@@ -83,7 +98,7 @@ export default function CabinetWithdrawView({
   };
 
   // Selected items summary
-  const selectedItems = consumables
+  const selectedItems = safeConsumables
     .filter(item => (quantities[item.id] || 0) > 0)
     .map(item => ({
       item,
@@ -108,15 +123,15 @@ export default function CabinetWithdrawView({
     try {
       const itemsPayload = selectedItems.map(({ item, qty }) => ({
         consumableId: item.id,
-        name: item.name,
+        name: item.name || "พัสดุไม่ระบุชื่อ",
         qtyTaken: qty,
-        unit: item.unit,
+        unit: item.unit || "ชิ้น",
         imageUrl: item.imageUrl || ""
       }));
 
       await saveCabinetWithdrawal(
         cabinet.id,
-        cabinet.name,
+        cabinet.name || "ตู้เก็บพัสดุ",
         selectedDept,
         withdrawnBy.trim(),
         itemsPayload,
@@ -184,10 +199,13 @@ export default function CabinetWithdrawView({
       <div className="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden mb-6">
         <div className="relative h-44 sm:h-52 bg-slate-900">
           <img 
-            src={cabinet.photoUrl} 
-            alt={cabinet.name} 
+            src={cabinet.photoUrl || FALLBACK_CABINET_IMAGE} 
+            alt={cabinet.name || "ตู้เก็บพัสดุ"} 
             className="w-full h-full object-cover opacity-85"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = FALLBACK_CABINET_IMAGE;
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/50 to-transparent flex flex-col justify-end p-6">
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -196,17 +214,17 @@ export default function CabinetWithdrawView({
                 สแกนเบิกของ (โหมดเบิกพัสดุออกจากตู้)
               </span>
               <span className="text-[11px] text-white/80 bg-black/40 backdrop-blur-xs px-2.5 py-0.5 rounded-full">
-                {cabinet.location}
+                {cabinet.location || "ไม่ระบุตำแหน่ง"}
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight font-display">
-              {cabinet.name}
+              {cabinet.name || "ตู้เก็บพัสดุ"}
             </h1>
             <p className="text-white/80 text-xs mt-1 flex items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-orange-400" />
-              <span>{cabinet.location}</span>
+              <span>{cabinet.location || "ไม่ระบุตำแหน่ง"}</span>
               <span className="text-white/40">•</span>
-              <span>แผนกประจำตู้: {cabinet.departments.join(", ")}</span>
+              <span>แผนกประจำตู้: {cabinetDepts.length > 0 ? cabinetDepts.join(", ") : "ทุกแผนก"}</span>
             </p>
           </div>
         </div>
@@ -238,7 +256,10 @@ export default function CabinetWithdrawView({
                 onChange={(e) => setSelectedDept(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
               >
-                {departments.map(d => (
+                {!safeDepartments.some(d => d.name === selectedDept) && selectedDept && (
+                  <option value={selectedDept}>{selectedDept}</option>
+                )}
+                {safeDepartments.map(d => (
                   <option key={d.id} value={d.name}>{d.name} {d.description ? `(${d.description})` : ""}</option>
                 ))}
               </select>
@@ -273,7 +294,7 @@ export default function CabinetWithdrawView({
       <div className="mb-6">
         {/* Multi-department selection tabs for cabinet items */}
         {(() => {
-          const deptsInCabinet = Array.from(new Set(consumables.map(item => item.department).filter(Boolean)));
+          const deptsInCabinet = Array.from(new Set(safeConsumables.map(item => item.department).filter(Boolean)));
           if (deptsInCabinet.length <= 1) return null;
 
           return (
@@ -302,12 +323,12 @@ export default function CabinetWithdrawView({
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                     cabinetDeptFilter === "ALL" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
                   }`}>
-                    {consumables.length}
+                    {safeConsumables.length}
                   </span>
                 </button>
 
                 {deptsInCabinet.map(dept => {
-                  const deptItemCount = consumables.filter(i => i.department === dept).length;
+                  const deptItemCount = safeConsumables.filter(i => i.department === dept).length;
                   const isSelected = cabinetDeptFilter === dept;
                   return (
                     <button
@@ -336,10 +357,10 @@ export default function CabinetWithdrawView({
 
         {(() => {
           const term = searchTerm.trim().toLowerCase();
-          const displayedConsumables = consumables.filter(item => {
+          const displayedConsumables = safeConsumables.filter(item => {
             const matchesDept = cabinetDeptFilter === "ALL" || item.department === cabinetDeptFilter;
             const matchesSearch = !term ||
-              item.name.toLowerCase().includes(term) ||
+              (item.name || "").toLowerCase().includes(term) ||
               (item.department && item.department.toLowerCase().includes(term)) ||
               (item.unit && item.unit.toLowerCase().includes(term)) ||
               (item.notes && item.notes.toLowerCase().includes(term));
@@ -391,7 +412,7 @@ export default function CabinetWithdrawView({
                   <Inbox className="h-4 w-4 text-orange-600" />
                   <span>
                     รายการพัสดุในตู้นี้ ({displayedConsumables.length}
-                    {cabinetDeptFilter !== "ALL" || term ? ` จากทั้งหมด ${consumables.length}` : ""} รายการ)
+                    {cabinetDeptFilter !== "ALL" || term ? ` จากทั้งหมด ${safeConsumables.length}` : ""} รายการ)
                   </span>
                 </h2>
                 <span className="text-xs text-slate-500 font-semibold">
@@ -426,8 +447,14 @@ export default function CabinetWithdrawView({
               ) : (
                 <div className="space-y-3">
                   {displayedConsumables.map(item => {
+                    const currentQty = Number(item.currentQty) || 0;
+                    const minThreshold = Number(item.minThreshold) || 0;
+                    const itemUnit = item.unit || "ชิ้น";
+                    const itemDept = item.department || "-";
+                    const itemName = item.name || "พัสดุไม่ระบุชื่อ";
+                    const itemImg = item.imageUrl || FALLBACK_ITEM_IMAGE;
                     const qtyToTake = quantities[item.id] || 0;
-                    const isOutOfStock = item.currentQty <= 0;
+                    const isOutOfStock = currentQty <= 0;
 
                     return (
                       <div 
@@ -443,18 +470,21 @@ export default function CabinetWithdrawView({
                           <button
                             type="button"
                             onClick={() => onPreviewImage({
-                              url: item.imageUrl,
-                              title: item.name,
-                              subtitle: `แผนก: ${item.department} | หน่วย: ${item.unit} | คงเหลือ: ${item.currentQty}`
+                              url: itemImg,
+                              title: itemName,
+                              subtitle: `แผนก: ${itemDept} | หน่วย: ${itemUnit} | คงเหลือ: ${currentQty}`
                             })}
                             className="relative h-16 w-16 rounded-2xl bg-slate-100 overflow-hidden border-2 border-slate-200 shrink-0 cursor-pointer group shadow-xs active:scale-95 transition-all text-left"
                             title="แตะดูรูปภาพจริง"
                           >
                             <img 
-                              src={item.imageUrl} 
-                              alt={item.name} 
+                              src={itemImg} 
+                              alt={itemName} 
                               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                               referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).src = FALLBACK_ITEM_IMAGE;
+                              }}
                             />
                             <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                               <Eye className="h-4 w-4 drop-shadow" />
@@ -467,9 +497,9 @@ export default function CabinetWithdrawView({
                           <div>
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-[9px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full uppercase">
-                                {item.department}
+                                {itemDept}
                               </span>
-                              {item.currentQty <= item.minThreshold && !isOutOfStock && (
+                              {currentQty <= minThreshold && !isOutOfStock && (
                                 <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.5 rounded">
                                   สต็อกต่ำ
                                 </span>
@@ -481,10 +511,10 @@ export default function CabinetWithdrawView({
                               )}
                             </div>
                             <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
-                              {item.name}
+                              {itemName}
                             </h3>
                             <p className="text-xs text-slate-500 font-medium mt-0.5">
-                              คงเหลือในตู้: <span className="font-black text-slate-800">{item.currentQty}</span> {item.unit}
+                              คงเหลือในตู้: <span className="font-black text-slate-800">{currentQty}</span> {itemUnit}
                             </p>
                           </div>
                         </div>

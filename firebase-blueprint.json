@@ -5,10 +5,10 @@
       "description": "Storage cabinet holding consumables",
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
-        "location": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "location": { "type": "string", "maxLength": 100 },
         "departments": { "type": "array" },
-        "photoUrl": { "type": "string" },
+        "photoUrl": { "type": "string", "maxLength": 500000 },
         "createdAt": { "type": "string" }
       },
       "required": ["name", "location"]
@@ -18,16 +18,19 @@
       "description": "Consumable item stored in a cabinet",
       "type": "object",
       "properties": {
-        "cabinetId": { "type": "string" },
-        "name": { "type": "string" },
-        "department": { "type": "string" },
+        "cabinetId": { "type": "string", "maxLength": 128 },
+        "masterId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "maxLength": 50 },
+        "category": { "type": "string", "maxLength": 100 },
         "currentQty": { "type": "number" },
         "minThreshold": { "type": "number" },
         "maxThreshold": { "type": "number" },
-        "unit": { "type": "string" },
-        "imageUrl": { "type": "string" },
+        "unit": { "type": "string", "maxLength": 30 },
+        "imageUrl": { "type": "string", "maxLength": 500000 },
+        "notes": { "type": "string", "maxLength": 500 },
         "lastUpdated": { "type": "string" },
-        "lastUpdatedBy": { "type": "string" }
+        "lastUpdatedBy": { "type": "string", "maxLength": 100 }
       },
       "required": ["cabinetId", "name", "currentQty"]
     },
@@ -36,11 +39,24 @@
       "description": "User permission and role profile",
       "type": "object",
       "properties": {
-        "email": { "type": "string" },
-        "name": { "type": "string" },
+        "email": { "type": "string", "maxLength": 150 },
+        "name": { "type": "string", "maxLength": 100 },
         "role": { "type": "string", "enum": ["ADMIN", "QC", "HELPER", "VIEWER"] },
         "isSuperAdmin": { "type": "boolean" },
-        "assignedBy": { "type": "string" },
+        "profileCompleted": { "type": "boolean" },
+        "assignedBy": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "UserRoleMapping": {
+      "title": "UserRoleMapping",
+      "description": "Email-keyed admin role lookup document for RBAC enforcement",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["ADMIN", "QC", "HELPER", "VIEWER"] },
         "updatedAt": { "type": "string" }
       },
       "required": ["email", "role"]
@@ -50,11 +66,11 @@
       "description": "Factory department entity for grouping cabinets and consumables",
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
-        "description": { "type": "string" },
-        "color": { "type": "string" },
+        "name": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 200 },
+        "color": { "type": "string", "maxLength": 50 },
         "createdAt": { "type": "string" },
-        "createdBy": { "type": "string" }
+        "createdBy": { "type": "string", "maxLength": 100 }
       },
       "required": ["name"]
     },
@@ -63,10 +79,10 @@
       "description": "Inventory counting session log",
       "type": "object",
       "properties": {
-        "cabinetId": { "type": "string" },
-        "cabinetName": { "type": "string" },
+        "cabinetId": { "type": "string", "maxLength": 128 },
+        "cabinetName": { "type": "string", "maxLength": 100 },
         "checkedAt": { "type": "string" },
-        "checkedBy": { "type": "string" },
+        "checkedBy": { "type": "string", "maxLength": 100 },
         "items": { "type": "array" }
       },
       "required": ["cabinetId", "checkedBy"]
@@ -76,13 +92,13 @@
       "description": "Item consumption and withdrawal log",
       "type": "object",
       "properties": {
-        "department": { "type": "string" },
+        "department": { "type": "string", "maxLength": 50 },
         "consumedAt": { "type": "string" },
-        "consumedBy": { "type": "string" },
-        "source": { "type": "string" },
-        "cabinetId": { "type": "string" },
-        "cabinetName": { "type": "string" },
-        "note": { "type": "string" },
+        "consumedBy": { "type": "string", "maxLength": 100 },
+        "source": { "type": "string", "maxLength": 50 },
+        "cabinetId": { "type": "string", "maxLength": 128 },
+        "cabinetName": { "type": "string", "maxLength": 100 },
+        "note": { "type": "string", "maxLength": 500 },
         "items": { "type": "array" }
       },
       "required": ["department", "consumedBy"]
@@ -92,16 +108,17 @@
       "description": "Standard factory-wide master consumable catalog item",
       "type": "object",
       "properties": {
-        "code": { "type": "string" },
-        "name": { "type": "string" },
-        "category": { "type": "string" },
-        "unit": { "type": "string" },
-        "imageUrl": { "type": "string" },
+        "code": { "type": "string", "maxLength": 50 },
+        "name": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 100 },
+        "unit": { "type": "string", "maxLength": 30 },
+        "imageUrl": { "type": "string", "maxLength": 500000 },
         "defaultMinThreshold": { "type": "number" },
         "defaultMaxThreshold": { "type": "number" },
-        "description": { "type": "string" },
+        "description": { "type": "string", "maxLength": 500 },
         "createdAt": { "type": "string" },
-        "createdBy": { "type": "string" }
+        "createdBy": { "type": "string", "maxLength": 100 },
+        "updatedAt": { "type": "string" }
       },
       "required": ["name", "unit"]
     }
@@ -130,6 +147,10 @@
     "/users/{userId}": {
       "schema": "AppUser",
       "description": "App user roles and access control"
+    },
+    "/user_roles/{emailKey}": {
+      "schema": "UserRoleMapping",
+      "description": "Email-keyed admin role lookup records"
     },
     "/departments/{deptId}": {
       "schema": "Department",

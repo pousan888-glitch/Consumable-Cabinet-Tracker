@@ -24,6 +24,13 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
   const [activeTab, setActiveTab] = useState<"withdraw" | "count" | "dual">("dual");
   const [copiedType, setCopiedType] = useState<string | null>(null);
 
+  const safeDepartments = Array.isArray(cabinet?.departments)
+    ? cabinet.departments.filter((d): d is string => typeof d === "string" && d.trim().length > 0)
+    : [];
+  const safeDeptLabel = safeDepartments.join(", ") || "ทุกแผนก";
+  const safeCabinetName = cabinet?.name || "ตู้เก็บพัสดุ";
+  const safeCabinetLocation = cabinet?.location || "-";
+
   const getQRUrl = (mode: "count" | "withdraw") => {
     const origin = window.location.origin;
     const pathname = window.location.pathname;
@@ -37,7 +44,9 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
 
   const handleCopy = (mode: "count" | "withdraw") => {
     const url = getQRUrl(mode);
-    navigator.clipboard.writeText(url);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
     setCopiedType(mode);
     setTimeout(() => setCopiedType(null), 2500);
   };
@@ -63,8 +72,8 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
             <div class="tag-title">📦 สแกนเบิกของ (WITHDRAW)</div>
             <div class="tag-subtitle">สำหรับพนักงาน / QC / ช่าง หยิบพัสดุไปใช้</div>
           </div>
-          <h2>${cabinet.name}</h2>
-          <div class="loc">📍 ตำแหน่ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}</div>
+          <h2>${safeCabinetName}</h2>
+          <div class="loc">📍 ตำแหน่ง: ${safeCabinetLocation} | แผนก: ${safeDeptLabel}</div>
           <div class="img-box withdraw-img-box">
             <img src="${withdrawImg}" alt="QR สแกนเบิกของ" />
           </div>
@@ -84,8 +93,8 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
             <div class="tag-title">📋 สแกนนับสต็อก (STOCK COUNT)</div>
             <div class="tag-subtitle">สำหรับทีมงาน Helper ตรวจเช็กจำนวนจริงบนชั้นวาง</div>
           </div>
-          <h2>${cabinet.name}</h2>
-          <div class="loc">📍 ตำแหน่ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}</div>
+          <h2>${safeCabinetName}</h2>
+          <div class="loc">📍 ตำแหน่ง: ${safeCabinetLocation} | แผนก: ${safeDeptLabel}</div>
           <div class="img-box count-img-box">
             <img src="${countImg}" alt="QR สแกนนับสต็อก" />
           </div>
@@ -103,8 +112,8 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
       bodyHtml = `
         <div class="dual-container">
           <div class="main-header">
-            <h1>${cabinet.name}</h1>
-            <div class="loc">📍 สถานที่ตั้ง: ${cabinet.location} | แผนก: ${cabinet.departments.join(", ")}</div>
+            <h1>${safeCabinetName}</h1>
+            <div class="loc">📍 สถานที่ตั้ง: ${safeCabinetLocation} | แผนก: ${safeDeptLabel}</div>
             <div class="alert-strip">
               ⚠️ คำแนะนำ: กรุณาเลือกสแกนให้ถูกต้องตามหน้าที่ (ทีมตรวจนับ สแกนฝั่งสีน้ำเงิน | ผู้เบิกของ สแกนฝั่งสีส้ม)
             </div>
@@ -504,11 +513,11 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
               </span>
 
               <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 mb-0.5">
-                {cabinet.name}
+                {safeCabinetName}
               </h3>
               <p className="text-slate-500 text-xs font-semibold flex items-center gap-1 mb-4">
                 <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                {cabinet.location} • แผนก: {cabinet.departments.join(", ")}
+                {safeCabinetLocation} • แผนก: {safeDeptLabel}
               </p>
 
               {/* QR Box with Orange Border */}
@@ -564,11 +573,11 @@ export default function CabinetQRModal({ cabinet, onClose }: CabinetQRModalProps
               </span>
 
               <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 mb-0.5">
-                {cabinet.name}
+                {safeCabinetName}
               </h3>
               <p className="text-slate-500 text-xs font-semibold flex items-center gap-1 mb-4">
                 <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                {cabinet.location} • แผนก: {cabinet.departments.join(", ")}
+                {safeCabinetLocation} • แผนก: {safeDeptLabel}
               </p>
 
               {/* QR Box with Indigo Border */}
