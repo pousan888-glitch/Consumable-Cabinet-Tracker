@@ -71,6 +71,7 @@ import {
   Filter,
   FileSpreadsheet,
   ShoppingCart,
+  ChevronLeft,
   ChevronRight,
   FileText,
   MoreHorizontal,
@@ -91,13 +92,15 @@ interface AdminDashboardProps {
   isSuperAdmin?: boolean;
   isSidebarOpen?: boolean;
   onSidebarOpenChange?: (open: boolean) => void;
+  onActiveSectionChange?: (label: string) => void;
 }
 
 export default function AdminDashboard({
   userEmail,
   isSuperAdmin,
   isSidebarOpen: controlledSidebarOpen,
-  onSidebarOpenChange
+  onSidebarOpenChange,
+  onActiveSectionChange
 }: AdminDashboardProps) {
   const isUserSuperAdmin = isSuperAdmin || userEmail.toLowerCase() === "pousan888@gmail.com";
 
@@ -684,15 +687,6 @@ export default function AdminDashboard({
     setShowConsumableModal(true);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6">
-        <Loader2 className="h-8 w-8 text-indigo-600 animate-spin mb-4" />
-        <p className="text-sm font-semibold text-slate-500">กำลังดึงข้อมูลแผงควบคุมแอดมิน...</p>
-      </div>
-    );
-  }
-
   const navItems: {
     id: "department_consumables" | "purchase_orders" | "cabinets" | "history" | "qc" | "users" | "settings";
     label: string;
@@ -754,45 +748,59 @@ export default function AdminDashboard({
 
   const activeNav = navItems.find(item => item.id === activeTab) || navItems[0];
 
+  useEffect(() => {
+    onActiveSectionChange?.(activeNav.label);
+  }, [activeNav.label, onActiveSectionChange]);
+
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between gap-2 px-2 pb-3 mb-2 border-b border-slate-200/70">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="h-7 w-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-            <Menu className="h-3.5 w-3.5" />
+      {/* Top Brand Header inside Docked Sidebar */}
+      <div className="flex items-center justify-between gap-2 px-4 h-14 sm:h-16 border-b border-slate-200/70 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-9 w-9 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 rounded-2xl flex items-center justify-center text-white font-black text-base shadow-md shadow-indigo-500/25 border border-white/40 shrink-0">
+            C
           </div>
-          <span className="text-xs font-black text-slate-900 truncate">
-            เมนูจัดการระบบ
-          </span>
+          <div className="min-w-0">
+            <span className="font-extrabold text-slate-900 tracking-tight text-sm block truncate">
+              Cabinet Stock
+            </span>
+            <span className="text-[9px] text-indigo-600 uppercase tracking-wider font-extrabold block leading-none truncate">
+              QR STOCK TRACKING
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={() => setIsSidebarPinned(!isSidebarPinned)}
-            className={`hidden lg:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer ${
-              isSidebarPinned
-                ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
-                : "bg-slate-100 hover:bg-slate-200 text-slate-600"
-            }`}
-            title={isSidebarPinned ? "ปักหมุดเมนูค้างไว้ (คลิกเพื่อเปลี่ยนเป็นซ่อนอัตโนมัติหลังเลือก)" : "ซ่อนอัตโนมัติหลังเลือก (คลิกเพื่อปักหมุดค้างไว้)"}
-          >
-            {isSidebarPinned ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
-            <span>{isSidebarPinned ? "ปักหมุด" : "ซ่อนอัตโนมัติ"}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-            title="ซ่อนแถบเมนูด้านซ้าย"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-            <span className="lg:hidden">ปิด</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          className="h-8 w-8 rounded-xl bg-slate-100/80 hover:bg-slate-200/80 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer shrink-0 ios-press"
+          title="ซ่อนแถบเมนูด้านซ้าย"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
       </div>
 
-      <nav className="space-y-1.5 flex-1">
+      {/* Section Title & Auto-hide / Pin Switch */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2 shrink-0">
+        <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+          เมนูจัดการระบบ
+        </span>
+        <button
+          type="button"
+          onClick={() => setIsSidebarPinned(!isSidebarPinned)}
+          className={`hidden lg:inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-colors cursor-pointer ${
+            isSidebarPinned
+              ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+              : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+          }`}
+          title={isSidebarPinned ? "ปักหมุดเมนูค้างไว้ (คลิกเพื่อเปลี่ยนเป็นซ่อนอัตโนมัติหลังเลือก)" : "ซ่อนอัตโนมัติหลังเลือก (คลิกเพื่อปักหมุดค้างไว้)"}
+        >
+          {isSidebarPinned ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
+          <span>{isSidebarPinned ? "ปักหมุด" : "ซ่อนอัตโนมัติ"}</span>
+        </button>
+      </div>
+
+      <nav className="space-y-1.5 flex-1 overflow-y-auto px-3 py-1">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
@@ -806,8 +814,8 @@ export default function AdminDashboard({
                     ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 border border-amber-400 font-extrabold"
                     : "text-amber-800 hover:bg-amber-100/60 font-bold"
                   : isActive
-                  ? "bg-white text-slate-900 shadow-md shadow-slate-300/40 border border-indigo-100 ring-1 ring-indigo-500/15 font-extrabold"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60 font-bold"
+                  ? "bg-indigo-50/90 text-indigo-950 shadow-xs border border-indigo-200/80 ring-1 ring-indigo-500/10 font-extrabold"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 font-bold"
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -825,8 +833,8 @@ export default function AdminDashboard({
                         ? "bg-amber-600 text-white"
                         : "bg-amber-100 text-amber-900"
                       : isActive
-                      ? "bg-indigo-50 text-indigo-700"
-                      : "bg-white/80 text-slate-500"
+                      ? "bg-white text-indigo-700 shadow-2xs"
+                      : "bg-slate-100 text-slate-500"
                   }`}
                 >
                   {item.badge}
@@ -837,17 +845,32 @@ export default function AdminDashboard({
         })}
       </nav>
 
-      <div className="mt-3 pt-3 border-t border-slate-200/70 px-2 text-[11px] text-slate-400 font-medium leading-relaxed">
+      <div className="mt-auto m-3 p-3.5 rounded-2xl bg-slate-50/90 border border-slate-200/70 text-[11px] text-slate-500 font-medium leading-relaxed shrink-0">
         {isSidebarPinned
-          ? "ปักหมุดเมนูด้านซ้ายอยู่ กดซ่อนได้จากปุ่มด้านบน"
+          ? "ปักหมุดแถบเมนูค้างไว้ กดปุ่ม < ด้านบนเพื่อซ่อนได้ตลอดเวลา"
           : "กดเลือกเมนูเพื่อเข้าดูข้อมูล ระบบจะซ่อนแถบเมนูให้อัตโนมัติ"}
       </div>
     </div>
   );
 
-  return (
-    <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 font-sans min-h-screen">
+  if (loading) {
+    return (
+      <>
+        {effectiveSidebarOpen && (
+          <aside className="hidden lg:flex lg:flex-col fixed inset-y-0 left-0 w-72 z-30 bg-white/92 backdrop-blur-2xl border-r border-slate-200/80 shadow-xl shadow-slate-900/5">
+            {renderSidebarContent()}
+          </aside>
+        )}
+        <div className="min-h-[80vh] flex flex-col items-center justify-center p-6">
+          <Loader2 className="h-8 w-8 text-indigo-600 animate-spin mb-4" />
+          <p className="text-sm font-semibold text-slate-500">กำลังดึงข้อมูลแผงควบคุมแอดมิน...</p>
+        </div>
+      </>
+    );
+  }
 
+  return (
+    <>
       {/* Mobile Left Drawer */}
       {effectiveSidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex animate-fade-in">
@@ -855,52 +878,20 @@ export default function AdminDashboard({
             className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs"
             onClick={() => setSidebarOpen(false)}
           />
-          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white/95 backdrop-blur-2xl shadow-2xl border-r border-white p-4 overflow-y-auto">
+          <aside className="relative z-10 w-72 max-w-[85vw] h-full bg-white/95 backdrop-blur-2xl shadow-2xl border-r border-slate-200 overflow-y-auto">
             {renderSidebarContent()}
           </aside>
         </div>
       )}
 
-      {/* Main Layout Container: Top-Left Sidebar + Right Workspace (Hero + Content) */}
-      <div className="flex flex-col lg:flex-row gap-5 items-start">
-        {effectiveSidebarOpen && (
-          <aside className="hidden lg:block w-64 xl:w-72 shrink-0 ios-glass-card rounded-3xl p-3.5 border border-white/90 shadow-xl shadow-slate-900/5 sticky top-20 animate-fade-in">
-            {renderSidebarContent()}
-          </aside>
-        )}
+      {/* Desktop Full-Height Docked Left Sidebar (Flush Top-Left y=0 to Bottom) */}
+      {effectiveSidebarOpen && (
+        <aside className="hidden lg:flex lg:flex-col fixed inset-y-0 left-0 w-72 z-30 bg-white/92 backdrop-blur-2xl border-r border-slate-200/80 shadow-xl shadow-slate-900/5 animate-fade-in">
+          {renderSidebarContent()}
+        </aside>
+      )}
 
-        <div className="flex-1 min-w-0 w-full">
-          {/* Compact Top Bar when Sidebar is Collapsed */}
-          {!effectiveSidebarOpen && (
-            <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 ios-glass-card hover:bg-white text-slate-900 rounded-2xl text-xs font-extrabold border border-white/90 shadow-md shadow-slate-900/5 transition-all cursor-pointer ios-press"
-                >
-                  <PanelLeftOpen className="h-4 w-4 text-indigo-600" />
-                  <span>แสดงเมนูด้านซ้าย</span>
-                </button>
-
-                <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 text-xs font-bold text-slate-700 shadow-2xs">
-                  {activeNav.icon}
-                  <span>{activeNav.label}</span>
-                  {activeNav.badge && (
-                    <span
-                      className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
-                        activeNav.badgeUrgent
-                          ? "bg-rose-500 text-white"
-                          : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {activeNav.badge}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+      <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 font-sans min-h-screen">
 
           {/* 1. TOP HERO BANNER & INTEGRATED STATS (APPLE LIQUID GLASS DARK SLAB) */}
           <div className="ios-glass-dark rounded-3xl p-5 sm:p-6 text-white shadow-2xl relative overflow-hidden mb-6 border border-white/20">
@@ -2194,8 +2185,6 @@ export default function AdminDashboard({
           }}
         />
       )}
-        </div>
-      </div>
 
       {/* ========================================================================= */}
       {/* MODALS SECTION */}
@@ -2887,5 +2876,6 @@ export default function AdminDashboard({
       )}
 
     </div>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import React from "react";
 import { UserProfile, UserRole } from "../types";
-import { LogOut, Shield, User, ClipboardList, Settings, Sparkles, RefreshCw, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, Shield, User, ClipboardList, Settings, Sparkles, RefreshCw, ChevronRight } from "lucide-react";
 
 interface HeaderProps {
   user: UserProfile;
@@ -10,6 +10,7 @@ interface HeaderProps {
   showMenuToggle?: boolean;
   isMenuOpen?: boolean;
   onToggleMenu?: () => void;
+  activeSectionLabel?: string;
 }
 
 export default function Header({
@@ -19,7 +20,8 @@ export default function Header({
   lowStockCount,
   showMenuToggle = false,
   isMenuOpen = false,
-  onToggleMenu
+  onToggleMenu,
+  activeSectionLabel
 }: HeaderProps) {
   const getRoleLabel = (role: UserRole, isSuperAdmin?: boolean) => {
     if (isSuperAdmin) {
@@ -42,41 +44,51 @@ export default function Header({
   const roleStyle = getRoleLabel(user?.role, user?.isSuperAdmin);
 
   return (
-    <header className="ios-glass-header sticky top-0 z-50 font-sans transition-all">
-      <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8">
+    <header className="ios-glass-header sticky top-0 z-30 font-sans transition-all">
+      <div className={`${showMenuToggle ? "w-full" : "max-w-[1440px] mx-auto"} px-3 sm:px-6 lg:px-8`}>
         <div className="flex justify-between h-14 sm:h-16 items-center gap-2">
-          {/* Logo, Sidebar Toggle & Brand */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {/* Left: Collapse/Expand Menu Trigger, Brand (when sidebar hidden or non-admin) & Active Section */}
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             {showMenuToggle && onToggleMenu && (
               <button
                 type="button"
                 onClick={onToggleMenu}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-2xl text-xs font-extrabold border transition-all cursor-pointer shrink-0 ios-press ${
-                  isMenuOpen
-                    ? "bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-500/25"
-                    : "bg-white/85 hover:bg-white text-slate-700 border-slate-200/80 shadow-xs"
-                }`}
-                title={isMenuOpen ? "ซ่อนเมนูจัดการระบบด้านซ้าย" : "เปิดเมนูจัดการระบบด้านซ้าย"}
+                className={`${
+                  isMenuOpen ? "lg:hidden" : "inline-flex"
+                } inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-extrabold border border-slate-200/90 shadow-xs transition-all cursor-pointer shrink-0 ios-press`}
+                title="เปิดแถบเมนูจัดการระบบด้านซ้าย"
               >
-                {isMenuOpen ? (
-                  <PanelLeftClose className="h-4 w-4 shrink-0" />
-                ) : (
-                  <PanelLeftOpen className="h-4 w-4 text-indigo-600 shrink-0" />
-                )}
-                <span className="hidden sm:inline">{isMenuOpen ? "ซ่อนเมนู" : "เมนู"}</span>
+                <ChevronRight className="h-4 w-4 text-indigo-600 shrink-0" />
+                <span>เมนู</span>
               </button>
             )}
-            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 rounded-2xl flex items-center justify-center text-white font-black text-base sm:text-lg shadow-md shadow-indigo-500/25 border border-white/40 shrink-0 ios-press">
-              C
+
+            {/* Brand Logo (hidden on desktop lg+ when Admin docked sidebar is already open so it isn't duplicated) */}
+            <div className={`flex items-center gap-2.5 min-w-0 ${showMenuToggle && isMenuOpen ? "lg:hidden" : ""}`}>
+              <div className="h-9 w-9 sm:h-10 sm:w-10 bg-gradient-to-tr from-indigo-600 via-indigo-500 to-sky-500 rounded-2xl flex items-center justify-center text-white font-black text-base sm:text-lg shadow-md shadow-indigo-500/25 border border-white/40 shrink-0 ios-press">
+                C
+              </div>
+              <div className="min-w-0">
+                <span className="font-extrabold text-slate-900 tracking-tight text-sm sm:text-base block truncate">
+                  Cabinet Stock
+                </span>
+                <span className="text-[9px] text-indigo-600 uppercase tracking-wider font-extrabold hidden sm:block leading-none">
+                  QR STOCK TRACKING SYSTEM
+                </span>
+              </div>
             </div>
-            <div className="min-w-0">
-              <span className="font-extrabold text-slate-900 tracking-tight text-sm sm:text-base block truncate">
-                Cabinet Stock
-              </span>
-              <span className="text-[9px] text-indigo-600 uppercase tracking-wider font-extrabold hidden sm:block leading-none">
-                QR STOCK TRACKING SYSTEM
-              </span>
-            </div>
+
+            {showMenuToggle && activeSectionLabel && (
+              <div className={`hidden sm:flex items-center gap-2 min-w-0 ${!isMenuOpen ? "pl-2 border-l border-slate-200/80" : ""}`}>
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 shrink-0">
+                  ADMIN PANEL
+                </span>
+                <span className="text-slate-300 shrink-0">—</span>
+                <span className="text-xs sm:text-sm font-extrabold text-indigo-700 truncate">
+                  {activeSectionLabel}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Quick Stats & Role Control */}

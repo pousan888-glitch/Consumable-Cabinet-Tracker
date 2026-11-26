@@ -72,6 +72,7 @@ export default function App() {
   const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState<boolean>(() =>
     typeof window !== "undefined" ? window.innerWidth >= 1024 : true
   );
+  const [activeAdminSection, setActiveAdminSection] = useState<string>("พัสดุ & สต็อกแผนก");
 
   // Auto-seed database and finish startup cleanly
   useEffect(() => {
@@ -239,7 +240,11 @@ export default function App() {
     <div className="relative min-h-screen font-sans flex flex-col pb-8 text-slate-900 selection:bg-indigo-500/20">
       {ambientBackground}
 
-      <div className="relative z-10 flex flex-col flex-grow">
+      <div
+        className={`relative z-10 flex flex-col flex-grow transition-[padding] duration-200 ${
+          user.role === "ADMIN" && isAdminSidebarOpen ? "lg:pl-72 print:pl-0" : ""
+        }`}
+      >
         <Header 
           user={user} 
           onChangeRole={handleChangeRole} 
@@ -248,6 +253,7 @@ export default function App() {
           showMenuToggle={user.role === "ADMIN"}
           isMenuOpen={isAdminSidebarOpen}
           onToggleMenu={() => setIsAdminSidebarOpen(prev => !prev)}
+          activeSectionLabel={user.role === "ADMIN" ? activeAdminSection : undefined}
         />
 
         <main className="flex-grow">
@@ -257,6 +263,7 @@ export default function App() {
               isSuperAdmin={user.isSuperAdmin || (user.email || "").toLowerCase() === "pousan888@gmail.com"}
               isSidebarOpen={isAdminSidebarOpen}
               onSidebarOpenChange={setIsAdminSidebarOpen}
+              onActiveSectionChange={setActiveAdminSection}
             />
           )}
           {user.role === "HELPER" && (
